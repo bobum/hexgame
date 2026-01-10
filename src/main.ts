@@ -1,0 +1,296 @@
+import * as THREE from 'three';
+import GUI from 'lil-gui';
+
+import { HexGrid } from './core/HexGrid';
+import { HexCoordinates } from './core/HexCoordinates';
+import { MapGenerator } from './generation/MapGenerator';
+import { TerrainRenderer } from './rendering/TerrainRenderer';
+import { WaterRenderer } from './rendering/WaterRenderer';
+import { FeatureRenderer } from './rendering/FeatureRenderer';
+import { MapCamera } from './camera/MapCamera';
+import { MapConfig, defaultMapConfig, HexCell } from './types';
+
+/**
+ * Main application class for the hex map game.
+ */
+class HexGame {
+  // Three.js core
+  private renderer: THREE.WebGLRenderer;
+  private scene: THREE.Scene;
+  private mapCamera: MapCamera;
+
+  // Game systems
+  private grid!: HexGrid;
+  private mapGenerator!: MapGenerator;
+  private terrainRenderer!: TerrainRenderer;
+  private waterRenderer!: WaterRenderer;
+  private featureRenderer!: FeatureRenderer;
+
+  // Debug UI
+  private gui: GUI;
+  private config: MapConfig;
+  private debugInfo: { cells: number; fps: number; hoveredHex: string };
+
+  // Interaction
+  private raycaster: THREE.Raycaster;
+  private mouse: THREE.Vector2;
+  private hoveredCell: HexCell | null = null;
+  private highlightMesh: THREE.Mesh | null = null;
+
+  // Animation
+  private clock: THREE.Clock;
+
+  constructor() {
+    // Initialize config
+    this.config = { ...defaultMapConfig };
+
+    // Setup renderer
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.setClearColor(0x87ceeb); // Sky blue background
+    document.body.appendChild(this.renderer.domElement);
+
+    // Setup scene
+    this.scene = new THREE.Scene();
+    this.scene.fog = new THREE.Fog(0x87ceeb, 50, 150);
+
+    // Setup camera
+    this.mapCamera = new MapCamera(window.innerWidth / window.innerHeight);
+
+    // Setup lighting
+    this.setupLighting();
+
+    // Setup interaction
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
+    this.setupInteraction();
+
+    // Setup debug UI
+    this.debugInfo = { cells: 0, fps: 0, hoveredHex: 'None' };
+    this.gui = new GUI();
+    this.setupDebugUI();
+
+    // Clock for delta time
+    this.clock = new THREE.Clock();
+
+    // Generate initial map
+    this.generateMap();
+
+    // Handle resize
+    window.addEventListener('resize', () => this.onResize());
+
+    // Start render loop
+    this.animate();
+  }
+
+  /**
+   * Setup scene lighting.
+   */
+  private setupLighting(): void {
+    // Ambient light for base illumination
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    this.scene.add(ambient);
+
+    // Directional light (sun)
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(50, 80, 30);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 2048;
+    sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 200;
+    sun.shadow.camera.left = -60;
+    sun.shadow.camera.right = 60;
+    sun.shadow.camera.top = 60;
+    sun.shadow.camera.bottom = -60;
+    this.scene.add(sun);
+
+    // Hemisphere light for sky/ground color variation
+    const hemi = new THREE.HemisphereLight(0x87ceeb, 0x8b7355, 0.3);
+    this.scene.add(hemi);
+  }
+
+  /**
+   * Setup debug UI with lil-gui.
+   */
+  private setupDebugUI(): void {
+    const mapFolder = this.gui.addFolder('Map Generation');
+
+    mapFolder.add(this.config, 'width', 10, 80, 1).name('Width');
+    mapFolder.add(this.config, 'height', 10, 60, 1).name('Height');
+    mapFolder.add(this.config, 'seed', 1, 99999, 1).name('Seed');
+    mapFolder.add(this.config, 'noiseScale', 0.01, 0.2, 0.005).name('Noise Scale');
+    mapFolder.add(this.config, 'octaves', 1, 8, 1).name('Octaves');
+    mapFolder.add(this.config, 'persistence', 0.1, 0.9, 0.05).name('Persistence');
+    mapFolder.add(this.config, 'lacunarity', 1.5, 3.0, 0.1).name('Lacunarity');
+    mapFolder.add(this.config, 'landPercentage', 0.2, 0.8, 0.05).name('Land %');
+    mapFolder.add(this.config, 'mountainousness', 0.1, 1.0, 0.05).name('Mountains');
+
+    mapFolder.add({
+      regenerate: () => this.generateMap()
+    }, 'regenerate').name('Regenerate Map');
+
+    mapFolder.add({
+      randomSeed: () => {
+        this.config.seed = Math.floor(Math.random() * 99999);
+        this.gui.controllersRecursive().forEach(c => c.updateDisplay());
+        this.generateMap();
+      }
+    }, 'randomSeed').name('Random Seed');
+
+    mapFolder.open();
+
+    // Info panel
+    const infoFolder = this.gui.addFolder('Info');
+    infoFolder.add(this.debugInfo, 'cells').name('Total Cells').listen();
+    infoFolder.add(this.debugInfo, 'fps').name('FPS').listen();
+    infoFolder.add(this.debugInfo, 'hoveredHex').name('Hovered Hex').listen();
+    infoFolder.open();
+
+    // Controls help
+    const helpFolder = this.gui.addFolder('Controls');
+    helpFolder.add({ text: 'WASD / Arrows: Pan' }, 'text').name('');
+    helpFolder.add({ text: 'Mouse Wheel: Zoom' }, 'text').name('');
+    helpFolder.add({ text: 'Q / E: Rotate' }, 'text').name('');
+    helpFolder.add({ text: 'R / F: Tilt Up/Down' }, 'text').name('');
+    helpFolder.add({ text: 'Right Drag: Rotate + Tilt' }, 'text').name('');
+    helpFolder.add({ text: 'Middle Drag: Pan' }, 'text').name('');
+  }
+
+  /**
+   * Setup mouse interaction for hex selection.
+   */
+  private setupInteraction(): void {
+    window.addEventListener('mousemove', (e) => {
+      this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    });
+
+    // Create highlight mesh (hexagonal ring)
+    const highlightGeo = new THREE.RingGeometry(0.7, 0.85, 6);
+    highlightGeo.rotateX(-Math.PI / 2);
+    highlightGeo.rotateY(Math.PI / 6); // Align with hex orientation
+    const highlightMat = new THREE.MeshBasicMaterial({
+      color: 0xffff00,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+    });
+    this.highlightMesh = new THREE.Mesh(highlightGeo, highlightMat);
+    this.highlightMesh.visible = false;
+    this.scene.add(this.highlightMesh);
+  }
+
+  /**
+   * Generate or regenerate the map.
+   */
+  private generateMap(): void {
+    console.log('Generating map with seed:', this.config.seed);
+
+    // Dispose old renderers if they exist
+    if (this.terrainRenderer) this.terrainRenderer.dispose();
+    if (this.waterRenderer) this.waterRenderer.dispose();
+    if (this.featureRenderer) this.featureRenderer.dispose();
+
+    // Recreate grid with new config
+    this.grid = new HexGrid(this.config);
+    this.mapGenerator = new MapGenerator(this.grid);
+    this.mapGenerator.generate();
+
+    // Create new renderers with new grid
+    this.terrainRenderer = new TerrainRenderer(this.scene, this.grid);
+    this.waterRenderer = new WaterRenderer(this.scene, this.grid);
+    this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
+
+    // Build all meshes
+    this.terrainRenderer.build();
+    this.waterRenderer.build();
+    this.featureRenderer.build();
+
+    // Update camera bounds and position
+    const bounds = this.grid.getMapBounds();
+    this.mapCamera.setBounds(bounds);
+    const center = this.grid.getMapCenter();
+    this.mapCamera.setInitialPosition(center.x, center.z);
+
+    // Update debug info
+    this.debugInfo.cells = this.grid.cellCount;
+
+    console.log('Map generated:', this.grid.cellCount, 'cells');
+  }
+
+  /**
+   * Update hex hover detection.
+   */
+  private updateHover(): void {
+    this.raycaster.setFromCamera(this.mouse, this.mapCamera.camera);
+
+    // Create a ground plane for raycasting
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const intersection = new THREE.Vector3();
+
+    if (this.raycaster.ray.intersectPlane(groundPlane, intersection)) {
+      // Convert world position to hex coordinates
+      const hexCoords = HexCoordinates.fromWorldPosition(intersection);
+      const cell = this.grid.getCell(hexCoords);
+
+      if (cell) {
+        this.hoveredCell = cell;
+
+        // Update highlight position
+        if (this.highlightMesh) {
+          const worldPos = hexCoords.toWorldPosition(cell.elevation);
+          this.highlightMesh.position.set(worldPos.x, worldPos.y + 0.05, worldPos.z);
+          this.highlightMesh.visible = true;
+        }
+
+        // Update debug info
+        this.debugInfo.hoveredHex = `(${cell.q}, ${cell.r}) ${cell.terrainType} E:${cell.elevation}`;
+      } else {
+        this.hoveredCell = null;
+        if (this.highlightMesh) {
+          this.highlightMesh.visible = false;
+        }
+        this.debugInfo.hoveredHex = 'None';
+      }
+    }
+  }
+
+  /**
+   * Handle window resize.
+   */
+  private onResize(): void {
+    this.mapCamera.onResize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  /**
+   * Main animation loop.
+   */
+  private animate(): void {
+    requestAnimationFrame(() => this.animate());
+
+    const deltaTime = this.clock.getDelta();
+
+    // Update camera
+    this.mapCamera.update(deltaTime);
+
+    // Update water animation
+    this.waterRenderer.update(deltaTime);
+
+    // Update hover detection
+    this.updateHover();
+
+    // Update FPS
+    this.debugInfo.fps = Math.round(1 / deltaTime);
+
+    // Render
+    this.renderer.render(this.scene, this.mapCamera.camera);
+  }
+}
+
+// Start the application
+new HexGame();
