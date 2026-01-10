@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HexGrid } from '../core/HexGrid';
 import { FeatureType, Feature } from '../types';
 
@@ -43,12 +44,10 @@ export class FeatureRenderer {
   }
 
   /**
-   * Create simple tree geometry (cone for foliage).
+   * Create simple tree geometry (cone for foliage + trunk).
    */
   private createTreeGeometry(): THREE.BufferGeometry {
-    const geometry = new THREE.BufferGeometry();
-
-    // Simple cone tree
+    // Simple cone tree - positioned above the ground
     const cone = new THREE.ConeGeometry(0.15, 0.4, 6);
     cone.translate(0, 0.3, 0);
 
@@ -56,23 +55,18 @@ export class FeatureRenderer {
     const trunk = new THREE.CylinderGeometry(0.03, 0.04, 0.15, 6);
     trunk.translate(0, 0.075, 0);
 
-    // Merge geometries
-    const merged = new THREE.BufferGeometry();
-
-    // Get positions from both geometries
-    const conePos = cone.getAttribute('position').array;
-    const trunkPos = trunk.getAttribute('position').array;
-
-    const positions = new Float32Array(conePos.length + trunkPos.length);
-    positions.set(conePos, 0);
-    positions.set(trunkPos, conePos.length);
-
-    merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    merged.computeVertexNormals();
+    // Properly merge geometries using Three.js utility
+    const merged = mergeGeometries([cone, trunk]);
 
     cone.dispose();
     trunk.dispose();
 
+    if (!merged) {
+      // Fallback to just a cone if merge fails
+      return new THREE.ConeGeometry(0.15, 0.5, 6).translate(0, 0.25, 0);
+    }
+
+    merged.computeVertexNormals();
     return merged;
   }
 
@@ -82,19 +76,22 @@ export class FeatureRenderer {
   private createRockGeometry(): THREE.BufferGeometry {
     const geometry = new THREE.IcosahedronGeometry(0.12, 0);
 
-    // Deform vertices for organic look
+    // Deform vertices for organic look - use consistent seed based on position
     const positions = geometry.getAttribute('position');
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
       const y = positions.getY(i);
       const z = positions.getZ(i);
 
-      // Random displacement
+      // Deterministic displacement based on position
       const noise = Math.sin(x * 10) * Math.cos(z * 10) * 0.3 + 1;
-      positions.setXYZ(i, x * noise, Math.max(0, y) * noise, z * noise);
+      // Flatten the bottom half to sit on ground
+      const yScale = y < 0 ? 0.3 : 1;
+      positions.setXYZ(i, x * noise, y * noise * yScale, z * noise);
     }
 
-    geometry.translate(0, 0.06, 0);
+    // Position so bottom sits at y=0
+    geometry.translate(0, 0.08, 0);
     geometry.computeVertexNormals();
 
     return geometry;
