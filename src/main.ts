@@ -247,8 +247,6 @@ class HexGame {
   private generateMap(): void {
     console.log('Generating map with seed:', this.config.seed);
 
-    // Show loading state
-    document.body.style.cursor = 'wait';
     const startTime = performance.now();
 
     // Dispose old renderers if they exist
@@ -256,21 +254,10 @@ class HexGame {
     if (this.waterRenderer) this.waterRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
 
-    // Use setTimeout to allow the cursor to update before blocking
-    setTimeout(() => {
-      // Recreate grid with new config
-      this.grid = new HexGrid(this.config);
-      this.mapGenerator = new MapGenerator(this.grid);
-      this.mapGenerator.generate();
-
-      this.finishMapGeneration(startTime);
-    }, 10);
-  }
-
-  /**
-   * Complete map generation after terrain is ready.
-   */
-  private finishMapGeneration(startTime: number): void {
+    // Recreate grid with new config
+    this.grid = new HexGrid(this.config);
+    this.mapGenerator = new MapGenerator(this.grid);
+    this.mapGenerator.generate();
 
     // Create new renderers with new grid
     this.terrainRenderer = new ChunkedTerrainRenderer(this.scene, this.grid);
@@ -288,11 +275,8 @@ class HexGame {
     const center = this.grid.getMapCenter();
     this.mapCamera.setInitialPosition(center.x, center.z);
 
-    // Restore cursor and log timing
-    document.body.style.cursor = 'default';
-    const elapsed = performance.now() - startTime;
-
     // Update debug info
+    const elapsed = performance.now() - startTime;
     this.debugInfo.cells = this.grid.cellCount;
     this.debugInfo.chunks = this.terrainRenderer.chunkCount;
     this.debugInfo.genTimeMs = Math.round(elapsed);
