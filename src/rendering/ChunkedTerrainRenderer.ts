@@ -2,25 +2,28 @@ import * as THREE from 'three';
 import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexMeshBuilder } from './HexMeshBuilder';
+import { LODHexBuilder, LODLevel, LODDistances } from './LODHexBuilder';
 import { HexCell } from '../types';
 
 /**
- * A chunk of terrain containing multiple hex cells.
+ * A chunk of terrain containing multiple hex cells with LOD support.
  */
 interface TerrainChunk {
-  mesh: THREE.Mesh | null;
+  lod: THREE.LOD | null;
   cells: HexCell[];
   dirty: boolean;
   chunkX: number;
   chunkZ: number;
+  centerX: number;
+  centerZ: number;
 }
 
 /**
- * Renders hex terrain using a chunk-based system for better performance.
- * Each chunk is a separate mesh, enabling:
- * - Frustum culling per chunk
- * - Dirty-flag rebuilding (only rebuild changed chunks)
- * - Future: LOD per chunk, streaming
+ * Renders hex terrain using a chunk-based system with LOD for better performance.
+ * Each chunk has 3 detail levels:
+ * - High: Full hex geometry with walls (near camera)
+ * - Medium: Hex tops only, no walls (mid-range)
+ * - Low: Simple quads (far from camera)
  */
 export class ChunkedTerrainRenderer {
   private scene: THREE.Scene;
@@ -30,6 +33,9 @@ export class ChunkedTerrainRenderer {
 
   // Chunk size in hex cells (world units depend on hex metrics)
   static readonly CHUNK_SIZE = 16;
+
+  // LOD statistics
+  private lodStats = { high: 0, medium: 0, low: 0 };
 
   constructor(scene: THREE.Scene, grid: HexGrid) {
     this.scene = scene;
@@ -56,7 +62,6 @@ export class ChunkedTerrainRenderer {
     const coords = new HexCoordinates(cell.q, cell.r);
     const worldPos = coords.toWorldPosition(0);
 
-    // Use world position to determine chunk
     const chunkX = Math.floor(worldPos.x / ChunkedTerrainRenderer.CHUNK_SIZE);
     const chunkZ = Math.floor(worldPos.z / ChunkedTerrainRenderer.CHUNK_SIZE);
 
@@ -81,11 +86,13 @@ export class ChunkedTerrainRenderer {
       let chunk = this.chunks.get(key);
       if (!chunk) {
         chunk = {
-          mesh: null,
+          lod: null,
           cells: [],
           dirty: true,
           chunkX,
           chunkZ,
+          centerX: (chunkX + 0.5) * ChunkedTerrainRenderer.CHUNK_SIZE,
+          centerZ: (chunkZ + 0.5) * ChunkedTerrainRenderer.CHUNK_SIZE,
         };
         this.chunks.set(key, chunk);
       }
@@ -93,51 +100,105 @@ export class ChunkedTerrainRenderer {
       chunk.cells.push(cell);
     }
 
-    // Build mesh for each chunk
+    // Build LOD meshes for each chunk
     for (const chunk of this.chunks.values()) {
-      this.buildChunkMesh(chunk);
+      this.buildChunkLOD(chunk);
     }
   }
 
   /**
-   * Build the mesh for a single chunk.
+   * Build LOD meshes for a single chunk.
    */
-  private buildChunkMesh(chunk: TerrainChunk): void {
-    // Remove old mesh if exists
-    if (chunk.mesh) {
-      this.scene.remove(chunk.mesh);
-      chunk.mesh.geometry.dispose();
+  private buildChunkLOD(chunk: TerrainChunk): void {
+    // Remove old LOD if exists
+    if (chunk.lod) {
+      this.scene.remove(chunk.lod);
+      chunk.lod.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+        }
+      });
     }
 
     if (chunk.cells.length === 0) {
-      chunk.mesh = null;
+      chunk.lod = null;
       chunk.dirty = false;
       return;
     }
 
-    // Build geometry for all cells in chunk
-    const builder = new HexMeshBuilder();
+    // Create LOD object
+    chunk.lod = new THREE.LOD();
+    chunk.lod.name = `chunk_${chunk.chunkX}_${chunk.chunkZ}`;
 
+    // Build HIGH detail geometry (full hexes with walls)
+    const highBuilder = new HexMeshBuilder();
     for (const cell of chunk.cells) {
-      builder.buildCell(cell, this.grid);
+      highBuilder.buildCell(cell, this.grid);
     }
+    const highGeometry = highBuilder.build();
+    const highMesh = new THREE.Mesh(highGeometry, this.material);
+    highMesh.receiveShadow = true;
+    highMesh.castShadow = true;
 
-    const geometry = builder.build();
+    // Build MEDIUM detail geometry (hex tops only)
+    const mediumBuilder = new LODHexBuilder();
+    for (const cell of chunk.cells) {
+      mediumBuilder.buildCellMedium(cell);
+    }
+    const mediumGeometry = mediumBuilder.build();
+    const mediumMesh = new THREE.Mesh(mediumGeometry, this.material);
+    mediumMesh.receiveShadow = true;
+    mediumMesh.castShadow = false; // No shadows at medium distance
 
-    // Create mesh
-    chunk.mesh = new THREE.Mesh(geometry, this.material);
-    chunk.mesh.receiveShadow = true;
-    chunk.mesh.castShadow = true;
+    // Build LOW detail geometry (simple quads)
+    const lowBuilder = new LODHexBuilder();
+    for (const cell of chunk.cells) {
+      lowBuilder.buildCellLow(cell);
+    }
+    const lowGeometry = lowBuilder.build();
+    const lowMesh = new THREE.Mesh(lowGeometry, this.material);
+    lowMesh.receiveShadow = false;
+    lowMesh.castShadow = false;
 
-    // Set frustum culling hint - compute bounding box
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
+    // Add levels to LOD (distance thresholds)
+    chunk.lod.addLevel(highMesh, 0);
+    chunk.lod.addLevel(mediumMesh, LODDistances.highToMedium);
+    chunk.lod.addLevel(lowMesh, LODDistances.mediumToLow);
 
-    // Name for debugging
-    chunk.mesh.name = `chunk_${chunk.chunkX}_${chunk.chunkZ}`;
+    // Position LOD at chunk center for proper distance calculation
+    chunk.lod.position.set(0, 0, 0);
 
-    this.scene.add(chunk.mesh);
+    this.scene.add(chunk.lod);
     chunk.dirty = false;
+  }
+
+  /**
+   * Update LOD levels based on camera position.
+   * Call this each frame for LOD to work.
+   */
+  update(camera: THREE.Camera): void {
+    // Reset stats
+    this.lodStats = { high: 0, medium: 0, low: 0 };
+
+    for (const chunk of this.chunks.values()) {
+      if (chunk.lod) {
+        // THREE.LOD.update() switches levels based on camera distance
+        chunk.lod.update(camera);
+
+        // Track which LOD level is active for stats
+        const currentLevel = chunk.lod.getCurrentLevel();
+        if (currentLevel === 0) this.lodStats.high++;
+        else if (currentLevel === 1) this.lodStats.medium++;
+        else this.lodStats.low++;
+      }
+    }
+  }
+
+  /**
+   * Get LOD statistics for debugging.
+   */
+  getLODStats(): { high: number; medium: number; low: number } {
+    return this.lodStats;
   }
 
   /**
@@ -159,7 +220,7 @@ export class ChunkedTerrainRenderer {
   rebuildDirtyChunks(): void {
     for (const chunk of this.chunks.values()) {
       if (chunk.dirty) {
-        this.buildChunkMesh(chunk);
+        this.buildChunkLOD(chunk);
       }
     }
   }
@@ -186,11 +247,15 @@ export class ChunkedTerrainRenderer {
 
     let visible = 0;
     for (const chunk of this.chunks.values()) {
-      if (chunk.mesh && chunk.mesh.geometry.boundingSphere) {
-        const sphere = chunk.mesh.geometry.boundingSphere.clone();
-        sphere.applyMatrix4(chunk.mesh.matrixWorld);
-        if (frustum.intersectsSphere(sphere)) {
-          visible++;
+      if (chunk.lod) {
+        // Check if any mesh in LOD is visible
+        const highMesh = chunk.lod.getObjectByProperty('type', 'Mesh') as THREE.Mesh;
+        if (highMesh && highMesh.geometry.boundingSphere) {
+          const sphere = highMesh.geometry.boundingSphere.clone();
+          sphere.applyMatrix4(chunk.lod.matrixWorld);
+          if (frustum.intersectsSphere(sphere)) {
+            visible++;
+          }
         }
       }
     }
@@ -203,9 +268,13 @@ export class ChunkedTerrainRenderer {
    */
   dispose(): void {
     for (const chunk of this.chunks.values()) {
-      if (chunk.mesh) {
-        this.scene.remove(chunk.mesh);
-        chunk.mesh.geometry.dispose();
+      if (chunk.lod) {
+        this.scene.remove(chunk.lod);
+        chunk.lod.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.geometry.dispose();
+          }
+        });
       }
     }
     this.chunks.clear();

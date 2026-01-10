@@ -38,6 +38,9 @@ class HexGame {
     geometries: number;
     chunks: number;
     visibleChunks: number;
+    lodHigh: number;
+    lodMedium: number;
+    lodLow: number;
   };
 
   // Interaction
@@ -90,6 +93,9 @@ class HexGame {
       geometries: 0,
       chunks: 0,
       visibleChunks: 0,
+      lodHigh: 0,
+      lodMedium: 0,
+      lodLow: 0,
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -179,6 +185,13 @@ class HexGame {
     statsFolder.add(this.debugInfo, 'chunks').name('Total Chunks').listen();
     statsFolder.add(this.debugInfo, 'visibleChunks').name('Visible Chunks').listen();
     statsFolder.open();
+
+    // LOD stats panel
+    const lodFolder = this.gui.addFolder('LOD Stats');
+    lodFolder.add(this.debugInfo, 'lodHigh').name('High Detail').listen();
+    lodFolder.add(this.debugInfo, 'lodMedium').name('Medium Detail').listen();
+    lodFolder.add(this.debugInfo, 'lodLow').name('Low Detail').listen();
+    lodFolder.open();
 
     // Controls help
     const helpFolder = this.gui.addFolder('Controls');
@@ -313,6 +326,9 @@ class HexGame {
     // Update camera
     this.mapCamera.update(deltaTime);
 
+    // Update terrain LOD based on camera position
+    this.terrainRenderer.update(this.mapCamera.camera);
+
     // Update water animation
     this.waterRenderer.update(deltaTime);
 
@@ -330,6 +346,12 @@ class HexGame {
     this.debugInfo.triangles = this.renderer.info.render.triangles;
     this.debugInfo.geometries = this.renderer.info.memory.geometries;
     this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount(this.mapCamera.camera);
+
+    // Update LOD stats
+    const lodStats = this.terrainRenderer.getLODStats();
+    this.debugInfo.lodHigh = lodStats.high;
+    this.debugInfo.lodMedium = lodStats.medium;
+    this.debugInfo.lodLow = lodStats.low;
   }
 }
 
