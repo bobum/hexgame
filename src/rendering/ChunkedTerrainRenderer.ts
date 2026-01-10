@@ -38,9 +38,10 @@ export class ChunkedTerrainRenderer {
   // Chunk size in hex cells (world units depend on hex metrics)
   static readonly CHUNK_SIZE = 16;
 
-  // Streaming settings
-  private viewRadius = 5; // Load chunks within this radius (in chunk units)
-  private unloadRadius = 7; // Unload chunks beyond this radius
+  // Streaming settings - disabled for now (orbital camera position != view target)
+  // TODO: Use camera target instead of camera position for proper streaming
+  private viewRadius = 100; // Load chunks within this radius (in chunk units)
+  private unloadRadius = 120; // Unload chunks beyond this radius
   private lastCameraChunkX = Infinity;
   private lastCameraChunkZ = Infinity;
 
