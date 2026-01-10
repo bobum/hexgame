@@ -29,13 +29,22 @@ class HexGame {
   // Debug UI
   private gui: GUI;
   private config: MapConfig;
-  private debugInfo: { cells: number; fps: number; hoveredHex: string };
+  private debugInfo: {
+    cells: number;
+    fps: number;
+    hoveredHex: string;
+    drawCalls: number;
+    triangles: number;
+    geometries: number;
+  };
 
   // Interaction
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
   private hoveredCell: HexCell | null = null;
   private highlightMesh: THREE.Mesh | null = null;
+  private groundPlane: THREE.Plane; // Cached for raycasting
+  private mouseMovedThisFrame: boolean = false;
 
   // Animation
   private clock: THREE.Clock;
@@ -66,10 +75,18 @@ class HexGame {
     // Setup interaction
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
+    this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Cached plane
     this.setupInteraction();
 
     // Setup debug UI
-    this.debugInfo = { cells: 0, fps: 0, hoveredHex: 'None' };
+    this.debugInfo = {
+      cells: 0,
+      fps: 0,
+      hoveredHex: 'None',
+      drawCalls: 0,
+      triangles: 0,
+      geometries: 0,
+    };
     this.gui = new GUI();
     this.setupDebugUI();
 
@@ -150,6 +167,13 @@ class HexGame {
     infoFolder.add(this.debugInfo, 'hoveredHex').name('Hovered Hex').listen();
     infoFolder.open();
 
+    // Render stats panel
+    const statsFolder = this.gui.addFolder('Render Stats');
+    statsFolder.add(this.debugInfo, 'drawCalls').name('Draw Calls').listen();
+    statsFolder.add(this.debugInfo, 'triangles').name('Triangles').listen();
+    statsFolder.add(this.debugInfo, 'geometries').name('Geometries').listen();
+    statsFolder.open();
+
     // Controls help
     const helpFolder = this.gui.addFolder('Controls');
     helpFolder.add({ text: 'WASD / Arrows: Pan' }, 'text').name('');
@@ -167,6 +191,7 @@ class HexGame {
     window.addEventListener('mousemove', (e) => {
       this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      this.mouseMovedThisFrame = true; // Flag for throttled hover detection
     });
 
     // Create highlight mesh (hexagonal ring)
@@ -223,16 +248,19 @@ class HexGame {
   }
 
   /**
-   * Update hex hover detection.
+   * Update hex hover detection (only when mouse moved).
    */
   private updateHover(): void {
+    // Skip if mouse hasn't moved - major performance win
+    if (!this.mouseMovedThisFrame) return;
+    this.mouseMovedThisFrame = false;
+
     this.raycaster.setFromCamera(this.mouse, this.mapCamera.camera);
 
-    // Create a ground plane for raycasting
-    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    // Use cached ground plane for raycasting
     const intersection = new THREE.Vector3();
 
-    if (this.raycaster.ray.intersectPlane(groundPlane, intersection)) {
+    if (this.raycaster.ray.intersectPlane(this.groundPlane, intersection)) {
       // Convert world position to hex coordinates
       const hexCoords = HexCoordinates.fromWorldPosition(intersection);
       const cell = this.grid.getCell(hexCoords);
@@ -289,6 +317,11 @@ class HexGame {
 
     // Render
     this.renderer.render(this.scene, this.mapCamera.camera);
+
+    // Update render stats
+    this.debugInfo.drawCalls = this.renderer.info.render.calls;
+    this.debugInfo.triangles = this.renderer.info.render.triangles;
+    this.debugInfo.geometries = this.renderer.info.memory.geometries;
   }
 }
 
