@@ -38,12 +38,6 @@ class HexGame {
     geometries: number;
     chunks: number;
     visibleChunks: number;
-    lodHigh: number;
-    lodMedium: number;
-    lodLow: number;
-    loadedChunks: number;
-    unloadedChunks: number;
-    genTimeMs: number;
   };
 
   // Interaction
@@ -96,12 +90,6 @@ class HexGame {
       geometries: 0,
       chunks: 0,
       visibleChunks: 0,
-      lodHigh: 0,
-      lodMedium: 0,
-      lodLow: 0,
-      loadedChunks: 0,
-      unloadedChunks: 0,
-      genTimeMs: 0,
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -181,7 +169,6 @@ class HexGame {
     infoFolder.add(this.debugInfo, 'cells').name('Total Cells').listen();
     infoFolder.add(this.debugInfo, 'fps').name('FPS').listen();
     infoFolder.add(this.debugInfo, 'hoveredHex').name('Hovered Hex').listen();
-    infoFolder.add(this.debugInfo, 'genTimeMs').name('Gen Time (ms)').listen();
     infoFolder.open();
 
     // Render stats panel
@@ -192,19 +179,6 @@ class HexGame {
     statsFolder.add(this.debugInfo, 'chunks').name('Total Chunks').listen();
     statsFolder.add(this.debugInfo, 'visibleChunks').name('Visible Chunks').listen();
     statsFolder.open();
-
-    // LOD stats panel
-    const lodFolder = this.gui.addFolder('LOD Stats');
-    lodFolder.add(this.debugInfo, 'lodHigh').name('High Detail').listen();
-    lodFolder.add(this.debugInfo, 'lodMedium').name('Medium Detail').listen();
-    lodFolder.add(this.debugInfo, 'lodLow').name('Low Detail').listen();
-    lodFolder.open();
-
-    // Streaming stats panel
-    const streamFolder = this.gui.addFolder('Streaming');
-    streamFolder.add(this.debugInfo, 'loadedChunks').name('Loaded').listen();
-    streamFolder.add(this.debugInfo, 'unloadedChunks').name('Unloaded').listen();
-    streamFolder.open();
 
     // Controls help
     const helpFolder = this.gui.addFolder('Controls');
@@ -247,8 +221,6 @@ class HexGame {
   private generateMap(): void {
     console.log('Generating map with seed:', this.config.seed);
 
-    const startTime = performance.now();
-
     // Dispose old renderers if they exist
     if (this.terrainRenderer) this.terrainRenderer.dispose();
     if (this.waterRenderer) this.waterRenderer.dispose();
@@ -276,12 +248,10 @@ class HexGame {
     this.mapCamera.setInitialPosition(center.x, center.z);
 
     // Update debug info
-    const elapsed = performance.now() - startTime;
     this.debugInfo.cells = this.grid.cellCount;
     this.debugInfo.chunks = this.terrainRenderer.chunkCount;
-    this.debugInfo.genTimeMs = Math.round(elapsed);
 
-    console.log(`Map generated: ${this.grid.cellCount} cells in ${this.terrainRenderer.chunkCount} chunks (${elapsed.toFixed(0)}ms)`);
+    console.log('Map generated:', this.grid.cellCount, 'cells in', this.terrainRenderer.chunkCount, 'chunks');
   }
 
   /**
@@ -343,9 +313,6 @@ class HexGame {
     // Update camera
     this.mapCamera.update(deltaTime);
 
-    // Update terrain LOD based on camera position
-    this.terrainRenderer.update(this.mapCamera.camera);
-
     // Update water animation
     this.waterRenderer.update(deltaTime);
 
@@ -363,17 +330,6 @@ class HexGame {
     this.debugInfo.triangles = this.renderer.info.render.triangles;
     this.debugInfo.geometries = this.renderer.info.memory.geometries;
     this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount(this.mapCamera.camera);
-
-    // Update LOD stats
-    const lodStats = this.terrainRenderer.getLODStats();
-    this.debugInfo.lodHigh = lodStats.high;
-    this.debugInfo.lodMedium = lodStats.medium;
-    this.debugInfo.lodLow = lodStats.low;
-
-    // Update streaming stats
-    const streamStats = this.terrainRenderer.getStreamingStats();
-    this.debugInfo.loadedChunks = streamStats.loaded;
-    this.debugInfo.unloadedChunks = streamStats.unloaded;
   }
 }
 
