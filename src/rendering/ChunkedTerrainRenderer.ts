@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexMeshBuilder } from './HexMeshBuilder';
-import { LODHexBuilder, LODLevel, LODDistances } from './LODHexBuilder';
+import { LODHexBuilder, LODDistances } from './LODHexBuilder';
 import { HexCell } from '../types';
 
 /**
@@ -12,6 +12,7 @@ interface TerrainChunk {
   lod: THREE.LOD | null;
   cells: HexCell[];
   dirty: boolean;
+  loaded: boolean;
   chunkX: number;
   chunkZ: number;
   centerX: number;
@@ -19,11 +20,14 @@ interface TerrainChunk {
 }
 
 /**
- * Renders hex terrain using a chunk-based system with LOD for better performance.
+ * Renders hex terrain using a chunk-based system with LOD and streaming.
  * Each chunk has 3 detail levels:
  * - High: Full hex geometry with walls (near camera)
  * - Medium: Hex tops only, no walls (mid-range)
  * - Low: Simple quads (far from camera)
+ *
+ * Streaming: Only chunks within viewRadius are loaded with geometry.
+ * Chunks outside are unloaded to save memory and GPU resources.
  */
 export class ChunkedTerrainRenderer {
   private scene: THREE.Scene;
@@ -34,8 +38,17 @@ export class ChunkedTerrainRenderer {
   // Chunk size in hex cells (world units depend on hex metrics)
   static readonly CHUNK_SIZE = 16;
 
+  // Streaming settings
+  private viewRadius = 5; // Load chunks within this radius (in chunk units)
+  private unloadRadius = 7; // Unload chunks beyond this radius
+  private lastCameraChunkX = Infinity;
+  private lastCameraChunkZ = Infinity;
+
   // LOD statistics
   private lodStats = { high: 0, medium: 0, low: 0 };
+
+  // Streaming statistics
+  private streamingStats = { loaded: 0, unloaded: 0, total: 0 };
 
   constructor(scene: THREE.Scene, grid: HexGrid) {
     this.scene = scene;
@@ -46,6 +59,14 @@ export class ChunkedTerrainRenderer {
       vertexColors: true,
       flatShading: true,
     });
+  }
+
+  /**
+   * Set the view radius for streaming (in chunk units).
+   */
+  setViewRadius(radius: number): void {
+    this.viewRadius = radius;
+    this.unloadRadius = radius + 2;
   }
 
   /**
@@ -69,7 +90,16 @@ export class ChunkedTerrainRenderer {
   }
 
   /**
-   * Build or rebuild all terrain chunks.
+   * Get chunk coordinates from world position.
+   */
+  private getChunkCoordsFromWorld(worldX: number, worldZ: number): { chunkX: number; chunkZ: number } {
+    const chunkX = Math.floor(worldX / ChunkedTerrainRenderer.CHUNK_SIZE);
+    const chunkZ = Math.floor(worldZ / ChunkedTerrainRenderer.CHUNK_SIZE);
+    return { chunkX, chunkZ };
+  }
+
+  /**
+   * Build or rebuild all terrain chunks (creates chunk data but doesn't load geometry).
    */
   build(): void {
     // Clear existing chunks
@@ -89,6 +119,7 @@ export class ChunkedTerrainRenderer {
           lod: null,
           cells: [],
           dirty: true,
+          loaded: false,
           chunkX,
           chunkZ,
           centerX: (chunkX + 0.5) * ChunkedTerrainRenderer.CHUNK_SIZE,
@@ -100,16 +131,20 @@ export class ChunkedTerrainRenderer {
       chunk.cells.push(cell);
     }
 
-    // Build LOD meshes for each chunk
+    this.streamingStats.total = this.chunks.size;
+
+    // Initially load all chunks (will be streamed on first update)
     for (const chunk of this.chunks.values()) {
-      this.buildChunkLOD(chunk);
+      this.loadChunk(chunk);
     }
   }
 
   /**
-   * Build LOD meshes for a single chunk.
+   * Load geometry for a chunk.
    */
-  private buildChunkLOD(chunk: TerrainChunk): void {
+  private loadChunk(chunk: TerrainChunk): void {
+    if (chunk.loaded && !chunk.dirty) return;
+
     // Remove old LOD if exists
     if (chunk.lod) {
       this.scene.remove(chunk.lod);
@@ -123,6 +158,7 @@ export class ChunkedTerrainRenderer {
     if (chunk.cells.length === 0) {
       chunk.lod = null;
       chunk.dirty = false;
+      chunk.loaded = true;
       return;
     }
 
@@ -148,7 +184,7 @@ export class ChunkedTerrainRenderer {
     const mediumGeometry = mediumBuilder.build();
     const mediumMesh = new THREE.Mesh(mediumGeometry, this.material);
     mediumMesh.receiveShadow = true;
-    mediumMesh.castShadow = false; // No shadows at medium distance
+    mediumMesh.castShadow = false;
 
     // Build LOW detail geometry (simple quads)
     const lowBuilder = new LODHexBuilder();
@@ -160,32 +196,60 @@ export class ChunkedTerrainRenderer {
     lowMesh.receiveShadow = false;
     lowMesh.castShadow = false;
 
-    // Add levels to LOD (distance thresholds)
+    // Add levels to LOD
     chunk.lod.addLevel(highMesh, 0);
     chunk.lod.addLevel(mediumMesh, LODDistances.highToMedium);
     chunk.lod.addLevel(lowMesh, LODDistances.mediumToLow);
 
-    // Position LOD at chunk center for proper distance calculation
     chunk.lod.position.set(0, 0, 0);
 
     this.scene.add(chunk.lod);
     chunk.dirty = false;
+    chunk.loaded = true;
   }
 
   /**
-   * Update LOD levels based on camera position.
-   * Call this each frame for LOD to work.
+   * Unload geometry for a chunk (keeps cell data).
+   */
+  private unloadChunk(chunk: TerrainChunk): void {
+    if (!chunk.loaded) return;
+
+    if (chunk.lod) {
+      this.scene.remove(chunk.lod);
+      chunk.lod.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+        }
+      });
+      chunk.lod = null;
+    }
+
+    chunk.loaded = false;
+    chunk.dirty = true; // Will need rebuild when loaded again
+  }
+
+  /**
+   * Update streaming and LOD based on camera position.
    */
   update(camera: THREE.Camera): void {
-    // Reset stats
+    const cameraPos = camera.position;
+    const { chunkX: camChunkX, chunkZ: camChunkZ } = this.getChunkCoordsFromWorld(cameraPos.x, cameraPos.z);
+
+    // Only update streaming if camera moved to a new chunk
+    if (camChunkX !== this.lastCameraChunkX || camChunkZ !== this.lastCameraChunkZ) {
+      this.lastCameraChunkX = camChunkX;
+      this.lastCameraChunkZ = camChunkZ;
+      this.updateStreaming(camChunkX, camChunkZ);
+    }
+
+    // Reset LOD stats
     this.lodStats = { high: 0, medium: 0, low: 0 };
 
+    // Update LOD for loaded chunks
     for (const chunk of this.chunks.values()) {
       if (chunk.lod) {
-        // THREE.LOD.update() switches levels based on camera distance
         chunk.lod.update(camera);
 
-        // Track which LOD level is active for stats
         const currentLevel = chunk.lod.getCurrentLevel();
         if (currentLevel === 0) this.lodStats.high++;
         else if (currentLevel === 1) this.lodStats.medium++;
@@ -195,14 +259,56 @@ export class ChunkedTerrainRenderer {
   }
 
   /**
-   * Get LOD statistics for debugging.
+   * Update which chunks are loaded based on camera chunk position.
+   */
+  private updateStreaming(camChunkX: number, camChunkZ: number): void {
+    let loaded = 0;
+    let unloaded = 0;
+
+    for (const chunk of this.chunks.values()) {
+      const dx = chunk.chunkX - camChunkX;
+      const dz = chunk.chunkZ - camChunkZ;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+
+      if (distance <= this.viewRadius) {
+        // Load chunks within view radius
+        if (!chunk.loaded) {
+          this.loadChunk(chunk);
+        }
+        loaded++;
+      } else if (distance > this.unloadRadius) {
+        // Unload chunks beyond unload radius
+        if (chunk.loaded) {
+          this.unloadChunk(chunk);
+        }
+        unloaded++;
+      } else {
+        // In buffer zone - keep current state
+        if (chunk.loaded) loaded++;
+        else unloaded++;
+      }
+    }
+
+    this.streamingStats.loaded = loaded;
+    this.streamingStats.unloaded = unloaded;
+  }
+
+  /**
+   * Get LOD statistics.
    */
   getLODStats(): { high: number; medium: number; low: number } {
     return this.lodStats;
   }
 
   /**
-   * Mark a cell's chunk as dirty (needs rebuild).
+   * Get streaming statistics.
+   */
+  getStreamingStats(): { loaded: number; unloaded: number; total: number } {
+    return this.streamingStats;
+  }
+
+  /**
+   * Mark a cell's chunk as dirty.
    */
   markCellDirty(cell: HexCell): void {
     const { chunkX, chunkZ } = this.getCellChunkCoords(cell);
@@ -215,25 +321,25 @@ export class ChunkedTerrainRenderer {
   }
 
   /**
-   * Rebuild any dirty chunks.
+   * Rebuild any dirty loaded chunks.
    */
   rebuildDirtyChunks(): void {
     for (const chunk of this.chunks.values()) {
-      if (chunk.dirty) {
-        this.buildChunkLOD(chunk);
+      if (chunk.dirty && chunk.loaded) {
+        this.loadChunk(chunk);
       }
     }
   }
 
   /**
-   * Get chunk count for debugging.
+   * Get chunk count.
    */
   get chunkCount(): number {
     return this.chunks.size;
   }
 
   /**
-   * Get visible chunk count (for frustum culling stats).
+   * Get visible chunk count (frustum culling).
    */
   getVisibleChunkCount(camera: THREE.Camera): number {
     const frustum = new THREE.Frustum();
@@ -248,7 +354,6 @@ export class ChunkedTerrainRenderer {
     let visible = 0;
     for (const chunk of this.chunks.values()) {
       if (chunk.lod) {
-        // Check if any mesh in LOD is visible
         const highMesh = chunk.lod.getObjectByProperty('type', 'Mesh') as THREE.Mesh;
         if (highMesh && highMesh.geometry.boundingSphere) {
           const sphere = highMesh.geometry.boundingSphere.clone();
@@ -278,6 +383,8 @@ export class ChunkedTerrainRenderer {
       }
     }
     this.chunks.clear();
+    this.lastCameraChunkX = Infinity;
+    this.lastCameraChunkZ = Infinity;
   }
 
   /**

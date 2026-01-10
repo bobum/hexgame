@@ -41,6 +41,8 @@ class HexGame {
     lodHigh: number;
     lodMedium: number;
     lodLow: number;
+    loadedChunks: number;
+    unloadedChunks: number;
   };
 
   // Interaction
@@ -96,6 +98,8 @@ class HexGame {
       lodHigh: 0,
       lodMedium: 0,
       lodLow: 0,
+      loadedChunks: 0,
+      unloadedChunks: 0,
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -192,6 +196,12 @@ class HexGame {
     lodFolder.add(this.debugInfo, 'lodMedium').name('Medium Detail').listen();
     lodFolder.add(this.debugInfo, 'lodLow').name('Low Detail').listen();
     lodFolder.open();
+
+    // Streaming stats panel
+    const streamFolder = this.gui.addFolder('Streaming');
+    streamFolder.add(this.debugInfo, 'loadedChunks').name('Loaded').listen();
+    streamFolder.add(this.debugInfo, 'unloadedChunks').name('Unloaded').listen();
+    streamFolder.open();
 
     // Controls help
     const helpFolder = this.gui.addFolder('Controls');
@@ -352,6 +362,11 @@ class HexGame {
     this.debugInfo.lodHigh = lodStats.high;
     this.debugInfo.lodMedium = lodStats.medium;
     this.debugInfo.lodLow = lodStats.low;
+
+    // Update streaming stats
+    const streamStats = this.terrainRenderer.getStreamingStats();
+    this.debugInfo.loadedChunks = streamStats.loaded;
+    this.debugInfo.unloadedChunks = streamStats.unloaded;
   }
 }
 
