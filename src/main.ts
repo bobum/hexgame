@@ -4,7 +4,7 @@ import GUI from 'lil-gui';
 import { HexGrid } from './core/HexGrid';
 import { HexCoordinates } from './core/HexCoordinates';
 import { MapGenerator } from './generation/MapGenerator';
-import { TerrainRenderer } from './rendering/TerrainRenderer';
+import { ChunkedTerrainRenderer } from './rendering/ChunkedTerrainRenderer';
 import { WaterRenderer } from './rendering/WaterRenderer';
 import { FeatureRenderer } from './rendering/FeatureRenderer';
 import { MapCamera } from './camera/MapCamera';
@@ -22,7 +22,7 @@ class HexGame {
   // Game systems
   private grid!: HexGrid;
   private mapGenerator!: MapGenerator;
-  private terrainRenderer!: TerrainRenderer;
+  private terrainRenderer!: ChunkedTerrainRenderer;
   private waterRenderer!: WaterRenderer;
   private featureRenderer!: FeatureRenderer;
 
@@ -36,6 +36,8 @@ class HexGame {
     drawCalls: number;
     triangles: number;
     geometries: number;
+    chunks: number;
+    visibleChunks: number;
   };
 
   // Interaction
@@ -86,6 +88,8 @@ class HexGame {
       drawCalls: 0,
       triangles: 0,
       geometries: 0,
+      chunks: 0,
+      visibleChunks: 0,
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -172,6 +176,8 @@ class HexGame {
     statsFolder.add(this.debugInfo, 'drawCalls').name('Draw Calls').listen();
     statsFolder.add(this.debugInfo, 'triangles').name('Triangles').listen();
     statsFolder.add(this.debugInfo, 'geometries').name('Geometries').listen();
+    statsFolder.add(this.debugInfo, 'chunks').name('Total Chunks').listen();
+    statsFolder.add(this.debugInfo, 'visibleChunks').name('Visible Chunks').listen();
     statsFolder.open();
 
     // Controls help
@@ -226,7 +232,7 @@ class HexGame {
     this.mapGenerator.generate();
 
     // Create new renderers with new grid
-    this.terrainRenderer = new TerrainRenderer(this.scene, this.grid);
+    this.terrainRenderer = new ChunkedTerrainRenderer(this.scene, this.grid);
     this.waterRenderer = new WaterRenderer(this.scene, this.grid);
     this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
 
@@ -243,8 +249,9 @@ class HexGame {
 
     // Update debug info
     this.debugInfo.cells = this.grid.cellCount;
+    this.debugInfo.chunks = this.terrainRenderer.chunkCount;
 
-    console.log('Map generated:', this.grid.cellCount, 'cells');
+    console.log('Map generated:', this.grid.cellCount, 'cells in', this.terrainRenderer.chunkCount, 'chunks');
   }
 
   /**
@@ -322,6 +329,7 @@ class HexGame {
     this.debugInfo.drawCalls = this.renderer.info.render.calls;
     this.debugInfo.triangles = this.renderer.info.render.triangles;
     this.debugInfo.geometries = this.renderer.info.memory.geometries;
+    this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount(this.mapCamera.camera);
   }
 }
 
