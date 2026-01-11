@@ -40,6 +40,7 @@ export class HexGrid {
           moisture: 0.5,
           temperature: 0.5,
           features: [],
+          riverDirections: [],
         };
         this.cells.set(coords.toKey(), cell);
         this.spatialHash.insert(cell, worldPos.x, worldPos.z);

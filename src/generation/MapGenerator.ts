@@ -3,6 +3,7 @@ import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexMetrics } from '../core/HexMetrics';
 import { NoiseGenerator } from './NoiseGenerator';
+import { RiverGenerator } from './RiverGenerator';
 import { getTerrainFromElevationAndBiome, calculateTemperature } from './BiomeMapper';
 import { HexCell, TerrainType, FeatureType } from '../types';
 import { getMapGenPool, workersSupported } from '../workers';
@@ -35,7 +36,16 @@ export class MapGenerator {
     this.generateElevation();
     this.generateClimate();
     this.assignTerrain();
+    this.generateRivers();
     this.generateFeatures();
+  }
+
+  /**
+   * Generate rivers flowing from high elevation to water.
+   */
+  private generateRivers(): void {
+    const riverGen = new RiverGenerator(this.grid, this.grid.config);
+    riverGen.generate();
   }
 
   /**
@@ -103,8 +113,9 @@ export class MapGenerator {
       }
     }
 
-    // Generate features on main thread (requires THREE.Vector3)
+    // Generate rivers and features on main thread
     const featureStart = performance.now();
+    this.generateRivers();
     this.generateFeatures();
     const featureTime = performance.now() - featureStart;
 

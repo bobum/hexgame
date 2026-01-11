@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HexDirection } from '../core/HexDirection';
 
 // Terrain types for the hex map
 export enum TerrainType {
@@ -42,6 +43,7 @@ export interface HexCell {
   moisture: number;           // 0-1
   temperature: number;        // 0-1
   features: Feature[];
+  riverDirections: HexDirection[];  // Directions water flows OUT of this cell
 }
 
 // Map generation configuration
@@ -55,6 +57,7 @@ export interface MapConfig {
   lacunarity: number;
   landPercentage: number;
   mountainousness: number;
+  riverPercentage: number;  // 0-0.2, controls river density
 }
 
 // Default map configuration
@@ -68,6 +71,7 @@ export const defaultMapConfig: MapConfig = {
   lacunarity: 2.0,
   landPercentage: 0.45,
   mountainousness: 0.6,
+  riverPercentage: 0.1,  // 10% of land cells as river budget
 };
 
 // Camera configuration

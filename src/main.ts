@@ -8,6 +8,7 @@ import { MapGenerator } from './generation/MapGenerator';
 import { ChunkedTerrainRenderer } from './rendering/ChunkedTerrainRenderer';
 import { InstancedHexRenderer } from './rendering/InstancedHexRenderer';
 import { WaterRenderer } from './rendering/WaterRenderer';
+import { EdgeRiverRenderer } from './rendering/EdgeRiverRenderer';
 import { FeatureRenderer } from './rendering/FeatureRenderer';
 import { MapCamera } from './camera/MapCamera';
 import { MapConfig, defaultMapConfig, HexCell, UnitType } from './types';
@@ -29,6 +30,7 @@ class HexGame {
   private terrainRenderer!: ChunkedTerrainRenderer;
   private instancedRenderer!: InstancedHexRenderer;
   private waterRenderer!: WaterRenderer;
+  private riverRenderer!: EdgeRiverRenderer;
   private featureRenderer!: FeatureRenderer;
   private unitManager!: UnitManager;
   private unitRenderer!: UnitRenderer;
@@ -193,6 +195,7 @@ class HexGame {
     mapFolder.add(this.config, 'lacunarity', 1.5, 3.0, 0.1).name('Lacunarity');
     mapFolder.add(this.config, 'landPercentage', 0.2, 0.8, 0.05).name('Land %');
     mapFolder.add(this.config, 'mountainousness', 0.1, 1.0, 0.05).name('Mountains');
+    mapFolder.add(this.config, 'riverPercentage', 0, 0.2, 0.01).name('River %');
 
     mapFolder.add({
       regenerate: () => this.generateMap()
@@ -330,6 +333,44 @@ class HexGame {
     });
 
     shaderFolder.open();
+
+    // Setup river shader controls
+    this.setupRiverShaderUI();
+  }
+
+  /**
+   * Setup river shader parameter controls.
+   */
+  private setupRiverShaderUI(): void {
+    // Remove old river folder if it exists
+    const existingFolder = this.gui.folders.find(f => f._title === 'River Settings');
+    if (existingFolder) {
+      existingFolder.destroy();
+    }
+
+    const riverUniforms = this.riverRenderer.getUniforms();
+
+    const riverFolder = this.gui.addFolder('River Settings');
+
+    riverFolder.add(riverUniforms.uFlowSpeed, 'value', 0.5, 3.0, 0.1).name('Flow Speed');
+
+    // River color
+    const colorProxy = {
+      color: '#' + riverUniforms.uRiverColor.value.getHexString()
+    };
+    riverFolder.addColor(colorProxy, 'color').name('River Color').onChange((value: string) => {
+      riverUniforms.uRiverColor.value.set(value);
+    });
+
+    // Deep color
+    const deepProxy = {
+      color: '#' + riverUniforms.uRiverColorDeep.value.getHexString()
+    };
+    riverFolder.addColor(deepProxy, 'color').name('Deep Color').onChange((value: string) => {
+      riverUniforms.uRiverColorDeep.value.set(value);
+    });
+
+    riverFolder.open();
   }
 
   /**
@@ -373,6 +414,7 @@ class HexGame {
     if (this.terrainRenderer) this.terrainRenderer.dispose();
     if (this.instancedRenderer) this.instancedRenderer.dispose();
     if (this.waterRenderer) this.waterRenderer.dispose();
+    if (this.riverRenderer) this.riverRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
     if (this.unitRenderer) this.unitRenderer.dispose();
     if (this.groundPlaneMesh) {
@@ -391,6 +433,7 @@ class HexGame {
     this.terrainRenderer = new ChunkedTerrainRenderer(this.scene, this.grid);
     this.instancedRenderer = new InstancedHexRenderer(this.scene, this.grid);
     this.waterRenderer = new WaterRenderer(this.scene, this.grid);
+    this.riverRenderer = new EdgeRiverRenderer(this.scene, this.grid);
     this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
 
     // Create unit system
@@ -406,6 +449,7 @@ class HexGame {
       this.debugInfo.renderMode = 'Chunked+LOD';
     }
     this.waterRenderer.build();
+    this.riverRenderer.build();
     this.featureRenderer.build();
 
     // Create ground plane to prevent seeing through terrain at distance
@@ -445,6 +489,7 @@ class HexGame {
     if (this.terrainRenderer) this.terrainRenderer.dispose();
     if (this.instancedRenderer) this.instancedRenderer.dispose();
     if (this.waterRenderer) this.waterRenderer.dispose();
+    if (this.riverRenderer) this.riverRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
     if (this.unitRenderer) this.unitRenderer.dispose();
     if (this.groundPlaneMesh) {
@@ -465,6 +510,7 @@ class HexGame {
     this.terrainRenderer = new ChunkedTerrainRenderer(this.scene, this.grid);
     this.instancedRenderer = new InstancedHexRenderer(this.scene, this.grid);
     this.waterRenderer = new WaterRenderer(this.scene, this.grid);
+    this.riverRenderer = new EdgeRiverRenderer(this.scene, this.grid);
     this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
 
     // Create unit system
@@ -480,6 +526,7 @@ class HexGame {
       this.debugInfo.renderMode = 'Chunked+LOD';
     }
     this.waterRenderer.build();
+    this.riverRenderer.build();
     this.featureRenderer.build();
 
     // Create ground plane to prevent seeing through terrain at distance
@@ -647,6 +694,9 @@ class HexGame {
 
     // Update water animation and visibility
     this.waterRenderer.update(deltaTime, cameraDistance);
+
+    // Update river animation and visibility
+    this.riverRenderer.update(deltaTime, cameraDistance);
 
     // Update feature visibility based on camera distance
     this.featureRenderer.update(cameraDistance);
