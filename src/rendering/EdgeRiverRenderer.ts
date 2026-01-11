@@ -162,15 +162,13 @@ export class EdgeRiverRenderer {
   }
 
   /**
-   * Trace a river path and get all the points along the edges.
-   * Returns array of points: edge corners in sequence forming the river centerline.
+   * Trace a river path and get edge MIDPOINTS only.
+   * This creates a simple path through the centers of river edges.
    */
   private traceRiverPath(source: { q: number; r: number; elevation: number; riverDirections: HexDirection[] }): Array<{
     x: number; y: number; z: number;
-    // Edge direction at this point for perpendicular calculation
-    edgeDirX: number; edgeDirZ: number;
   }> {
-    const points: Array<{ x: number; y: number; z: number; edgeDirX: number; edgeDirZ: number }> = [];
+    const points: Array<{ x: number; y: number; z: number }> = [];
     let current: { q: number; r: number; elevation: number; riverDirections: HexDirection[] } | undefined = source;
     const visited = new Set<string>();
     const corners = HexMetrics.getCorners();
@@ -188,6 +186,10 @@ export class EdgeRiverRenderer {
       const c1 = corners[edgeIndex];
       const c2 = corners[(edgeIndex + 1) % 6];
 
+      // Edge midpoint
+      const midX = centerPos.x + (c1.x + c2.x) / 2;
+      const midZ = centerPos.z + (c1.z + c2.z) / 2;
+
       // Get neighbor for Y averaging
       const neighbor = this.grid.getNeighbor(current as any, dir);
       let avgY = centerPos.y + EdgeRiverRenderer.HEIGHT_OFFSET;
@@ -197,27 +199,7 @@ export class EdgeRiverRenderer {
         avgY = (centerPos.y + neighborPos.y) / 2 + EdgeRiverRenderer.HEIGHT_OFFSET;
       }
 
-      // Edge direction
-      const edgeDirX = c2.x - c1.x;
-      const edgeDirZ = c2.z - c1.z;
-
-      // Add corner1 of this edge
-      points.push({
-        x: centerPos.x + c1.x,
-        y: avgY,
-        z: centerPos.z + c1.z,
-        edgeDirX,
-        edgeDirZ,
-      });
-
-      // Add corner2 of this edge
-      points.push({
-        x: centerPos.x + c2.x,
-        y: avgY,
-        z: centerPos.z + c2.z,
-        edgeDirX,
-        edgeDirZ,
-      });
+      points.push({ x: midX, y: avgY, z: midZ });
 
       if (!neighbor) break;
       current = neighbor;
@@ -227,10 +209,11 @@ export class EdgeRiverRenderer {
   }
 
   /**
-   * Build ONE continuous quad strip for the entire river path.
+   * Build ONE continuous quad strip connecting edge midpoints.
+   * Perpendicular is calculated based on direction to next/prev point.
    */
   private buildRiverStrip(
-    points: Array<{ x: number; y: number; z: number; edgeDirX: number; edgeDirZ: number }>,
+    points: Array<{ x: number; y: number; z: number }>,
     startIndex: number,
     renderedCells: Set<string>
   ): { vertices: number[]; uvs: number[]; indices: number[]; nextVertexIndex: number } {
@@ -249,14 +232,35 @@ export class EdgeRiverRenderer {
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
 
-      // Normalize edge direction
-      const len = Math.sqrt(p.edgeDirX * p.edgeDirX + p.edgeDirZ * p.edgeDirZ);
-      const normX = len > 0 ? p.edgeDirX / len : 1;
-      const normZ = len > 0 ? p.edgeDirZ / len : 0;
+      // Calculate direction based on neighbors
+      let dirX: number, dirZ: number;
+      if (i === 0) {
+        // First point: direction to next
+        dirX = points[1].x - p.x;
+        dirZ = points[1].z - p.z;
+      } else if (i === points.length - 1) {
+        // Last point: direction from prev
+        dirX = p.x - points[i - 1].x;
+        dirZ = p.z - points[i - 1].z;
+      } else {
+        // Middle: average of prev→current and current→next
+        dirX = points[i + 1].x - points[i - 1].x;
+        dirZ = points[i + 1].z - points[i - 1].z;
+      }
 
-      // Perpendicular to edge direction (this keeps river aligned with edge)
-      const perpX = -normZ;
-      const perpZ = normX;
+      // Normalize
+      const len = Math.sqrt(dirX * dirX + dirZ * dirZ);
+      if (len > 0) {
+        dirX /= len;
+        dirZ /= len;
+      } else {
+        dirX = 1;
+        dirZ = 0;
+      }
+
+      // Perpendicular
+      const perpX = -dirZ;
+      const perpZ = dirX;
 
       // Two vertices at this point (left and right side of river)
       vertices.push(p.x - perpX * halfWidth, p.y, p.z - perpZ * halfWidth);
