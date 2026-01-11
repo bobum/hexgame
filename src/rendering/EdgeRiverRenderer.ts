@@ -164,6 +164,7 @@ export class EdgeRiverRenderer {
   /**
    * Trace a river path along hex edges.
    * Rivers follow the hex boundary lines, pathfinding from entry edge to exit edge.
+   * Y position uses the HIGHER elevation at boundaries to avoid clipping through walls.
    */
   private traceRiverPath(source: { q: number; r: number; elevation: number; riverDirections: HexDirection[] }): Array<{
     x: number; y: number; z: number;
@@ -174,6 +175,7 @@ export class EdgeRiverRenderer {
     const corners = HexMetrics.getCorners();
 
     let prevExitEdge: number | null = null; // Track where we entered from
+    let prevElevation: number | null = null; // Track previous cell's elevation
 
     while (current && current.riverDirections.length > 0) {
       const key = `${current.q},${current.r}`;
@@ -182,17 +184,27 @@ export class EdgeRiverRenderer {
 
       const coords = new HexCoordinates(current.q, current.r);
       const centerPos = coords.toWorldPosition(current.elevation);
-      const y = centerPos.y + EdgeRiverRenderer.HEIGHT_OFFSET;
 
       const exitDir = current.riverDirections[0];
       const exitEdge = exitDir as number;
 
+      // Get neighbor elevation for boundary calculations
+      const neighbor = this.grid.getNeighbor(current as any, exitDir);
+      const neighborElevation = neighbor ? neighbor.elevation : current.elevation;
+
       // Calculate entry edge (opposite of how we got here from previous cell)
       let entryEdge: number | null = null;
       if (prevExitEdge !== null) {
-        // Entry edge is opposite of previous exit (offset by 3)
         entryEdge = (prevExitEdge + 3) % 6;
       }
+
+      // Y position: use MAX of current and relevant neighbor to stay on top of terrain
+      // For entry points, use max of current and previous cell
+      // For exit points, use max of current and next cell
+      const entryY = prevElevation !== null
+        ? Math.max(current.elevation, prevElevation) * HexMetrics.elevationStep + EdgeRiverRenderer.HEIGHT_OFFSET
+        : centerPos.y + EdgeRiverRenderer.HEIGHT_OFFSET;
+      const exitY = Math.max(current.elevation, neighborElevation) * HexMetrics.elevationStep + EdgeRiverRenderer.HEIGHT_OFFSET;
 
       // If this is the source (no entry), just add the exit edge midpoint
       if (entryEdge === null) {
@@ -200,18 +212,18 @@ export class EdgeRiverRenderer {
         const c2 = corners[(exitEdge + 1) % 6];
         points.push({
           x: centerPos.x + (c1.x + c2.x) / 2,
-          y,
+          y: exitY,
           z: centerPos.z + (c1.z + c2.z) / 2,
         });
       } else {
         // Pathfind along hex boundary from entry edge to exit edge
-        const boundaryPoints = this.getEdgePath(entryEdge, exitEdge, centerPos, y, corners);
+        const boundaryPoints = this.getEdgePath(entryEdge, exitEdge, centerPos, entryY, exitY, corners);
         points.push(...boundaryPoints);
       }
 
       prevExitEdge = exitEdge;
+      prevElevation = current.elevation;
 
-      const neighbor = this.grid.getNeighbor(current as any, exitDir);
       if (!neighbor) break;
       current = neighbor;
     }
@@ -222,71 +234,61 @@ export class EdgeRiverRenderer {
   /**
    * Get the path along hex boundary from entry edge to exit edge.
    * Returns points along the hex perimeter (corners and edge midpoints).
+   * Y is interpolated from entryY to exitY along the path.
    */
   private getEdgePath(
     entryEdge: number,
     exitEdge: number,
     centerPos: { x: number; y: number; z: number },
-    y: number,
+    entryY: number,
+    exitY: number,
     corners: Array<{ x: number; z: number }>
   ): Array<{ x: number; y: number; z: number }> {
-    const points: Array<{ x: number; y: number; z: number }> = [];
+    const tempPoints: Array<{ x: number; z: number }> = [];
 
     // Entry edge midpoint
     const entryC1 = corners[entryEdge];
     const entryC2 = corners[(entryEdge + 1) % 6];
-    points.push({
+    tempPoints.push({
       x: centerPos.x + (entryC1.x + entryC2.x) / 2,
-      y,
       z: centerPos.z + (entryC1.z + entryC2.z) / 2,
     });
 
     // Find shortest path around hex boundary
-    // Each edge shares corners: edge i has corners i and i+1
-    // Entry edge i has corners i and i+1
-    // Exit edge j has corners j and j+1
-
-    // Determine which direction around the hex is shorter
     const clockwiseDist = (exitEdge - entryEdge + 6) % 6;
     const counterClockwiseDist = (entryEdge - exitEdge + 6) % 6;
 
     if (clockwiseDist <= counterClockwiseDist) {
-      // Go clockwise: from entry corner (entryEdge+1) to exit corner (exitEdge)
+      // Go clockwise
       let cornerIdx = (entryEdge + 1) % 6;
       while (cornerIdx !== exitEdge) {
         const corner = corners[cornerIdx];
-        points.push({
+        tempPoints.push({
           x: centerPos.x + corner.x,
-          y,
           z: centerPos.z + corner.z,
         });
         cornerIdx = (cornerIdx + 1) % 6;
       }
-      // Add the exit edge's first corner
       const exitCorner = corners[exitEdge];
-      points.push({
+      tempPoints.push({
         x: centerPos.x + exitCorner.x,
-        y,
         z: centerPos.z + exitCorner.z,
       });
     } else {
-      // Go counter-clockwise: from entry corner (entryEdge) to exit corner (exitEdge+1)
+      // Go counter-clockwise
       let cornerIdx = entryEdge;
       const targetCorner = (exitEdge + 1) % 6;
       while (cornerIdx !== targetCorner) {
         const corner = corners[cornerIdx];
-        points.push({
+        tempPoints.push({
           x: centerPos.x + corner.x,
-          y,
           z: centerPos.z + corner.z,
         });
         cornerIdx = (cornerIdx - 1 + 6) % 6;
       }
-      // Add the exit edge's second corner
       const exitCorner = corners[targetCorner];
-      points.push({
+      tempPoints.push({
         x: centerPos.x + exitCorner.x,
-        y,
         z: centerPos.z + exitCorner.z,
       });
     }
@@ -294,11 +296,18 @@ export class EdgeRiverRenderer {
     // Exit edge midpoint
     const exitC1 = corners[exitEdge];
     const exitC2 = corners[(exitEdge + 1) % 6];
-    points.push({
+    tempPoints.push({
       x: centerPos.x + (exitC1.x + exitC2.x) / 2,
-      y,
       z: centerPos.z + (exitC1.z + exitC2.z) / 2,
     });
+
+    // Now add Y values, interpolating from entryY to exitY
+    const points: Array<{ x: number; y: number; z: number }> = [];
+    for (let i = 0; i < tempPoints.length; i++) {
+      const t = tempPoints.length > 1 ? i / (tempPoints.length - 1) : 0;
+      const y = entryY + (exitY - entryY) * t;
+      points.push({ x: tempPoints[i].x, y, z: tempPoints[i].z });
+    }
 
     return points;
   }
