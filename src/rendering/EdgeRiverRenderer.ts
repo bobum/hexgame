@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexMetrics } from '../core/HexMetrics';
-import { HexDirection } from '../core/HexDirection';
+import { HexDirection, opposite } from '../core/HexDirection';
 import { LODDistances } from './LODHexBuilder';
 
 /**
  * Renders rivers as edge-based meshes with animated flow.
- * Rivers are rendered as quad strips along hex edges.
+ * Rivers follow hex boundaries, tracing along edges between hexes.
  */
 export class EdgeRiverRenderer {
   private mesh: THREE.Mesh | null = null;
@@ -16,7 +16,7 @@ export class EdgeRiverRenderer {
   private time = 0;
 
   // River width relative to hex edge
-  private static readonly RIVER_WIDTH = 0.25;
+  private static readonly RIVER_WIDTH = 0.15;
   // Height offset above terrain to avoid z-fighting
   private static readonly HEIGHT_OFFSET = 0.02;
 
@@ -27,6 +27,39 @@ export class EdgeRiverRenderer {
     uFlowSpeed: { value: 1.5 },
   };
 
+  /**
+   * Maps HexDirection to the corner indices that form that edge.
+   * Corners are at angles 30°, 90°, 150°, 210°, 270°, 330° (indices 0-5).
+   *
+   * Corner layout (looking down at XZ plane, +Z is forward):
+   *       1 (90°, +Z)
+   *      / \
+   *   2 /   \ 0 (30°, +X,+Z)
+   *    |     |
+   *   3 \   / 5 (330°, +X,-Z)
+   *      \ /
+   *       4 (270°, -Z)
+   *
+   * Edge indices are determined by which direction they face:
+   * Edge 0 faces 60° (toward +X,+Z), Edge 5 faces 0° (toward +X), etc.
+   *
+   * HexDirection world angles (calculated from toWorldPosition):
+   * - NE [1,0,-1]: angle 0° → edge 5
+   * - E [1,-1,0]: angle -60° (300°) → edge 4
+   * - SE [0,-1,1]: angle -120° (240°) → edge 3
+   * - SW [-1,0,1]: angle 180° → edge 2
+   * - W [-1,1,0]: angle 120° → edge 1
+   * - NW [0,1,-1]: angle 60° → edge 0
+   */
+  private static readonly DIRECTION_TO_CORNERS: Record<HexDirection, [number, number]> = {
+    [HexDirection.NE]: [5, 0],  // edge 5: corners 5→0 (faces 0°, +X direction)
+    [HexDirection.E]: [4, 5],   // edge 4: corners 4→5 (faces 300°, +X,-Z direction)
+    [HexDirection.SE]: [3, 4],  // edge 3: corners 3→4 (faces 240°, -X,-Z direction)
+    [HexDirection.SW]: [2, 3],  // edge 2: corners 2→3 (faces 180°, -X direction)
+    [HexDirection.W]: [1, 2],   // edge 1: corners 1→2 (faces 120°, -X,+Z direction)
+    [HexDirection.NW]: [0, 1],  // edge 0: corners 0→1 (faces 60°, +X,+Z direction)
+  };
+
   constructor(scene: THREE.Scene, grid: HexGrid) {
     this.scene = scene;
     this.grid = grid;
@@ -34,7 +67,8 @@ export class EdgeRiverRenderer {
 
   /**
    * Build the river mesh from grid river data.
-   * Traces complete river paths and builds connected geometry.
+   * Rivers are drawn as quads along hex edges, with connecting segments
+   * that trace around hex boundaries when rivers pass through.
    */
   build(): void {
     // Remove existing mesh
@@ -52,88 +86,131 @@ export class EdgeRiverRenderer {
     const corners = HexMetrics.getCorners();
     const halfWidth = EdgeRiverRenderer.RIVER_WIDTH;
 
-    // Find river sources (cells with outgoing rivers but no incoming)
-    const hasIncoming = new Set<string>();
+    // Build a map of incoming river directions for each cell
+    const incomingRivers = new Map<string, HexDirection[]>();
     for (const cell of this.grid.getAllCells()) {
       for (const dir of cell.riverDirections) {
         const neighbor = this.grid.getNeighbor(cell, dir);
         if (neighbor) {
-          hasIncoming.add(`${neighbor.q},${neighbor.r}`);
+          const key = `${neighbor.q},${neighbor.r}`;
+          if (!incomingRivers.has(key)) {
+            incomingRivers.set(key, []);
+          }
+          incomingRivers.get(key)!.push(opposite(dir));
         }
       }
     }
 
-    // Find sources and trace each river
-    const sources = this.grid.getAllCells().filter(cell =>
-      cell.riverDirections.length > 0 && !hasIncoming.has(`${cell.q},${cell.r}`)
-    );
-
-    // Track rendered edges to avoid duplicates across rivers
+    // Track rendered edges to avoid duplicates
     const renderedEdges = new Set<string>();
 
-    for (const source of sources) {
-      // Trace this river path
-      const edgeSegments = this.traceRiverEdges(source, corners);
-      if (edgeSegments.length === 0) continue;
+    // Process each cell that has rivers
+    for (const cell of this.grid.getAllCells()) {
+      const outgoing = cell.riverDirections;
+      const incoming = incomingRivers.get(`${cell.q},${cell.r}`) || [];
 
-      // Build connected quad strip for this river
-      let totalLength = 0;
-      for (const seg of edgeSegments) {
-        if (!renderedEdges.has(seg.edgeKey)) {
-          totalLength++;
-        }
-      }
-      if (totalLength === 0) continue;
+      if (outgoing.length === 0 && incoming.length === 0) continue;
 
-      let segmentIndex = 0;
-      for (let i = 0; i < edgeSegments.length; i++) {
-        const seg = edgeSegments[i];
+      const coords = new HexCoordinates(cell.q, cell.r);
+      const centerPos = coords.toWorldPosition(cell.elevation);
 
-        if (renderedEdges.has(seg.edgeKey)) continue;
-        renderedEdges.add(seg.edgeKey);
+      // Get world positions of all 6 corners for this cell
+      const worldCorners: THREE.Vector3[] = corners.map(c =>
+        new THREE.Vector3(centerPos.x + c.x, 0, centerPos.z + c.z)
+      );
 
-        // Four vertices for this edge quad
-        vertices.push(seg.corner1X - seg.perpX, seg.y, seg.corner1Z - seg.perpZ);
-        vertices.push(seg.corner1X + seg.perpX, seg.y, seg.corner1Z + seg.perpZ);
-        vertices.push(seg.corner2X + seg.perpX, seg.y, seg.corner2Z + seg.perpZ);
-        vertices.push(seg.corner2X - seg.perpX, seg.y, seg.corner2Z - seg.perpZ);
+      // For each outgoing river, draw the edge quad
+      for (const outDir of outgoing) {
+        const neighbor = this.grid.getNeighbor(cell, outDir);
+        if (!neighbor) continue;
 
-        // UVs based on position in river
-        const vStart = segmentIndex / totalLength;
-        const vEnd = (segmentIndex + 1) / totalLength;
-        uvs.push(0, vStart);
-        uvs.push(1, vStart);
-        uvs.push(1, vEnd);
-        uvs.push(0, vEnd);
+        const edgeKey = this.getEdgeKey(cell.q, cell.r, neighbor.q, neighbor.r);
+        if (renderedEdges.has(edgeKey)) continue;
+        renderedEdges.add(edgeKey);
 
-        // Two triangles for quad
+        // Get the corners for this edge
+        const [c1Idx, c2Idx] = EdgeRiverRenderer.DIRECTION_TO_CORNERS[outDir];
+        const c1 = worldCorners[c1Idx];
+        const c2 = worldCorners[c2Idx];
+
+        // Calculate edge midpoint and perpendicular
+        const midX = (c1.x + c2.x) / 2;
+        const midZ = (c1.z + c2.z) / 2;
+        const edgeDX = c2.x - c1.x;
+        const edgeDZ = c2.z - c1.z;
+        const edgeLen = Math.sqrt(edgeDX * edgeDX + edgeDZ * edgeDZ);
+        const perpX = -edgeDZ / edgeLen * halfWidth;
+        const perpZ = edgeDX / edgeLen * halfWidth;
+
+        // Y position: use higher of the two cells
+        const y = Math.max(cell.elevation, neighbor.elevation) * HexMetrics.elevationStep
+          + EdgeRiverRenderer.HEIGHT_OFFSET;
+
+        // Draw quad along the edge
+        vertices.push(c1.x - perpX, y, c1.z - perpZ);
+        vertices.push(c1.x + perpX, y, c1.z + perpZ);
+        vertices.push(c2.x + perpX, y, c2.z + perpZ);
+        vertices.push(c2.x - perpX, y, c2.z - perpZ);
+
+        uvs.push(0, 0);
+        uvs.push(1, 0);
+        uvs.push(1, 1);
+        uvs.push(0, 1);
+
         indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
         vertexIndex += 4;
+      }
 
-        // Add connecting triangle at corners if there's a next segment
-        if (i < edgeSegments.length - 1) {
-          const nextSeg = edgeSegments[i + 1];
-          if (!renderedEdges.has(nextSeg.edgeKey)) {
-            // Add triangular connector between this edge's corner2 and next edge's corner1
-            // This fills the gap at the shared corner
-            vertices.push(seg.corner2X - seg.perpX, seg.y, seg.corner2Z - seg.perpZ);
-            vertices.push(seg.corner2X + seg.perpX, seg.y, seg.corner2Z + seg.perpZ);
-            vertices.push(nextSeg.corner1X - nextSeg.perpX, nextSeg.y, nextSeg.corner1Z - nextSeg.perpZ);
-            vertices.push(nextSeg.corner1X + nextSeg.perpX, nextSeg.y, nextSeg.corner1Z + nextSeg.perpZ);
+      // If this cell has both incoming and outgoing rivers, draw connecting path
+      // along the hex boundary from incoming edge to outgoing edge
+      if (incoming.length > 0 && outgoing.length > 0) {
+        for (const inDir of incoming) {
+          for (const outDir of outgoing) {
+            // Get the shared corner between incoming and outgoing edges
+            const [inC1, inC2] = EdgeRiverRenderer.DIRECTION_TO_CORNERS[inDir];
+            const [outC1, outC2] = EdgeRiverRenderer.DIRECTION_TO_CORNERS[outDir];
 
-            uvs.push(0, vEnd);
-            uvs.push(1, vEnd);
-            uvs.push(0, vEnd);
-            uvs.push(1, vEnd);
+            // Find path from incoming edge to outgoing edge along hex boundary
+            // The path goes through corners between the two edges
+            const pathCorners = this.findCornerPath(inC2, outC1);
 
-            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 3);
-            indices.push(vertexIndex, vertexIndex + 3, vertexIndex + 2);
-            vertexIndex += 4;
+            if (pathCorners.length >= 2) {
+              const y = cell.elevation * HexMetrics.elevationStep + EdgeRiverRenderer.HEIGHT_OFFSET;
+
+              // Draw quads along the corner path
+              for (let i = 0; i < pathCorners.length - 1; i++) {
+                const cIdx1 = pathCorners[i];
+                const cIdx2 = pathCorners[i + 1];
+                const p1 = worldCorners[cIdx1];
+                const p2 = worldCorners[cIdx2];
+
+                // Calculate perpendicular for this segment
+                const segDX = p2.x - p1.x;
+                const segDZ = p2.z - p1.z;
+                const segLen = Math.sqrt(segDX * segDX + segDZ * segDZ);
+                if (segLen < 0.001) continue;
+
+                const sPerpX = -segDZ / segLen * halfWidth;
+                const sPerpZ = segDX / segLen * halfWidth;
+
+                vertices.push(p1.x - sPerpX, y, p1.z - sPerpZ);
+                vertices.push(p1.x + sPerpX, y, p1.z + sPerpZ);
+                vertices.push(p2.x + sPerpX, y, p2.z + sPerpZ);
+                vertices.push(p2.x - sPerpX, y, p2.z - sPerpZ);
+
+                uvs.push(0, 0);
+                uvs.push(1, 0);
+                uvs.push(1, 1);
+                uvs.push(0, 1);
+
+                indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+                indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
+                vertexIndex += 4;
+              }
+            }
           }
         }
-
-        segmentIndex++;
       }
     }
 
@@ -219,77 +296,34 @@ export class EdgeRiverRenderer {
   }
 
   /**
-   * Trace a river path and collect all edge segments with their geometry.
+   * Find the shortest path of corner indices from start to end,
+   * going around the hex boundary (clockwise or counterclockwise).
    */
-  private traceRiverEdges(
-    source: { q: number; r: number; elevation: number; riverDirections: HexDirection[] },
-    corners: Array<{ x: number; z: number }>
-  ): Array<{
-    edgeKey: string;
-    corner1X: number; corner1Z: number;
-    corner2X: number; corner2Z: number;
-    perpX: number; perpZ: number;
-    y: number;
-  }> {
-    const segments: Array<{
-      edgeKey: string;
-      corner1X: number; corner1Z: number;
-      corner2X: number; corner2Z: number;
-      perpX: number; perpZ: number;
-      y: number;
-    }> = [];
-
-    let current: { q: number; r: number; elevation: number; riverDirections: HexDirection[] } | undefined = source;
-    const visited = new Set<string>();
-    const halfWidth = EdgeRiverRenderer.RIVER_WIDTH;
-
-    while (current && current.riverDirections.length > 0) {
-      const key = `${current.q},${current.r}`;
-      if (visited.has(key)) break;
-      visited.add(key);
-
-      const coords = new HexCoordinates(current.q, current.r);
-      const centerPos = coords.toWorldPosition(current.elevation);
-
-      const dir = current.riverDirections[0];
-      const neighbor = this.grid.getNeighbor(current as any, dir);
-      if (!neighbor) break;
-
-      const edgeKey = this.getEdgeKey(current.q, current.r, neighbor.q, neighbor.r);
-
-      // Get edge corners
-      const edgeIndex = dir as number;
-      const c1 = corners[edgeIndex];
-      const c2 = corners[(edgeIndex + 1) % 6];
-
-      // World positions of corners
-      const corner1X = centerPos.x + c1.x;
-      const corner1Z = centerPos.z + c1.z;
-      const corner2X = centerPos.x + c2.x;
-      const corner2Z = centerPos.z + c2.z;
-
-      // Y position: use higher of the two cells
-      const y = Math.max(current.elevation, neighbor.elevation) * HexMetrics.elevationStep + EdgeRiverRenderer.HEIGHT_OFFSET;
-
-      // Edge direction and perpendicular
-      const edgeDX = corner2X - corner1X;
-      const edgeDZ = corner2Z - corner1Z;
-      const edgeLen = Math.sqrt(edgeDX * edgeDX + edgeDZ * edgeDZ);
-      const perpX = -edgeDZ / edgeLen * halfWidth;
-      const perpZ = edgeDX / edgeLen * halfWidth;
-
-      segments.push({
-        edgeKey,
-        corner1X, corner1Z,
-        corner2X, corner2Z,
-        perpX, perpZ,
-        y,
-      });
-
-      current = neighbor;
+  private findCornerPath(startCorner: number, endCorner: number): number[] {
+    if (startCorner === endCorner) {
+      return [startCorner];
     }
 
-    return segments;
+    // Try clockwise path
+    const cwPath: number[] = [startCorner];
+    let current = startCorner;
+    while (current !== endCorner) {
+      current = (current + 1) % 6;
+      cwPath.push(current);
+      if (cwPath.length > 6) break; // Safety
+    }
+
+    // Try counterclockwise path
+    const ccwPath: number[] = [startCorner];
+    current = startCorner;
+    while (current !== endCorner) {
+      current = (current + 5) % 6; // -1 mod 6
+      ccwPath.push(current);
+      if (ccwPath.length > 6) break; // Safety
+    }
+
+    // Return shorter path
+    return cwPath.length <= ccwPath.length ? cwPath : ccwPath;
   }
 
   /**
