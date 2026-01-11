@@ -147,18 +147,13 @@ const fragmentShader = /* glsl */ `
 
   void main() {
     vec3 normal = normalize(vWorldNormal);
-    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-
-    // Start with vertex color as base
     vec3 baseColor = vTerrainColor;
 
-    // ============================================
-    // Decide projection based on surface orientation
-    // ============================================
+    // Apply noise based on surface orientation
     vec3 texturedColor;
 
     if (abs(normal.y) > 0.7) {
-      // Mostly horizontal (hex tops) - use top-down projection
+      // Hex tops - use top-down projection
       float noiseVal = fbm(vWorldPosition.xz * uTextureScale);
       texturedColor = baseColor * (1.0 + (noiseVal - 0.5) * uNoiseStrength);
     } else {
@@ -166,18 +161,10 @@ const fragmentShader = /* glsl */ `
       texturedColor = triplanarSample(vWorldPosition, normal, baseColor);
     }
 
-    // Add terrain-specific detail
-    vec3 detail = getTerrainDetail(vTerrainType, vWorldPosition);
-    texturedColor *= (0.9 + detail.r * 0.2);
-
-    // Apply PBR lighting
-    vec3 finalColor = pbrLighting(texturedColor, normal, viewDir);
-
-    // Tone mapping (simple Reinhard)
-    finalColor = finalColor / (finalColor + vec3(1.0));
-
-    // Gamma correction
-    finalColor = pow(finalColor, vec3(1.0 / 2.2));
+    // Simple directional lighting
+    float NdotL = max(dot(normal, uSunDirection), 0.0);
+    float lightFactor = 0.35 + 0.65 * NdotL;
+    vec3 finalColor = texturedColor * lightFactor;
 
     gl_FragColor = vec4(finalColor, 1.0);
   }
@@ -197,11 +184,11 @@ export interface TerrainShaderUniforms {
 const defaultUniforms: TerrainShaderUniforms = {
   uSunDirection: new THREE.Vector3(0.5, 0.8, 0.3).normalize(),
   uSunColor: new THREE.Color(1.0, 0.95, 0.9),
-  uAmbientColor: new THREE.Color(0.3, 0.35, 0.4),
+  uAmbientColor: new THREE.Color(0.15, 0.18, 0.22),  // Reduced ambient for more contrast
   uTime: 0,
-  uTextureScale: 0.5,
+  uTextureScale: 3.0,        // Higher = smaller patterns, visible within each hex
   uTriplanarSharpness: 4.0,
-  uNoiseStrength: 0.3,
+  uNoiseStrength: 0.4,       // Subtle but visible
   uRoughness: 0.7,
 };
 
