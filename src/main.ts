@@ -373,8 +373,11 @@ class HexGame {
     // Update camera
     this.mapCamera.update(deltaTime);
 
-    // Update water animation
-    this.waterRenderer.update(deltaTime);
+    // Update water animation and visibility
+    this.waterRenderer.update(deltaTime, this.mapCamera.camera);
+
+    // Update feature visibility based on camera distance
+    this.featureRenderer.update(this.mapCamera.camera);
 
     // Update terrain shader (time uniform for potential animations)
     if (!this.useInstancing) {
