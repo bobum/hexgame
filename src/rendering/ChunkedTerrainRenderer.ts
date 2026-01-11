@@ -6,6 +6,9 @@ import { LODHexBuilder, LODDistances } from './LODHexBuilder';
 import { createTerrainMaterial, updateTerrainMaterial } from './TerrainShaderMaterial';
 import { HexCell } from '../types';
 
+// Hard distance cutoff - beyond fog (50), chunks are invisible anyway
+const MAX_RENDER_DISTANCE = 70;
+
 /**
  * A chunk of terrain containing multiple hex cells with LOD support.
  */
@@ -158,10 +161,70 @@ export class ChunkedTerrainRenderer {
    * Update LOD levels based on camera position. Call each frame.
    */
   update(camera: THREE.Camera): void {
+    // First update visibility (frustum + distance culling)
+    this.updateVisibility(camera);
+
+    // Then update LOD levels for visible chunks only
     for (const chunk of this.chunks.values()) {
-      if (chunk.lod) {
+      if (chunk.lod && chunk.lod.visible) {
         chunk.lod.update(camera);
       }
+    }
+  }
+
+  /**
+   * Get bounding sphere for a chunk in world space.
+   */
+  private getChunkBoundingSphere(chunk: TerrainChunk): THREE.Sphere {
+    if (chunk.lod && chunk.lod.children.length > 0) {
+      const mesh = chunk.lod.children[0] as THREE.Mesh;
+      if (mesh && mesh.geometry.boundingSphere) {
+        const sphere = mesh.geometry.boundingSphere.clone();
+        // Apply mesh offset and LOD position to get world space
+        sphere.center.add(mesh.position);
+        sphere.center.add(chunk.lod.position);
+        return sphere;
+      }
+    }
+    // Fallback: create sphere from chunk center
+    const radius = ChunkedTerrainRenderer.CHUNK_SIZE * 0.75;
+    return new THREE.Sphere(
+      new THREE.Vector3(chunk.centerX, 0, chunk.centerZ),
+      radius
+    );
+  }
+
+  /**
+   * Update chunk visibility based on frustum and distance culling.
+   */
+  private updateVisibility(camera: THREE.Camera): void {
+    const frustum = new THREE.Frustum();
+    const projScreenMatrix = new THREE.Matrix4();
+    projScreenMatrix.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse
+    );
+    frustum.setFromProjectionMatrix(projScreenMatrix);
+
+    const cameraPos = camera.position;
+    const maxDistSq = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE;
+
+    for (const chunk of this.chunks.values()) {
+      if (!chunk.lod) continue;
+
+      // Distance check first (cheaper than frustum test)
+      const dx = chunk.centerX - cameraPos.x;
+      const dz = chunk.centerZ - cameraPos.z;
+      const distSq = dx * dx + dz * dz;
+
+      if (distSq > maxDistSq) {
+        chunk.lod.visible = false;
+        continue;
+      }
+
+      // Frustum check
+      const sphere = this.getChunkBoundingSphere(chunk);
+      chunk.lod.visible = frustum.intersectsSphere(sphere);
     }
   }
 
@@ -193,28 +256,14 @@ export class ChunkedTerrainRenderer {
     return this.material;
   }
 
-  getVisibleChunkCount(camera: THREE.Camera): number {
-    const frustum = new THREE.Frustum();
-    const projScreenMatrix = new THREE.Matrix4();
-    projScreenMatrix.multiplyMatrices(
-      camera.projectionMatrix,
-      camera.matrixWorldInverse
-    );
-    frustum.setFromProjectionMatrix(projScreenMatrix);
-
+  /**
+   * Get count of currently visible chunks (after culling).
+   */
+  getVisibleChunkCount(): number {
     let visible = 0;
     for (const chunk of this.chunks.values()) {
-      if (chunk.lod && chunk.lod.children.length > 0) {
-        const mesh = chunk.lod.children[0] as THREE.Mesh;
-        if (mesh && mesh.geometry.boundingSphere) {
-          const sphere = mesh.geometry.boundingSphere.clone();
-          // Apply both mesh offset and LOD position
-          sphere.center.add(mesh.position);
-          sphere.center.add(chunk.lod.position);
-          if (frustum.intersectsSphere(sphere)) {
-            visible++;
-          }
-        }
+      if (chunk.lod && chunk.lod.visible) {
+        visible++;
       }
     }
     return visible;
