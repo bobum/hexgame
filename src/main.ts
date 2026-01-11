@@ -9,8 +9,9 @@ import { InstancedHexRenderer } from './rendering/InstancedHexRenderer';
 import { WaterRenderer } from './rendering/WaterRenderer';
 import { FeatureRenderer } from './rendering/FeatureRenderer';
 import { MapCamera } from './camera/MapCamera';
-import { MapConfig, defaultMapConfig, HexCell } from './types';
+import { MapConfig, defaultMapConfig, HexCell, UnitType } from './types';
 import { PerformanceMonitor } from './utils/PerformanceMonitor';
+import { UnitManager, UnitRenderer } from './units';
 
 /**
  * Main application class for the hex map game.
@@ -28,6 +29,8 @@ class HexGame {
   private instancedRenderer!: InstancedHexRenderer;
   private waterRenderer!: WaterRenderer;
   private featureRenderer!: FeatureRenderer;
+  private unitManager!: UnitManager;
+  private unitRenderer!: UnitRenderer;
 
   // Render mode
   private useInstancing: boolean = false;
@@ -54,6 +57,9 @@ class HexGame {
     maxFrameTime: string;
     generationTime: string;
     memoryMB: number;
+    // Units
+    unitCount: number;
+    poolStats: string;
   };
 
   // Interaction
@@ -121,6 +127,9 @@ class HexGame {
       maxFrameTime: '0.0 ms',
       generationTime: '0 ms',
       memoryMB: 0,
+      // Units
+      unitCount: 0,
+      poolStats: '',
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -236,6 +245,33 @@ class HexGame {
     }, 'runStressTest').name('Run Stress Test');
     perfFolder.open();
 
+    // Units panel
+    const unitsFolder = this.gui.addFolder('Units');
+    unitsFolder.add(this.debugInfo, 'unitCount').name('Unit Count').listen();
+    unitsFolder.add(this.debugInfo, 'poolStats').name('Pool Stats').listen();
+    unitsFolder.add({
+      spawn10: () => {
+        const spawned = this.unitManager.spawnRandomUnits(10, 1);
+        console.log(`Spawned ${spawned} units`);
+        this.unitRenderer.markDirty();
+      }
+    }, 'spawn10').name('Spawn 10 Units');
+    unitsFolder.add({
+      spawn100: () => {
+        const spawned = this.unitManager.spawnRandomUnits(100, 1);
+        console.log(`Spawned ${spawned} units`);
+        this.unitRenderer.markDirty();
+      }
+    }, 'spawn100').name('Spawn 100 Units');
+    unitsFolder.add({
+      clearUnits: () => {
+        this.unitManager.clear();
+        this.unitRenderer.markDirty();
+        console.log('Cleared all units');
+      }
+    }, 'clearUnits').name('Clear Units');
+    unitsFolder.open();
+
     // Controls help
     const helpFolder = this.gui.addFolder('Controls');
     helpFolder.add({ text: 'WASD / Arrows: Pan' }, 'text').name('');
@@ -333,6 +369,7 @@ class HexGame {
     if (this.instancedRenderer) this.instancedRenderer.dispose();
     if (this.waterRenderer) this.waterRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
+    if (this.unitRenderer) this.unitRenderer.dispose();
 
     // Recreate grid with new config
     this.grid = new HexGrid(this.config);
@@ -344,6 +381,10 @@ class HexGame {
     this.instancedRenderer = new InstancedHexRenderer(this.scene, this.grid);
     this.waterRenderer = new WaterRenderer(this.scene, this.grid);
     this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
+
+    // Create unit system
+    this.unitManager = new UnitManager(this.grid);
+    this.unitRenderer = new UnitRenderer(this.scene, this.unitManager);
 
     // Build active renderer based on mode
     if (this.useInstancing) {
@@ -391,6 +432,7 @@ class HexGame {
     if (this.instancedRenderer) this.instancedRenderer.dispose();
     if (this.waterRenderer) this.waterRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
+    if (this.unitRenderer) this.unitRenderer.dispose();
 
     // Recreate grid with new config
     this.grid = new HexGrid(this.config);
@@ -404,6 +446,10 @@ class HexGame {
     this.instancedRenderer = new InstancedHexRenderer(this.scene, this.grid);
     this.waterRenderer = new WaterRenderer(this.scene, this.grid);
     this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
+
+    // Create unit system
+    this.unitManager = new UnitManager(this.grid);
+    this.unitRenderer = new UnitRenderer(this.scene, this.unitManager);
 
     // Build active renderer based on mode
     if (this.useInstancing) {
@@ -551,6 +597,18 @@ class HexGame {
     // Update terrain LOD (only for chunked mode)
     if (!this.useInstancing) {
       this.terrainRenderer.update(this.mapCamera.camera);
+    }
+
+    // Update unit renderer
+    if (this.unitRenderer) {
+      this.unitRenderer.update();
+    }
+
+    // Update unit stats
+    if (this.unitManager) {
+      this.debugInfo.unitCount = this.unitManager.unitCount;
+      const stats = this.unitManager.poolStats;
+      this.debugInfo.poolStats = `${stats.active}/${stats.created} (${(stats.reuseRate * 100).toFixed(0)}%)`;
     }
 
     // Render
