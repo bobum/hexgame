@@ -319,6 +319,9 @@ class HexGame {
     // Update hover detection
     this.updateHover();
 
+    // Update terrain LOD based on camera distance
+    this.terrainRenderer.update(this.mapCamera.camera);
+
     // Update FPS
     this.debugInfo.fps = Math.round(1 / deltaTime);
 
