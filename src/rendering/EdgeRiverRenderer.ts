@@ -69,11 +69,11 @@ export class EdgeRiverRenderer {
 
     // Trace and render each river path
     for (const source of sources) {
-      const edges = this.traceRiverEdges(source);
-      if (edges.length === 0) continue;
+      const points = this.traceRiverPath(source);
+      if (points.length < 2) continue;
 
-      // Build quad strip along edges
-      const result = this.buildRiverStrip(edges, vertexIndex, renderedCells);
+      // Build ONE continuous quad strip for entire river
+      const result = this.buildRiverStrip(points, vertexIndex, renderedCells);
       vertices.push(...result.vertices);
       uvs.push(...result.uvs);
       indices.push(...result.indices);
@@ -162,15 +162,15 @@ export class EdgeRiverRenderer {
   }
 
   /**
-   * Trace a river path and get the edge segments (corner pairs) to draw.
-   * Returns array of edge segments, each with two corner positions and Y height.
+   * Trace a river path and get all the points along the edges.
+   * Returns array of points: edge corners in sequence forming the river centerline.
    */
-  private traceRiverEdges(source: { q: number; r: number; elevation: number; riverDirections: HexDirection[] }): Array<{
-    corner1: { x: number; z: number };
-    corner2: { x: number; z: number };
-    y: number;
+  private traceRiverPath(source: { q: number; r: number; elevation: number; riverDirections: HexDirection[] }): Array<{
+    x: number; y: number; z: number;
+    // Edge direction at this point for perpendicular calculation
+    edgeDirX: number; edgeDirZ: number;
   }> {
-    const edges: Array<{ corner1: { x: number; z: number }; corner2: { x: number; z: number }; y: number }> = [];
+    const points: Array<{ x: number; y: number; z: number; edgeDirX: number; edgeDirZ: number }> = [];
     let current: { q: number; r: number; elevation: number; riverDirections: HexDirection[] } | undefined = source;
     const visited = new Set<string>();
     const corners = HexMetrics.getCorners();
@@ -197,25 +197,40 @@ export class EdgeRiverRenderer {
         avgY = (centerPos.y + neighborPos.y) / 2 + EdgeRiverRenderer.HEIGHT_OFFSET;
       }
 
-      edges.push({
-        corner1: { x: centerPos.x + c1.x, z: centerPos.z + c1.z },
-        corner2: { x: centerPos.x + c2.x, z: centerPos.z + c2.z },
+      // Edge direction
+      const edgeDirX = c2.x - c1.x;
+      const edgeDirZ = c2.z - c1.z;
+
+      // Add corner1 of this edge
+      points.push({
+        x: centerPos.x + c1.x,
         y: avgY,
+        z: centerPos.z + c1.z,
+        edgeDirX,
+        edgeDirZ,
+      });
+
+      // Add corner2 of this edge
+      points.push({
+        x: centerPos.x + c2.x,
+        y: avgY,
+        z: centerPos.z + c2.z,
+        edgeDirX,
+        edgeDirZ,
       });
 
       if (!neighbor) break;
       current = neighbor;
     }
 
-    return edges;
+    return points;
   }
 
   /**
-   * Build quad strips along edge segments for a river.
-   * Each edge gets a quad running along the edge line.
+   * Build ONE continuous quad strip for the entire river path.
    */
   private buildRiverStrip(
-    edges: Array<{ corner1: { x: number; z: number }; corner2: { x: number; z: number }; y: number }>,
+    points: Array<{ x: number; y: number; z: number; edgeDirX: number; edgeDirZ: number }>,
     startIndex: number,
     renderedCells: Set<string>
   ): { vertices: number[]; uvs: number[]; indices: number[]; nextVertexIndex: number } {
@@ -224,52 +239,43 @@ export class EdgeRiverRenderer {
     const indices: number[] = [];
     let vertexIndex = startIndex;
 
+    if (points.length < 2) {
+      return { vertices, uvs, indices, nextVertexIndex: vertexIndex };
+    }
+
     const halfWidth = EdgeRiverRenderer.RIVER_WIDTH;
 
-    for (let i = 0; i < edges.length; i++) {
-      const edge = edges[i];
+    // Build continuous quad strip
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
 
-      // Direction along the edge
-      const edgeDX = edge.corner2.x - edge.corner1.x;
-      const edgeDZ = edge.corner2.z - edge.corner1.z;
-      const edgeLen = Math.sqrt(edgeDX * edgeDX + edgeDZ * edgeDZ);
+      // Normalize edge direction
+      const len = Math.sqrt(p.edgeDirX * p.edgeDirX + p.edgeDirZ * p.edgeDirZ);
+      const normX = len > 0 ? p.edgeDirX / len : 1;
+      const normZ = len > 0 ? p.edgeDirZ / len : 0;
 
-      if (edgeLen === 0) continue;
+      // Perpendicular to edge direction (this keeps river aligned with edge)
+      const perpX = -normZ;
+      const perpZ = normX;
 
-      const edgeNormX = edgeDX / edgeLen;
-      const edgeNormZ = edgeDZ / edgeLen;
+      // Two vertices at this point (left and right side of river)
+      vertices.push(p.x - perpX * halfWidth, p.y, p.z - perpZ * halfWidth);
+      vertices.push(p.x + perpX * halfWidth, p.y, p.z + perpZ * halfWidth);
 
-      // Perpendicular to edge (for river width)
-      const perpX = -edgeNormZ;
-      const perpZ = edgeNormX;
+      // UV coordinates
+      const v = i / (points.length - 1);
+      uvs.push(0, v);
+      uvs.push(1, v);
 
-      // Four corners of quad along the edge
-      const v0x = edge.corner1.x - perpX * halfWidth;
-      const v0z = edge.corner1.z - perpZ * halfWidth;
-      const v1x = edge.corner1.x + perpX * halfWidth;
-      const v1z = edge.corner1.z + perpZ * halfWidth;
-      const v2x = edge.corner2.x + perpX * halfWidth;
-      const v2z = edge.corner2.z + perpZ * halfWidth;
-      const v3x = edge.corner2.x - perpX * halfWidth;
-      const v3z = edge.corner2.z - perpZ * halfWidth;
+      // Create triangles connecting to previous pair
+      if (i > 0) {
+        const prev = vertexIndex - 2;
+        const curr = vertexIndex;
+        indices.push(prev, curr, prev + 1);
+        indices.push(prev + 1, curr, curr + 1);
+      }
 
-      vertices.push(v0x, edge.y, v0z);
-      vertices.push(v1x, edge.y, v1z);
-      vertices.push(v2x, edge.y, v2z);
-      vertices.push(v3x, edge.y, v3z);
-
-      // UV for flow animation
-      const vStart = i / Math.max(edges.length, 1);
-      const vEnd = (i + 1) / Math.max(edges.length, 1);
-      uvs.push(0, vStart);
-      uvs.push(1, vStart);
-      uvs.push(1, vEnd);
-      uvs.push(0, vEnd);
-
-      // Two triangles
-      indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-      indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
-      vertexIndex += 4;
+      vertexIndex += 2;
     }
 
     return { vertices, uvs, indices, nextVertexIndex: vertexIndex };
