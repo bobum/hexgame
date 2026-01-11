@@ -118,10 +118,10 @@ export class WaterRenderer {
     this.time += deltaTime;
     this.uniforms.uTime.value = this.time;
 
-    // Hide water when walls start disappearing (medium LOD)
+    // Hide water when camera is zoomed out past medium LOD threshold
     if (camera && this.mesh) {
-      const cameraHeight = camera.position.y;
-      this.mesh.visible = cameraHeight < LODDistances.highToMedium * 1.2;
+      const cameraDistance = camera.position.length();
+      this.mesh.visible = cameraDistance < LODDistances.highToMedium * 1.5;
     }
   }
 

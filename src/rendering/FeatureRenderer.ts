@@ -198,11 +198,12 @@ export class FeatureRenderer {
    * Hides features when camera is zoomed out past medium LOD threshold.
    */
   update(camera: THREE.Camera): void {
-    // Get camera height as proxy for zoom level
-    const cameraHeight = camera.position.y;
+    // Use actual camera distance from origin as zoom level
+    // (camera orbits around map center, so distance from origin works)
+    const cameraDistance = camera.position.length();
 
-    // Hide features when walls start disappearing (medium LOD)
-    const showFeatures = cameraHeight < LODDistances.highToMedium * 1.2;
+    // Hide features when camera is zoomed out past medium LOD threshold
+    const showFeatures = cameraDistance < LODDistances.highToMedium * 1.5;
 
     if (this.treeMesh) {
       this.treeMesh.visible = showFeatures;
