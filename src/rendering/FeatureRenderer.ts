@@ -196,12 +196,9 @@ export class FeatureRenderer {
   /**
    * Update feature visibility based on camera distance.
    * Hides features when camera is zoomed out past medium LOD threshold.
+   * @param cameraDistance - Orbital distance from camera to target (zoom level)
    */
-  update(camera: THREE.Camera): void {
-    // Use actual camera distance from origin as zoom level
-    // (camera orbits around map center, so distance from origin works)
-    const cameraDistance = camera.position.length();
-
+  update(cameraDistance: number): void {
     // Hide features when camera is zoomed out past medium LOD threshold
     const showFeatures = cameraDistance < LODDistances.highToMedium * 1.5;
 

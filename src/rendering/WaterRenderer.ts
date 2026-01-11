@@ -113,14 +113,14 @@ export class WaterRenderer {
 
   /**
    * Update water animation and visibility.
+   * @param cameraDistance - Orbital distance from camera to target (zoom level)
    */
-  update(deltaTime: number, camera?: THREE.Camera): void {
+  update(deltaTime: number, cameraDistance?: number): void {
     this.time += deltaTime;
     this.uniforms.uTime.value = this.time;
 
     // Hide water when camera is zoomed out past medium LOD threshold
-    if (camera && this.mesh) {
-      const cameraDistance = camera.position.length();
+    if (cameraDistance !== undefined && this.mesh) {
       this.mesh.visible = cameraDistance < LODDistances.highToMedium * 1.5;
     }
   }

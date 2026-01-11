@@ -240,4 +240,11 @@ export class MapCamera {
   getTarget(): THREE.Vector3 {
     return this.target.clone();
   }
+
+  /**
+   * Get the current orbital distance (zoom level).
+   */
+  getDistance(): number {
+    return this.distance;
+  }
 }
