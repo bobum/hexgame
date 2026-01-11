@@ -12,11 +12,21 @@ import * as THREE from 'three';
 const vertexShader = /* glsl */ `
   attribute vec3 terrainColor;
   attribute float terrainType;
+  // Splat map: 3 colors + RGB weights
+  attribute vec3 splatColor1;
+  attribute vec3 splatColor2;
+  attribute vec3 splatColor3;
+  attribute vec3 splatWeights;
 
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
   varying vec3 vTerrainColor;
   varying float vTerrainType;
+  // Splat varyings
+  varying vec3 vSplatColor1;
+  varying vec3 vSplatColor2;
+  varying vec3 vSplatColor3;
+  varying vec3 vSplatWeights;
 
   void main() {
     vec4 worldPos = modelMatrix * vec4(position, 1.0);
@@ -24,6 +34,11 @@ const vertexShader = /* glsl */ `
     vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
     vTerrainColor = terrainColor;
     vTerrainType = terrainType;
+    // Pass splat data
+    vSplatColor1 = splatColor1;
+    vSplatColor2 = splatColor2;
+    vSplatColor3 = splatColor3;
+    vSplatWeights = splatWeights;
 
     gl_Position = projectionMatrix * viewMatrix * worldPos;
   }
@@ -39,11 +54,17 @@ const fragmentShader = /* glsl */ `
   uniform float uTriplanarSharpness;
   uniform float uNoiseStrength;
   uniform float uRoughness;
+  uniform float uBlendStrength;
 
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
   varying vec3 vTerrainColor;
   varying float vTerrainType;
+  // Splat varyings
+  varying vec3 vSplatColor1;
+  varying vec3 vSplatColor2;
+  varying vec3 vSplatColor3;
+  varying vec3 vSplatWeights;
 
   // ============================================
   // PROCEDURAL NOISE (technique 3)
@@ -147,7 +168,22 @@ const fragmentShader = /* glsl */ `
 
   void main() {
     vec3 normal = normalize(vWorldNormal);
-    vec3 baseColor = vTerrainColor;
+
+    // Splat map blending: combine 3 colors using interpolated weights
+    // uBlendStrength controls how much neighbor colors influence corners
+    // 0 = no blending (100% main color), 1 = full splat blend
+    vec3 weights = vSplatWeights;
+    // Bias weights toward main color based on blend strength
+    // When uBlendStrength=0: weights become (1,0,0)
+    // When uBlendStrength=1: weights stay as vertex values
+    weights = mix(vec3(1.0, 0.0, 0.0), weights, uBlendStrength);
+    // Normalize weights
+    float weightSum = weights.r + weights.g + weights.b;
+    if (weightSum > 0.0) {
+      weights /= weightSum;
+    }
+    // Blend the 3 colors using weights
+    vec3 baseColor = vSplatColor1 * weights.r + vSplatColor2 * weights.g + vSplatColor3 * weights.b;
 
     // Apply noise based on surface orientation
     vec3 texturedColor;
@@ -182,17 +218,19 @@ export interface TerrainShaderUniforms {
   uTriplanarSharpness: number;
   uNoiseStrength: number;
   uRoughness: number;
+  uBlendStrength: number;
 }
 
 const defaultUniforms: TerrainShaderUniforms = {
   uSunDirection: new THREE.Vector3(0.5, 0.8, 0.3).normalize(),
   uSunColor: new THREE.Color(1.0, 0.95, 0.9),
-  uAmbientColor: new THREE.Color(0.15, 0.18, 0.22),  // Reduced ambient for more contrast
+  uAmbientColor: new THREE.Color(0.15, 0.18, 0.22),
   uTime: 0,
-  uTextureScale: 3.0,        // Higher = smaller patterns, visible within each hex
+  uTextureScale: 3.0,
   uTriplanarSharpness: 4.0,
-  uNoiseStrength: 0.4,       // Subtle but visible
+  uNoiseStrength: 0.4,
   uRoughness: 0.7,
+  uBlendStrength: 1.0,       // Multiplier for biome blending (0 = off, 1 = full)
 };
 
 export function createTerrainMaterial(options: Partial<TerrainShaderUniforms> = {}): THREE.ShaderMaterial {
@@ -210,6 +248,7 @@ export function createTerrainMaterial(options: Partial<TerrainShaderUniforms> = 
       uTriplanarSharpness: { value: uniforms.uTriplanarSharpness },
       uNoiseStrength: { value: uniforms.uNoiseStrength },
       uRoughness: { value: uniforms.uRoughness },
+      uBlendStrength: { value: uniforms.uBlendStrength },
     },
   });
 }

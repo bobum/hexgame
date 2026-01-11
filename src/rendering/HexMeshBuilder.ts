@@ -13,9 +13,19 @@ export class HexMeshBuilder {
   private vertices: number[] = [];
   private colors: number[] = [];
   private terrainTypes: number[] = [];
+  // Splat map approach: 3 colors + RGB weights
+  private color1: number[] = [];         // Main terrain color (R weight)
+  private color2: number[] = [];         // First neighbor color (G weight)
+  private color3: number[] = [];         // Second neighbor color (B weight)
+  private splatWeights: number[] = [];   // RGB weights for blending
   private indices: number[] = [];
   private vertexIndex = 0;
   private currentTerrainType: TerrainType = TerrainType.Plains;
+  // Current splat state
+  private currentColor1 = new THREE.Color();
+  private currentColor2 = new THREE.Color();
+  private currentColor3 = new THREE.Color();
+  private currentWeights = new THREE.Vector3(1, 0, 0);
 
   // Pre-calculated corner offsets for a flat-topped hex
   // Corners at 30°, 90°, 150°, 210°, 270°, 330°
@@ -38,6 +48,10 @@ export class HexMeshBuilder {
     this.vertices = [];
     this.colors = [];
     this.terrainTypes = [];
+    this.color1 = [];
+    this.color2 = [];
+    this.color3 = [];
+    this.splatWeights = [];
     this.indices = [];
     this.vertexIndex = 0;
   }
@@ -51,8 +65,19 @@ export class HexMeshBuilder {
     const baseColor = varyColor(getTerrainColor(cell.terrainType), 0.08);
     this.currentTerrainType = cell.terrainType;
 
-    // 1. Build the top hexagon face
-    this.buildTopFace(center, baseColor);
+    // Gather neighbor colors for blending (6 neighbors)
+    const neighborColors: THREE.Color[] = [];
+    for (let dir = 0; dir < 6; dir++) {
+      const neighbor = grid.getNeighbor(cell, dir as HexDirection);
+      if (neighbor) {
+        neighborColors.push(getTerrainColor(neighbor.terrainType));
+      } else {
+        neighborColors.push(baseColor.clone()); // Use own color if no neighbor
+      }
+    }
+
+    // 1. Build the top hexagon face with splat blending
+    this.buildTopFaceWithSplatting(center, baseColor, neighborColors);
 
     // 2. Build walls for each of the 6 edges
     for (let edge = 0; edge < 6; edge++) {
@@ -140,10 +165,19 @@ export class HexMeshBuilder {
     return 0;
   }
 
+  // Maps edge index to HexDirection index
+  // Edge 0 faces direction 5, Edge 1 faces direction 4, etc.
+  private static readonly EDGE_TO_DIRECTION = [5, 4, 3, 2, 1, 0];
+
   /**
-   * Build the top hexagonal face.
+   * Build the top hexagonal face using splat map blending.
+   * Each corner blends 3 colors: this hex + 2 neighbors that meet at that corner.
    */
-  private buildTopFace(center: THREE.Vector3, color: THREE.Color): void {
+  private buildTopFaceWithSplatting(
+    center: THREE.Vector3,
+    color: THREE.Color,
+    neighborColors: THREE.Color[]
+  ): void {
     for (let i = 0; i < 6; i++) {
       const corner1 = this.corners[i];
       const corner2 = this.corners[(i + 1) % 6];
@@ -152,8 +186,40 @@ export class HexMeshBuilder {
       const v2 = new THREE.Vector3(center.x + corner1.x, center.y, center.z + corner1.z);
       const v3 = new THREE.Vector3(center.x + corner2.x, center.y, center.z + corner2.z);
 
-      // CCW winding for upward normal
-      this.addTriangle(v1, v3, v2, color);
+      // Get the two neighbors that border this edge
+      const edgeDir = HexMeshBuilder.EDGE_TO_DIRECTION[i];
+      const prevDir = (edgeDir + 1) % 6;  // Neighbor on the "left" side of this wedge
+
+      const neighborColor1 = neighborColors[edgeDir];      // Neighbor across this edge
+      const neighborColor2 = neighborColors[prevDir];      // Neighbor across previous edge
+
+      // Center vertex - 100% main color
+      this.currentColor1.copy(color);
+      this.currentColor2.copy(color);
+      this.currentColor3.copy(color);
+      this.currentWeights.set(1, 0, 0);
+      this.addVertex(v1, color);
+
+      // Corner v3 (corner i+1) - where this hex meets 2 neighbors
+      // Blend all 3: this hex + edgeDir neighbor + next edge's neighbor
+      const nextDir = (edgeDir + 5) % 6;  // Neighbor on the "right" side
+      const neighborColorRight = neighborColors[nextDir];
+
+      this.currentColor1.copy(color);
+      this.currentColor2.copy(neighborColor1);
+      this.currentColor3.copy(neighborColorRight);
+      this.currentWeights.set(0.34, 0.33, 0.33);
+      this.addVertex(v3, color);
+
+      // Corner v2 (corner i) - where this hex meets 2 neighbors
+      this.currentColor1.copy(color);
+      this.currentColor2.copy(neighborColor1);
+      this.currentColor3.copy(neighborColor2);
+      this.currentWeights.set(0.34, 0.33, 0.33);
+      this.addVertex(v2, color);
+
+      // Add triangle indices
+      this.indices.push(this.vertexIndex - 3, this.vertexIndex - 2, this.vertexIndex - 1);
     }
   }
 
@@ -182,7 +248,22 @@ export class HexMeshBuilder {
   }
 
   /**
-   * Add a triangle.
+   * Add a single vertex with current splat state.
+   */
+  private addVertex(v: THREE.Vector3, color: THREE.Color): void {
+    this.vertices.push(v.x, v.y, v.z);
+    this.colors.push(color.r, color.g, color.b);
+    this.terrainTypes.push(getTerrainTypeIndex(this.currentTerrainType));
+    // Splat colors
+    this.color1.push(this.currentColor1.r, this.currentColor1.g, this.currentColor1.b);
+    this.color2.push(this.currentColor2.r, this.currentColor2.g, this.currentColor2.b);
+    this.color3.push(this.currentColor3.r, this.currentColor3.g, this.currentColor3.b);
+    this.splatWeights.push(this.currentWeights.x, this.currentWeights.y, this.currentWeights.z);
+    this.vertexIndex++;
+  }
+
+  /**
+   * Add a triangle (for walls - no blending).
    */
   private addTriangle(
     v1: THREE.Vector3,
@@ -190,20 +271,17 @@ export class HexMeshBuilder {
     v3: THREE.Vector3,
     color: THREE.Color
   ): void {
-    this.vertices.push(v1.x, v1.y, v1.z);
-    this.vertices.push(v2.x, v2.y, v2.z);
-    this.vertices.push(v3.x, v3.y, v3.z);
+    // Walls don't blend - 100% main color
+    this.currentColor1.copy(color);
+    this.currentColor2.copy(color);
+    this.currentColor3.copy(color);
+    this.currentWeights.set(1, 0, 0);
 
-    this.colors.push(color.r, color.g, color.b);
-    this.colors.push(color.r, color.g, color.b);
-    this.colors.push(color.r, color.g, color.b);
+    this.addVertex(v1, color);
+    this.addVertex(v2, color);
+    this.addVertex(v3, color);
 
-    // Add terrain type for each vertex (for shader)
-    const terrainTypeFloat = getTerrainTypeIndex(this.currentTerrainType);
-    this.terrainTypes.push(terrainTypeFloat, terrainTypeFloat, terrainTypeFloat);
-
-    this.indices.push(this.vertexIndex, this.vertexIndex + 1, this.vertexIndex + 2);
-    this.vertexIndex += 3;
+    this.indices.push(this.vertexIndex - 3, this.vertexIndex - 2, this.vertexIndex - 1);
   }
 
   /**
@@ -216,6 +294,11 @@ export class HexMeshBuilder {
     // For terrain shader compatibility
     geometry.setAttribute('terrainColor', new THREE.Float32BufferAttribute(this.colors, 3));
     geometry.setAttribute('terrainType', new THREE.Float32BufferAttribute(this.terrainTypes, 1));
+    // Splat map blending - 3 colors + weights
+    geometry.setAttribute('splatColor1', new THREE.Float32BufferAttribute(this.color1, 3));
+    geometry.setAttribute('splatColor2', new THREE.Float32BufferAttribute(this.color2, 3));
+    geometry.setAttribute('splatColor3', new THREE.Float32BufferAttribute(this.color3, 3));
+    geometry.setAttribute('splatWeights', new THREE.Float32BufferAttribute(this.splatWeights, 3));
     geometry.setIndex(this.indices);
     geometry.computeVertexNormals();
     return geometry;

@@ -119,10 +119,10 @@ export class MapCamera {
       }
 
       if (this.isRotating) {
-        // Rotate the camera
-        this.targetYaw += deltaX * this.config.rotateSpeed;
+        // Rotate the camera (inverted for natural feel)
+        this.targetYaw -= deltaX * this.config.rotateSpeed;
         this.targetPitch = THREE.MathUtils.clamp(
-          this.targetPitch - deltaY * this.config.rotateSpeed,
+          this.targetPitch + deltaY * this.config.rotateSpeed,
           this.config.minPitch,
           this.config.maxPitch
         );

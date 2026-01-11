@@ -19,9 +19,15 @@ export class LODHexBuilder {
   private vertices: number[] = [];
   private colors: number[] = [];
   private terrainTypes: number[] = [];
+  // Splat attributes (needed for shader compatibility)
+  private color1: number[] = [];
+  private color2: number[] = [];
+  private color3: number[] = [];
+  private splatWeights: number[] = [];
   private indices: number[] = [];
   private vertexIndex = 0;
   private currentTerrainType: TerrainType = TerrainType.Plains;
+  private currentColor = new THREE.Color();
 
   private corners: THREE.Vector3[];
 
@@ -41,6 +47,10 @@ export class LODHexBuilder {
     this.vertices = [];
     this.colors = [];
     this.terrainTypes = [];
+    this.color1 = [];
+    this.color2 = [];
+    this.color3 = [];
+    this.splatWeights = [];
     this.indices = [];
     this.vertexIndex = 0;
   }
@@ -53,6 +63,7 @@ export class LODHexBuilder {
     const center = coords.toWorldPosition(cell.elevation);
     const baseColor = varyColor(getTerrainColor(cell.terrainType), 0.08);
     this.currentTerrainType = cell.terrainType;
+    this.currentColor.copy(baseColor);
 
     // Build hex top as 6 triangles from center
     for (let i = 0; i < 6; i++) {
@@ -75,6 +86,7 @@ export class LODHexBuilder {
     const center = coords.toWorldPosition(cell.elevation);
     const baseColor = varyColor(getTerrainColor(cell.terrainType), 0.08);
     this.currentTerrainType = cell.terrainType;
+    this.currentColor.copy(baseColor);
 
     // Simple quad approximation
     const size = HexMetrics.outerRadius * 0.85;
@@ -106,6 +118,14 @@ export class LODHexBuilder {
     const terrainTypeFloat = getTerrainTypeIndex(this.currentTerrainType);
     this.terrainTypes.push(terrainTypeFloat, terrainTypeFloat, terrainTypeFloat);
 
+    // Splat attributes: all 3 colors same, weight 100% on first (no blending for LOD)
+    for (let i = 0; i < 3; i++) {
+      this.color1.push(this.currentColor.r, this.currentColor.g, this.currentColor.b);
+      this.color2.push(this.currentColor.r, this.currentColor.g, this.currentColor.b);
+      this.color3.push(this.currentColor.r, this.currentColor.g, this.currentColor.b);
+      this.splatWeights.push(1, 0, 0);  // 100% main color
+    }
+
     this.indices.push(this.vertexIndex, this.vertexIndex + 1, this.vertexIndex + 2);
     this.vertexIndex += 3;
   }
@@ -117,6 +137,11 @@ export class LODHexBuilder {
     // For terrain shader compatibility
     geometry.setAttribute('terrainColor', new THREE.Float32BufferAttribute(this.colors, 3));
     geometry.setAttribute('terrainType', new THREE.Float32BufferAttribute(this.terrainTypes, 1));
+    // Splat map attributes (no blending for LOD, but shader needs them)
+    geometry.setAttribute('splatColor1', new THREE.Float32BufferAttribute(this.color1, 3));
+    geometry.setAttribute('splatColor2', new THREE.Float32BufferAttribute(this.color2, 3));
+    geometry.setAttribute('splatColor3', new THREE.Float32BufferAttribute(this.color3, 3));
+    geometry.setAttribute('splatWeights', new THREE.Float32BufferAttribute(this.splatWeights, 3));
     geometry.setIndex(this.indices);
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();

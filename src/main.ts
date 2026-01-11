@@ -208,6 +208,51 @@ class HexGame {
   }
 
   /**
+   * Setup shader parameter controls (called after terrain is generated).
+   */
+  private setupShaderUI(): void {
+    // Remove old shader folder if it exists
+    const existingFolder = this.gui.folders.find(f => f._title === 'Shader Settings');
+    if (existingFolder) {
+      existingFolder.destroy();
+    }
+
+    const material = this.terrainRenderer.getMaterial();
+    const uniforms = material.uniforms;
+
+    const shaderFolder = this.gui.addFolder('Shader Settings');
+
+    // Noise settings
+    shaderFolder.add(uniforms.uTextureScale, 'value', 0.5, 10, 0.1).name('Texture Scale');
+    shaderFolder.add(uniforms.uNoiseStrength, 'value', 0, 1, 0.05).name('Noise Strength');
+    shaderFolder.add(uniforms.uTriplanarSharpness, 'value', 1, 10, 0.5).name('Triplanar Sharpness');
+
+    // Biome blending
+    shaderFolder.add(uniforms.uBlendStrength, 'value', 0, 2, 0.1).name('Blend Strength');
+
+    // Lighting
+    shaderFolder.add(uniforms.uRoughness, 'value', 0, 1, 0.05).name('Roughness');
+
+    // Ambient color (as object with r,g,b for lil-gui)
+    const ambientProxy = {
+      color: '#' + uniforms.uAmbientColor.value.getHexString()
+    };
+    shaderFolder.addColor(ambientProxy, 'color').name('Ambient Color').onChange((value: string) => {
+      uniforms.uAmbientColor.value.set(value);
+    });
+
+    // Sun color
+    const sunProxy = {
+      color: '#' + uniforms.uSunColor.value.getHexString()
+    };
+    shaderFolder.addColor(sunProxy, 'color').name('Sun Color').onChange((value: string) => {
+      uniforms.uSunColor.value.set(value);
+    });
+
+    shaderFolder.open();
+  }
+
+  /**
    * Setup mouse interaction for hex selection.
    */
   private setupInteraction(): void {
@@ -277,6 +322,9 @@ class HexGame {
     this.debugInfo.chunks = this.useInstancing ? 0 : this.terrainRenderer.chunkCount;
     this.debugInfo.hexInstances = this.useInstancing ? this.instancedRenderer.hexCount : 0;
     this.debugInfo.wallInstances = this.useInstancing ? this.instancedRenderer.wallCount : 0;
+
+    // Setup shader UI controls
+    this.setupShaderUI();
 
     console.log('Map generated:', this.grid.cellCount, 'cells');
   }
