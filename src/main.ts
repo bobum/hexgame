@@ -693,7 +693,7 @@ class HexGame {
     this.debugInfo.triangles = this.renderer.info.render.triangles;
     this.debugInfo.geometries = this.renderer.info.memory.geometries;
     if (!this.useInstancing) {
-      this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount(this.mapCamera.camera);
+      this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount();
     }
 
     // Update memory usage (if available)
