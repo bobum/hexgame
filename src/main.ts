@@ -22,7 +22,7 @@ class HexGame {
   private mapCamera: MapCamera;
 
   // Game systems
-  private grid!: HexGrid;
+  grid!: HexGrid;  // Public for console debugging
   private mapGenerator!: MapGenerator;
   private terrainRenderer!: ChunkedTerrainRenderer;
   private instancedRenderer!: InstancedHexRenderer;
@@ -461,11 +461,14 @@ class HexGame {
     // Update camera
     this.mapCamera.update(deltaTime);
 
+    // Get camera distance for LOD calculations
+    const cameraDistance = this.mapCamera.getDistance();
+
     // Update water animation and visibility
-    this.waterRenderer.update(deltaTime, this.mapCamera.camera);
+    this.waterRenderer.update(deltaTime, cameraDistance);
 
     // Update feature visibility based on camera distance
-    this.featureRenderer.update(this.mapCamera.camera);
+    this.featureRenderer.update(cameraDistance);
 
     // Update terrain shader (time uniform for potential animations)
     if (!this.useInstancing) {
@@ -581,4 +584,7 @@ class HexGame {
 }
 
 // Start the application
-new HexGame();
+const game = new HexGame();
+
+// Expose for console debugging
+(window as any).game = game;
