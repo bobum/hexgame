@@ -5,6 +5,7 @@ import { HexGrid } from './core/HexGrid';
 import { HexCoordinates } from './core/HexCoordinates';
 import { MapGenerator } from './generation/MapGenerator';
 import { ChunkedTerrainRenderer } from './rendering/ChunkedTerrainRenderer';
+import { InstancedHexRenderer } from './rendering/InstancedHexRenderer';
 import { WaterRenderer } from './rendering/WaterRenderer';
 import { FeatureRenderer } from './rendering/FeatureRenderer';
 import { MapCamera } from './camera/MapCamera';
@@ -23,8 +24,12 @@ class HexGame {
   private grid!: HexGrid;
   private mapGenerator!: MapGenerator;
   private terrainRenderer!: ChunkedTerrainRenderer;
+  private instancedRenderer!: InstancedHexRenderer;
   private waterRenderer!: WaterRenderer;
   private featureRenderer!: FeatureRenderer;
+
+  // Render mode
+  private useInstancing: boolean = false;
 
   // Debug UI
   private gui: GUI;
@@ -38,6 +43,9 @@ class HexGame {
     geometries: number;
     chunks: number;
     visibleChunks: number;
+    renderMode: string;
+    hexInstances: number;
+    wallInstances: number;
   };
 
   // Interaction
@@ -90,6 +98,9 @@ class HexGame {
       geometries: 0,
       chunks: 0,
       visibleChunks: 0,
+      renderMode: 'Chunked+LOD',
+      hexInstances: 0,
+      wallInstances: 0,
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -173,11 +184,17 @@ class HexGame {
 
     // Render stats panel
     const statsFolder = this.gui.addFolder('Render Stats');
+    statsFolder.add(this.debugInfo, 'renderMode').name('Mode').listen();
     statsFolder.add(this.debugInfo, 'drawCalls').name('Draw Calls').listen();
     statsFolder.add(this.debugInfo, 'triangles').name('Triangles').listen();
     statsFolder.add(this.debugInfo, 'geometries').name('Geometries').listen();
     statsFolder.add(this.debugInfo, 'chunks').name('Total Chunks').listen();
     statsFolder.add(this.debugInfo, 'visibleChunks').name('Visible Chunks').listen();
+    statsFolder.add(this.debugInfo, 'hexInstances').name('Hex Instances').listen();
+    statsFolder.add(this.debugInfo, 'wallInstances').name('Wall Instances').listen();
+    statsFolder.add({
+      toggleRenderer: () => this.toggleRenderMode()
+    }, 'toggleRenderer').name('Toggle Instancing');
     statsFolder.open();
 
     // Controls help
@@ -223,6 +240,7 @@ class HexGame {
 
     // Dispose old renderers if they exist
     if (this.terrainRenderer) this.terrainRenderer.dispose();
+    if (this.instancedRenderer) this.instancedRenderer.dispose();
     if (this.waterRenderer) this.waterRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
 
@@ -231,13 +249,20 @@ class HexGame {
     this.mapGenerator = new MapGenerator(this.grid);
     this.mapGenerator.generate();
 
-    // Create new renderers with new grid
+    // Create both renderers
     this.terrainRenderer = new ChunkedTerrainRenderer(this.scene, this.grid);
+    this.instancedRenderer = new InstancedHexRenderer(this.scene, this.grid);
     this.waterRenderer = new WaterRenderer(this.scene, this.grid);
     this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
 
-    // Build all meshes
-    this.terrainRenderer.build();
+    // Build active renderer based on mode
+    if (this.useInstancing) {
+      this.instancedRenderer.build();
+      this.debugInfo.renderMode = 'Instanced';
+    } else {
+      this.terrainRenderer.build();
+      this.debugInfo.renderMode = 'Chunked+LOD';
+    }
     this.waterRenderer.build();
     this.featureRenderer.build();
 
@@ -249,9 +274,44 @@ class HexGame {
 
     // Update debug info
     this.debugInfo.cells = this.grid.cellCount;
-    this.debugInfo.chunks = this.terrainRenderer.chunkCount;
+    this.debugInfo.chunks = this.useInstancing ? 0 : this.terrainRenderer.chunkCount;
+    this.debugInfo.hexInstances = this.useInstancing ? this.instancedRenderer.hexCount : 0;
+    this.debugInfo.wallInstances = this.useInstancing ? this.instancedRenderer.wallCount : 0;
 
-    console.log('Map generated:', this.grid.cellCount, 'cells in', this.terrainRenderer.chunkCount, 'chunks');
+    console.log('Map generated:', this.grid.cellCount, 'cells');
+  }
+
+  /**
+   * Toggle between chunked and instanced rendering.
+   */
+  private toggleRenderMode(): void {
+    this.useInstancing = !this.useInstancing;
+
+    // Dispose current terrain and rebuild with new mode
+    this.terrainRenderer.dispose();
+    this.instancedRenderer.dispose();
+
+    if (this.useInstancing) {
+      this.instancedRenderer.build();
+      this.debugInfo.renderMode = 'Instanced';
+      this.debugInfo.chunks = 0;
+      this.debugInfo.visibleChunks = 0;
+      this.debugInfo.hexInstances = this.instancedRenderer.hexCount;
+      this.debugInfo.wallInstances = this.instancedRenderer.wallCount;
+    } else {
+      this.terrainRenderer.build();
+      this.debugInfo.renderMode = 'Chunked+LOD';
+      this.debugInfo.chunks = this.terrainRenderer.chunkCount;
+      this.debugInfo.hexInstances = 0;
+      this.debugInfo.wallInstances = 0;
+    }
+
+    // Release focus from GUI button so keyboard controls work
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    console.log('Switched to', this.debugInfo.renderMode, 'rendering');
   }
 
   /**
@@ -319,8 +379,10 @@ class HexGame {
     // Update hover detection
     this.updateHover();
 
-    // Update terrain LOD based on camera distance
-    this.terrainRenderer.update(this.mapCamera.camera);
+    // Update terrain LOD (only for chunked mode)
+    if (!this.useInstancing) {
+      this.terrainRenderer.update(this.mapCamera.camera);
+    }
 
     // Update FPS
     this.debugInfo.fps = Math.round(1 / deltaTime);
@@ -332,7 +394,9 @@ class HexGame {
     this.debugInfo.drawCalls = this.renderer.info.render.calls;
     this.debugInfo.triangles = this.renderer.info.render.triangles;
     this.debugInfo.geometries = this.renderer.info.memory.geometries;
-    this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount(this.mapCamera.camera);
+    if (!this.useInstancing) {
+      this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount(this.mapCamera.camera);
+    }
   }
 }
 
