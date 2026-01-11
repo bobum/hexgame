@@ -186,6 +186,13 @@ export class ChunkedTerrainRenderer {
     return this.chunks.size;
   }
 
+  /**
+   * Get the terrain material for GUI controls.
+   */
+  getMaterial(): THREE.ShaderMaterial {
+    return this.material;
+  }
+
   getVisibleChunkCount(camera: THREE.Camera): number {
     const frustum = new THREE.Frustum();
     const projScreenMatrix = new THREE.Matrix4();
