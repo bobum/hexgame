@@ -574,10 +574,21 @@ class HexGame {
 
     this.raycaster.setFromCamera(this.mouse, this.mapCamera.camera);
 
-    // Use cached ground plane for raycasting
-    const intersection = new THREE.Vector3();
+    // Collect terrain meshes (LOD chunks) for raycasting
+    const terrainObjects: THREE.Object3D[] = [];
+    this.scene.traverse((obj) => {
+      if (obj.name.startsWith('chunk_')) {
+        terrainObjects.push(obj);
+      }
+    });
 
-    if (this.raycaster.ray.intersectPlane(this.groundPlane, intersection)) {
+    // Raycast against terrain geometry
+    const intersects = this.raycaster.intersectObjects(terrainObjects, true);
+
+    if (intersects.length > 0) {
+      // Use the intersection point on the terrain mesh
+      const intersection = intersects[0].point;
+
       // Convert world position to hex coordinates
       const hexCoords = HexCoordinates.fromWorldPosition(intersection);
       const cell = this.grid.getCell(hexCoords);
@@ -601,6 +612,13 @@ class HexGame {
         }
         this.debugInfo.hoveredHex = 'None';
       }
+    } else {
+      // No terrain hit - clear selection
+      this.hoveredCell = null;
+      if (this.highlightMesh) {
+        this.highlightMesh.visible = false;
+      }
+      this.debugInfo.hoveredHex = 'None';
     }
   }
 
