@@ -5,6 +5,7 @@ import { HexMetrics } from '../core/HexMetrics';
 import { NoiseGenerator } from './NoiseGenerator';
 import { getTerrainFromElevationAndBiome, calculateTemperature } from './BiomeMapper';
 import { HexCell, TerrainType, FeatureType } from '../types';
+import { getMapGenPool, workersSupported } from '../workers';
 
 /**
  * Procedural map generator using noise-based terrain generation.
@@ -27,6 +28,7 @@ export class MapGenerator {
 
   /**
    * Generate complete map with terrain, biomes, and features.
+   * Synchronous version - runs on main thread.
    */
   generate(): void {
     this.grid.initialize();
@@ -34,6 +36,79 @@ export class MapGenerator {
     this.generateClimate();
     this.assignTerrain();
     this.generateFeatures();
+  }
+
+  /**
+   * Generate map asynchronously using Web Workers.
+   * Falls back to synchronous generation if workers unavailable.
+   * @returns Promise that resolves when generation is complete
+   */
+  async generateAsync(): Promise<{ workerTime: number; featureTime: number }> {
+    if (!workersSupported()) {
+      console.log('Web Workers not supported, falling back to sync generation');
+      this.generate();
+      return { workerTime: 0, featureTime: 0 };
+    }
+
+    this.grid.initialize();
+
+    const pool = getMapGenPool();
+    const config = this.grid.config;
+
+    // Run terrain generation in worker
+    interface WorkerCellData {
+      q: number;
+      r: number;
+      s: number;
+      elevation: number;
+      moisture: number;
+      temperature: number;
+      terrainType: string;
+    }
+
+    const result = await pool.runTask<
+      {
+        width: number;
+        height: number;
+        seed: number;
+        noiseScale: number;
+        octaves: number;
+        persistence: number;
+        lacunarity: number;
+        landPercentage: number;
+        mountainousness: number;
+      },
+      { cells: WorkerCellData[]; generationTime: number }
+    >('generateMap', {
+      width: config.width,
+      height: config.height,
+      seed: config.seed,
+      noiseScale: config.noiseScale,
+      octaves: config.octaves,
+      persistence: config.persistence,
+      lacunarity: config.lacunarity,
+      landPercentage: config.landPercentage,
+      mountainousness: config.mountainousness,
+    });
+
+    // Apply worker results to grid
+    for (const cellData of result.cells) {
+      const cell = this.grid.getCellAt(cellData.q, cellData.r);
+      if (cell) {
+        cell.elevation = cellData.elevation;
+        cell.moisture = cellData.moisture;
+        cell.temperature = cellData.temperature;
+        cell.terrainType = cellData.terrainType as TerrainType;
+        this.grid.setCell(cell);
+      }
+    }
+
+    // Generate features on main thread (requires THREE.Vector3)
+    const featureStart = performance.now();
+    this.generateFeatures();
+    const featureTime = performance.now() - featureStart;
+
+    return { workerTime: result.generationTime, featureTime };
   }
 
   /**
