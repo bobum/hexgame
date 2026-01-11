@@ -10,6 +10,7 @@ import { WaterRenderer } from './rendering/WaterRenderer';
 import { FeatureRenderer } from './rendering/FeatureRenderer';
 import { MapCamera } from './camera/MapCamera';
 import { MapConfig, defaultMapConfig, HexCell } from './types';
+import { PerformanceMonitor } from './utils/PerformanceMonitor';
 
 /**
  * Main application class for the hex map game.
@@ -46,6 +47,12 @@ class HexGame {
     renderMode: string;
     hexInstances: number;
     wallInstances: number;
+    // Performance stats
+    avgFrameTime: string;
+    onePercentLow: number;
+    maxFrameTime: string;
+    generationTime: string;
+    memoryMB: number;
   };
 
   // Interaction
@@ -58,6 +65,9 @@ class HexGame {
 
   // Animation
   private clock: THREE.Clock;
+
+  // Performance monitoring
+  private perfMonitor: PerformanceMonitor;
 
   constructor() {
     // Initialize config
@@ -88,6 +98,9 @@ class HexGame {
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Cached plane
     this.setupInteraction();
 
+    // Setup performance monitor
+    this.perfMonitor = new PerformanceMonitor();
+
     // Setup debug UI
     this.debugInfo = {
       cells: 0,
@@ -101,6 +114,12 @@ class HexGame {
       renderMode: 'Chunked+LOD',
       hexInstances: 0,
       wallInstances: 0,
+      // Performance stats
+      avgFrameTime: '0.0 ms',
+      onePercentLow: 0,
+      maxFrameTime: '0.0 ms',
+      generationTime: '0 ms',
+      memoryMB: 0,
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -197,6 +216,21 @@ class HexGame {
     }, 'toggleRenderer').name('Toggle Instancing');
     statsFolder.open();
 
+    // Performance panel
+    const perfFolder = this.gui.addFolder('Performance');
+    perfFolder.add(this.debugInfo, 'avgFrameTime').name('Avg Frame').listen();
+    perfFolder.add(this.debugInfo, 'maxFrameTime').name('Max Frame').listen();
+    perfFolder.add(this.debugInfo, 'onePercentLow').name('1% Low FPS').listen();
+    perfFolder.add(this.debugInfo, 'generationTime').name('Gen Time').listen();
+    perfFolder.add(this.debugInfo, 'memoryMB').name('Memory (MB)').listen();
+    perfFolder.add({
+      toggleGraph: () => this.perfMonitor.toggleGraph()
+    }, 'toggleGraph').name('Toggle Graph');
+    perfFolder.add({
+      runStressTest: () => this.runStressTest()
+    }, 'runStressTest').name('Run Stress Test');
+    perfFolder.open();
+
     // Controls help
     const helpFolder = this.gui.addFolder('Controls');
     helpFolder.add({ text: 'WASD / Arrows: Pan' }, 'text').name('');
@@ -281,6 +315,7 @@ class HexGame {
    * Generate or regenerate the map.
    */
   private generateMap(): void {
+    const startTime = performance.now();
     console.log('Generating map with seed:', this.config.seed);
 
     // Dispose old renderers if they exist
@@ -323,10 +358,15 @@ class HexGame {
     this.debugInfo.hexInstances = this.useInstancing ? this.instancedRenderer.hexCount : 0;
     this.debugInfo.wallInstances = this.useInstancing ? this.instancedRenderer.wallCount : 0;
 
+    // Record generation time
+    const genTime = performance.now() - startTime;
+    this.perfMonitor.recordGenerationTime(genTime);
+    this.debugInfo.generationTime = `${genTime.toFixed(0)} ms`;
+
     // Setup shader UI controls
     this.setupShaderUI();
 
-    console.log('Map generated:', this.grid.cellCount, 'cells');
+    console.log(`Map generated: ${this.grid.cellCount} cells in ${genTime.toFixed(0)}ms`);
   }
 
   /**
@@ -440,11 +480,17 @@ class HexGame {
       this.terrainRenderer.update(this.mapCamera.camera);
     }
 
-    // Update FPS
-    this.debugInfo.fps = Math.round(1 / deltaTime);
-
     // Render
     this.renderer.render(this.scene, this.mapCamera.camera);
+
+    // Record frame for performance monitoring
+    this.perfMonitor.recordFrame(deltaTime);
+
+    // Update debug stats
+    this.debugInfo.fps = this.perfMonitor.fps;
+    this.debugInfo.avgFrameTime = `${this.perfMonitor.avgFrameTime.toFixed(1)} ms`;
+    this.debugInfo.maxFrameTime = `${this.perfMonitor.maxFrameTime.toFixed(1)} ms`;
+    this.debugInfo.onePercentLow = this.perfMonitor.onePercentLow;
 
     // Update render stats
     this.debugInfo.drawCalls = this.renderer.info.render.calls;
@@ -453,6 +499,84 @@ class HexGame {
     if (!this.useInstancing) {
       this.debugInfo.visibleChunks = this.terrainRenderer.getVisibleChunkCount(this.mapCamera.camera);
     }
+
+    // Update memory usage (if available)
+    if ((performance as any).memory) {
+      this.debugInfo.memoryMB = Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024);
+    }
+  }
+
+  /**
+   * Run automated stress test.
+   */
+  private async runStressTest(): Promise<void> {
+    console.log('=== STRESS TEST STARTED ===');
+    const results: { size: string; cells: number; genTime: number; avgFps: number; minFps: number }[] = [];
+
+    const sizes = [
+      { width: 20, height: 15, name: 'Small (20x15)' },
+      { width: 40, height: 30, name: 'Medium (40x30)' },
+      { width: 60, height: 45, name: 'Large (60x45)' },
+      { width: 80, height: 60, name: 'Max (80x60)' },
+    ];
+
+    for (const size of sizes) {
+      console.log(`Testing ${size.name}...`);
+
+      // Set config and generate
+      this.config.width = size.width;
+      this.config.height = size.height;
+      this.config.seed = 12345; // Consistent seed
+      this.gui.controllersRecursive().forEach(c => c.updateDisplay());
+
+      this.perfMonitor.reset();
+      this.generateMap();
+
+      // Wait for a few frames to stabilize
+      await this.waitFrames(30);
+
+      // Collect 120 frames of data
+      this.perfMonitor.reset();
+      await this.waitFrames(120);
+
+      results.push({
+        size: size.name,
+        cells: this.grid.cellCount,
+        genTime: this.perfMonitor.lastGenerationTime,
+        avgFps: Math.round(1000 / this.perfMonitor.avgFrameTime),
+        minFps: this.perfMonitor.onePercentLow,
+      });
+    }
+
+    // Print results
+    console.log('=== STRESS TEST RESULTS ===');
+    console.table(results);
+
+    // Reset to default size
+    this.config.width = 30;
+    this.config.height = 20;
+    this.gui.controllersRecursive().forEach(c => c.updateDisplay());
+    this.generateMap();
+
+    console.log('=== STRESS TEST COMPLETE ===');
+  }
+
+  /**
+   * Wait for N frames (for stress test timing).
+   */
+  private waitFrames(count: number): Promise<void> {
+    return new Promise(resolve => {
+      let frames = 0;
+      const check = () => {
+        frames++;
+        if (frames >= count) {
+          resolve();
+        } else {
+          requestAnimationFrame(check);
+        }
+      };
+      requestAnimationFrame(check);
+    });
   }
 }
 
