@@ -72,10 +72,15 @@ export class WaterRenderer {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    // Water material with transparency
+    // Water material with transparency and fog
     const material = new THREE.ShaderMaterial({
-      uniforms: this.uniforms,
+      uniforms: THREE.UniformsUtils.merge([
+        THREE.UniformsLib.fog,
+        this.uniforms,
+      ]),
       vertexShader: `
+        #include <fog_pars_vertex>
+
         uniform float uTime;
         varying vec3 vWorldPosition;
 
@@ -87,10 +92,15 @@ export class WaterRenderer {
           pos.y += sin(pos.x * 2.0 + uTime) * 0.02;
           pos.y += sin(pos.z * 2.0 + uTime * 0.8) * 0.02;
 
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+          vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+
+          #include <fog_vertex>
         }
       `,
       fragmentShader: `
+        #include <fog_pars_fragment>
+
         uniform vec3 uWaterColor;
         uniform vec3 uWaterColorShallow;
         varying vec3 vWorldPosition;
@@ -101,10 +111,13 @@ export class WaterRenderer {
           vec3 color = mix(uWaterColor, uWaterColorShallow, gradient * 0.3);
 
           gl_FragColor = vec4(color, 0.85);
+
+          #include <fog_fragment>
         }
       `,
       transparent: true,
       side: THREE.DoubleSide,
+      fog: true,
     });
 
     this.mesh = new THREE.Mesh(geometry, material);
