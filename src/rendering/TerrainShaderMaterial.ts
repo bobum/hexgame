@@ -161,10 +161,13 @@ const fragmentShader = /* glsl */ `
       texturedColor = triplanarSample(vWorldPosition, normal, baseColor);
     }
 
-    // Simple directional lighting
-    float NdotL = max(dot(normal, uSunDirection), 0.0);
-    float lightFactor = 0.35 + 0.65 * NdotL;
-    vec3 finalColor = texturedColor * lightFactor;
+    // PBR-style lighting
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    vec3 finalColor = pbrLighting(texturedColor, normal, viewDir);
+
+    // Tone mapping (Reinhard) and gamma correction
+    finalColor = finalColor / (finalColor + vec3(1.0));
+    finalColor = pow(finalColor, vec3(1.0 / 2.2));
 
     gl_FragColor = vec4(finalColor, 1.0);
   }
