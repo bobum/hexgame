@@ -90,3 +90,56 @@ export const defaultCameraConfig: CameraConfig = {
   rotateSpeed: 0.3,
   zoomSpeed: 2.0,
 };
+
+// Unit types
+export enum UnitType {
+  Infantry = 'infantry',
+  Cavalry = 'cavalry',
+  Archer = 'archer',
+}
+
+// Unit data
+export interface UnitData {
+  id: number;
+  type: UnitType;
+  q: number;  // Hex position
+  r: number;
+  health: number;
+  maxHealth: number;
+  movement: number;
+  maxMovement: number;
+  attack: number;
+  defense: number;
+  playerId: number;
+}
+
+// Unit type stats
+export const UnitStats: Record<UnitType, Omit<UnitData, 'id' | 'q' | 'r' | 'playerId'>> = {
+  [UnitType.Infantry]: {
+    type: UnitType.Infantry,
+    health: 100,
+    maxHealth: 100,
+    movement: 2,
+    maxMovement: 2,
+    attack: 10,
+    defense: 8,
+  },
+  [UnitType.Cavalry]: {
+    type: UnitType.Cavalry,
+    health: 80,
+    maxHealth: 80,
+    movement: 4,
+    maxMovement: 4,
+    attack: 12,
+    defense: 5,
+  },
+  [UnitType.Archer]: {
+    type: UnitType.Archer,
+    health: 60,
+    maxHealth: 60,
+    movement: 2,
+    maxMovement: 2,
+    attack: 15,
+    defense: 3,
+  },
+};
