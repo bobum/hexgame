@@ -10,6 +10,8 @@ import * as THREE from 'three';
  */
 
 const vertexShader = /* glsl */ `
+  #include <fog_pars_vertex>
+
   attribute vec3 terrainColor;
   attribute float terrainType;
   // Splat map: 3 colors + RGB weights
@@ -40,11 +42,16 @@ const vertexShader = /* glsl */ `
     vSplatColor3 = splatColor3;
     vSplatWeights = splatWeights;
 
-    gl_Position = projectionMatrix * viewMatrix * worldPos;
+    vec4 mvPosition = viewMatrix * worldPos;
+    gl_Position = projectionMatrix * mvPosition;
+
+    #include <fog_vertex>
   }
 `;
 
 const fragmentShader = /* glsl */ `
+  #include <fog_pars_fragment>
+
   uniform vec3 uSunDirection;
   uniform vec3 uSunColor;
   uniform vec3 uAmbientColor;
@@ -206,6 +213,8 @@ const fragmentShader = /* glsl */ `
     finalColor = pow(finalColor, vec3(1.0 / 2.2));
 
     gl_FragColor = vec4(finalColor, 1.0);
+
+    #include <fog_fragment>
   }
 `;
 
@@ -239,17 +248,21 @@ export function createTerrainMaterial(options: Partial<TerrainShaderUniforms> = 
   return new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader,
-    uniforms: {
-      uSunDirection: { value: uniforms.uSunDirection },
-      uSunColor: { value: uniforms.uSunColor },
-      uAmbientColor: { value: uniforms.uAmbientColor },
-      uTime: { value: uniforms.uTime },
-      uTextureScale: { value: uniforms.uTextureScale },
-      uTriplanarSharpness: { value: uniforms.uTriplanarSharpness },
-      uNoiseStrength: { value: uniforms.uNoiseStrength },
-      uRoughness: { value: uniforms.uRoughness },
-      uBlendStrength: { value: uniforms.uBlendStrength },
-    },
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        uSunDirection: { value: uniforms.uSunDirection },
+        uSunColor: { value: uniforms.uSunColor },
+        uAmbientColor: { value: uniforms.uAmbientColor },
+        uTime: { value: uniforms.uTime },
+        uTextureScale: { value: uniforms.uTextureScale },
+        uTriplanarSharpness: { value: uniforms.uTriplanarSharpness },
+        uNoiseStrength: { value: uniforms.uNoiseStrength },
+        uRoughness: { value: uniforms.uRoughness },
+        uBlendStrength: { value: uniforms.uBlendStrength },
+      },
+    ]),
+    fog: true,
   });
 }
 

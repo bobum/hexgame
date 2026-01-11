@@ -3,6 +3,7 @@ import GUI from 'lil-gui';
 
 import { HexGrid } from './core/HexGrid';
 import { HexCoordinates } from './core/HexCoordinates';
+import { HexMetrics } from './core/HexMetrics';
 import { MapGenerator } from './generation/MapGenerator';
 import { ChunkedTerrainRenderer } from './rendering/ChunkedTerrainRenderer';
 import { InstancedHexRenderer } from './rendering/InstancedHexRenderer';
@@ -68,6 +69,9 @@ class HexGame {
   private hoveredCell: HexCell | null = null;
   private highlightMesh: THREE.Mesh | null = null;
   private groundPlane: THREE.Plane; // Cached for raycasting
+
+  // Ground plane mesh (prevents seeing through terrain at distance)
+  private groundPlaneMesh: THREE.Mesh | null = null;
   private mouseMovedThisFrame: boolean = false;
 
   // Animation
@@ -91,7 +95,7 @@ class HexGame {
 
     // Setup scene
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x87ceeb, 50, 150);
+    this.scene.fog = new THREE.Fog(0x87ceeb, 15, 50);
 
     // Setup camera
     this.mapCamera = new MapCamera(window.innerWidth / window.innerHeight);
@@ -370,6 +374,12 @@ class HexGame {
     if (this.waterRenderer) this.waterRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
     if (this.unitRenderer) this.unitRenderer.dispose();
+    if (this.groundPlaneMesh) {
+      this.scene.remove(this.groundPlaneMesh);
+      this.groundPlaneMesh.geometry.dispose();
+      (this.groundPlaneMesh.material as THREE.Material).dispose();
+      this.groundPlaneMesh = null;
+    }
 
     // Recreate grid with new config
     this.grid = new HexGrid(this.config);
@@ -397,8 +407,11 @@ class HexGame {
     this.waterRenderer.build();
     this.featureRenderer.build();
 
-    // Update camera bounds and position
+    // Create ground plane to prevent seeing through terrain at distance
     const bounds = this.grid.getMapBounds();
+    this.createGroundPlane(bounds);
+
+    // Update camera bounds and position
     this.mapCamera.setBounds(bounds);
     const center = this.grid.getMapCenter();
     this.mapCamera.setInitialPosition(center.x, center.z);
@@ -433,6 +446,12 @@ class HexGame {
     if (this.waterRenderer) this.waterRenderer.dispose();
     if (this.featureRenderer) this.featureRenderer.dispose();
     if (this.unitRenderer) this.unitRenderer.dispose();
+    if (this.groundPlaneMesh) {
+      this.scene.remove(this.groundPlaneMesh);
+      this.groundPlaneMesh.geometry.dispose();
+      (this.groundPlaneMesh.material as THREE.Material).dispose();
+      this.groundPlaneMesh = null;
+    }
 
     // Recreate grid with new config
     this.grid = new HexGrid(this.config);
@@ -462,8 +481,11 @@ class HexGame {
     this.waterRenderer.build();
     this.featureRenderer.build();
 
-    // Update camera bounds and position
+    // Create ground plane to prevent seeing through terrain at distance
     const bounds = this.grid.getMapBounds();
+    this.createGroundPlane(bounds);
+
+    // Update camera bounds and position
     this.mapCamera.setBounds(bounds);
     const center = this.grid.getMapCenter();
     this.mapCamera.setInitialPosition(center.x, center.z);
@@ -516,6 +538,30 @@ class HexGame {
     }
 
     console.log('Switched to', this.debugInfo.renderMode, 'rendering');
+  }
+
+  /**
+   * Create ground plane mesh below terrain.
+   */
+  private createGroundPlane(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): void {
+    const groundY = HexMetrics.minElevation * HexMetrics.elevationStep - 0.5;
+    const padding = 20;
+    const groundGeo = new THREE.PlaneGeometry(
+      bounds.maxX - bounds.minX + padding * 2,
+      bounds.maxZ - bounds.minZ + padding * 2
+    );
+    groundGeo.rotateX(-Math.PI / 2);
+    const groundMat = new THREE.MeshBasicMaterial({
+      color: 0x1a4c6e, // Ocean color
+      fog: true,
+    });
+    this.groundPlaneMesh = new THREE.Mesh(groundGeo, groundMat);
+    this.groundPlaneMesh.position.set(
+      (bounds.minX + bounds.maxX) / 2,
+      groundY,
+      (bounds.minZ + bounds.maxZ) / 2
+    );
+    this.scene.add(this.groundPlaneMesh);
   }
 
   /**
