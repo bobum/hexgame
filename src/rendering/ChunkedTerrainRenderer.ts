@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
+import { HexMetrics } from '../core/HexMetrics';
 import { HexMeshBuilder } from './HexMeshBuilder';
 import { LODHexBuilder, LODDistances } from './LODHexBuilder';
 import { createTerrainMaterial, updateTerrainMaterial } from './TerrainShaderMaterial';
@@ -20,6 +21,7 @@ interface TerrainChunk {
   chunkZ: number;
   centerX: number;  // World center for LOD positioning
   centerZ: number;
+  maxElevation: number;  // Highest cell elevation in chunk (for occlusion)
 }
 
 /**
@@ -83,10 +85,15 @@ export class ChunkedTerrainRenderer {
           chunkZ,
           centerX: (chunkX + 0.5) * ChunkedTerrainRenderer.CHUNK_SIZE,
           centerZ: (chunkZ + 0.5) * ChunkedTerrainRenderer.CHUNK_SIZE,
+          maxElevation: 0,
         };
         this.chunks.set(key, chunk);
       }
       chunk.cells.push(cell);
+      // Track max elevation for occlusion culling
+      if (cell.elevation > chunk.maxElevation) {
+        chunk.maxElevation = cell.elevation;
+      }
     }
 
     // Build LOD for each chunk
@@ -195,7 +202,7 @@ export class ChunkedTerrainRenderer {
   }
 
   /**
-   * Update chunk visibility based on frustum and distance culling.
+   * Update chunk visibility based on frustum, distance, and occlusion culling.
    */
   private updateVisibility(camera: THREE.Camera): void {
     const frustum = new THREE.Frustum();
@@ -208,6 +215,9 @@ export class ChunkedTerrainRenderer {
 
     const cameraPos = camera.position;
     const maxDistSq = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE;
+
+    // First pass: distance and frustum culling
+    const visibleChunks: { chunk: TerrainChunk; distSq: number }[] = [];
 
     for (const chunk of this.chunks.values()) {
       if (!chunk.lod) continue;
@@ -224,7 +234,72 @@ export class ChunkedTerrainRenderer {
 
       // Frustum check
       const sphere = this.getChunkBoundingSphere(chunk);
-      chunk.lod.visible = frustum.intersectsSphere(sphere);
+      if (!frustum.intersectsSphere(sphere)) {
+        chunk.lod.visible = false;
+        continue;
+      }
+
+      // Passed frustum + distance, candidate for occlusion check
+      visibleChunks.push({ chunk, distSq });
+    }
+
+    // Second pass: horizon-based occlusion culling
+    // Only effective when camera is relatively low
+    const cameraHeight = cameraPos.y;
+    const maxTerrainHeight = HexMetrics.maxElevation * HexMetrics.elevationStep;
+
+    // Skip occlusion culling if camera is high above terrain (looking down)
+    if (cameraHeight > maxTerrainHeight * 3) {
+      for (const { chunk } of visibleChunks) {
+        chunk.lod!.visible = true;
+      }
+      return;
+    }
+
+    // Sort by distance (near to far)
+    visibleChunks.sort((a, b) => a.distSq - b.distSq);
+
+    // Track horizon angle per direction sector (8 sectors for 360°)
+    const NUM_SECTORS = 16;
+    const horizonAngles = new Float32Array(NUM_SECTORS).fill(-Math.PI / 2);
+
+    for (const { chunk, distSq } of visibleChunks) {
+      const dx = chunk.centerX - cameraPos.x;
+      const dz = chunk.centerZ - cameraPos.z;
+      const dist = Math.sqrt(distSq);
+
+      // Calculate which direction sector this chunk is in
+      const angle = Math.atan2(dz, dx);
+      const sector = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * NUM_SECTORS) % NUM_SECTORS;
+
+      // Calculate angle from camera to chunk's highest point
+      const chunkTopY = chunk.maxElevation * HexMetrics.elevationStep;
+      const angleToTop = Math.atan2(chunkTopY - cameraHeight, dist);
+
+      // Check if chunk top is below the horizon in this sector
+      if (angleToTop < horizonAngles[sector] - 0.05) {
+        // Chunk is occluded by terrain in front
+        chunk.lod!.visible = false;
+        continue;
+      }
+
+      // Chunk is visible
+      chunk.lod!.visible = true;
+
+      // Update horizon angle for this sector if chunk peak is higher
+      if (angleToTop > horizonAngles[sector]) {
+        horizonAngles[sector] = angleToTop;
+        // Also update adjacent sectors slightly (terrain has width)
+        const prevSector = (sector - 1 + NUM_SECTORS) % NUM_SECTORS;
+        const nextSector = (sector + 1) % NUM_SECTORS;
+        const adjacentAngle = angleToTop - 0.1; // Reduced effect for adjacent
+        if (adjacentAngle > horizonAngles[prevSector]) {
+          horizonAngles[prevSector] = adjacentAngle;
+        }
+        if (adjacentAngle > horizonAngles[nextSector]) {
+          horizonAngles[nextSector] = adjacentAngle;
+        }
+      }
     }
   }
 
