@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexMetrics } from '../core/HexMetrics';
+import { LODDistances } from './LODHexBuilder';
 
 /**
  * Renders water surface with animation.
@@ -111,11 +112,17 @@ export class WaterRenderer {
   }
 
   /**
-   * Update water animation.
+   * Update water animation and visibility.
    */
-  update(deltaTime: number): void {
+  update(deltaTime: number, camera?: THREE.Camera): void {
     this.time += deltaTime;
     this.uniforms.uTime.value = this.time;
+
+    // Hide water when walls start disappearing (medium LOD)
+    if (camera && this.mesh) {
+      const cameraHeight = camera.position.y;
+      this.mesh.visible = cameraHeight < LODDistances.highToMedium * 1.2;
+    }
   }
 
   /**

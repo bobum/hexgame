@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HexGrid } from '../core/HexGrid';
 import { FeatureType, Feature } from '../types';
+import { LODDistances } from './LODHexBuilder';
 
 /**
  * Renders instanced features (trees, rocks) on hex cells.
@@ -189,6 +190,25 @@ export class FeatureRenderer {
       this.rockMesh.receiveShadow = true;
 
       this.scene.add(this.rockMesh);
+    }
+  }
+
+  /**
+   * Update feature visibility based on camera distance.
+   * Hides features when camera is zoomed out past medium LOD threshold.
+   */
+  update(camera: THREE.Camera): void {
+    // Get camera height as proxy for zoom level
+    const cameraHeight = camera.position.y;
+
+    // Hide features when walls start disappearing (medium LOD)
+    const showFeatures = cameraHeight < LODDistances.highToMedium * 1.2;
+
+    if (this.treeMesh) {
+      this.treeMesh.visible = showFeatures;
+    }
+    if (this.rockMesh) {
+      this.rockMesh.visible = showFeatures;
     }
   }
 
