@@ -31,6 +31,7 @@ class HexGame {
 
   // Render mode
   private useInstancing: boolean = false;
+  private useAsyncGeneration: boolean = true;
 
   // Debug UI
   private gui: GUI;
@@ -192,6 +193,10 @@ class HexGame {
       }
     }, 'randomSeed').name('Random Seed');
 
+    mapFolder.add({ useAsync: this.useAsyncGeneration }, 'useAsync').name('Async Generation').onChange((v: boolean) => {
+      this.useAsyncGeneration = v;
+    });
+
     mapFolder.open();
 
     // Info panel
@@ -315,8 +320,13 @@ class HexGame {
    * Generate or regenerate the map.
    */
   private generateMap(): void {
+    if (this.useAsyncGeneration) {
+      this.generateMapAsync();
+      return;
+    }
+
     const startTime = performance.now();
-    console.log('Generating map with seed:', this.config.seed);
+    console.log('Generating map with seed:', this.config.seed, '(sync)');
 
     // Dispose old renderers if they exist
     if (this.terrainRenderer) this.terrainRenderer.dispose();
@@ -367,6 +377,66 @@ class HexGame {
     this.setupShaderUI();
 
     console.log(`Map generated: ${this.grid.cellCount} cells in ${genTime.toFixed(0)}ms`);
+  }
+
+  /**
+   * Generate map asynchronously using Web Workers.
+   */
+  private async generateMapAsync(): Promise<void> {
+    const startTime = performance.now();
+    console.log('Generating map with seed:', this.config.seed, '(async worker)');
+
+    // Dispose old renderers if they exist
+    if (this.terrainRenderer) this.terrainRenderer.dispose();
+    if (this.instancedRenderer) this.instancedRenderer.dispose();
+    if (this.waterRenderer) this.waterRenderer.dispose();
+    if (this.featureRenderer) this.featureRenderer.dispose();
+
+    // Recreate grid with new config
+    this.grid = new HexGrid(this.config);
+    this.mapGenerator = new MapGenerator(this.grid);
+
+    // Run generation in worker
+    const result = await this.mapGenerator.generateAsync();
+
+    // Create renderers
+    this.terrainRenderer = new ChunkedTerrainRenderer(this.scene, this.grid);
+    this.instancedRenderer = new InstancedHexRenderer(this.scene, this.grid);
+    this.waterRenderer = new WaterRenderer(this.scene, this.grid);
+    this.featureRenderer = new FeatureRenderer(this.scene, this.grid);
+
+    // Build active renderer based on mode
+    if (this.useInstancing) {
+      this.instancedRenderer.build();
+      this.debugInfo.renderMode = 'Instanced';
+    } else {
+      this.terrainRenderer.build();
+      this.debugInfo.renderMode = 'Chunked+LOD';
+    }
+    this.waterRenderer.build();
+    this.featureRenderer.build();
+
+    // Update camera bounds and position
+    const bounds = this.grid.getMapBounds();
+    this.mapCamera.setBounds(bounds);
+    const center = this.grid.getMapCenter();
+    this.mapCamera.setInitialPosition(center.x, center.z);
+
+    // Update debug info
+    this.debugInfo.cells = this.grid.cellCount;
+    this.debugInfo.chunks = this.useInstancing ? 0 : this.terrainRenderer.chunkCount;
+    this.debugInfo.hexInstances = this.useInstancing ? this.instancedRenderer.hexCount : 0;
+    this.debugInfo.wallInstances = this.useInstancing ? this.instancedRenderer.wallCount : 0;
+
+    // Record generation time
+    const genTime = performance.now() - startTime;
+    this.perfMonitor.recordGenerationTime(genTime);
+    this.debugInfo.generationTime = `${genTime.toFixed(0)} ms (W:${result.workerTime.toFixed(0)})`;
+
+    // Setup shader UI controls
+    this.setupShaderUI();
+
+    console.log(`Map generated (async): ${this.grid.cellCount} cells in ${genTime.toFixed(0)}ms (worker: ${result.workerTime.toFixed(0)}ms, features: ${result.featureTime.toFixed(0)}ms)`);
   }
 
   /**
