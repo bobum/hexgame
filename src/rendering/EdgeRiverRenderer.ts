@@ -34,7 +34,7 @@ export class EdgeRiverRenderer {
 
   /**
    * Build the river mesh from grid river data.
-   * Simple approach: one quad per river edge, positioned exactly on the edge.
+   * Traces complete river paths and builds connected geometry.
    */
   build(): void {
     // Remove existing mesh
@@ -52,62 +52,88 @@ export class EdgeRiverRenderer {
     const corners = HexMetrics.getCorners();
     const halfWidth = EdgeRiverRenderer.RIVER_WIDTH;
 
-    // Track rendered edges to avoid duplicates
+    // Find river sources (cells with outgoing rivers but no incoming)
+    const hasIncoming = new Set<string>();
+    for (const cell of this.grid.getAllCells()) {
+      for (const dir of cell.riverDirections) {
+        const neighbor = this.grid.getNeighbor(cell, dir);
+        if (neighbor) {
+          hasIncoming.add(`${neighbor.q},${neighbor.r}`);
+        }
+      }
+    }
+
+    // Find sources and trace each river
+    const sources = this.grid.getAllCells().filter(cell =>
+      cell.riverDirections.length > 0 && !hasIncoming.has(`${cell.q},${cell.r}`)
+    );
+
+    // Track rendered edges to avoid duplicates across rivers
     const renderedEdges = new Set<string>();
 
-    // For each cell with rivers, draw a quad on each river edge
-    for (const cell of this.grid.getAllCells()) {
-      if (cell.riverDirections.length === 0) continue;
+    for (const source of sources) {
+      // Trace this river path
+      const edgeSegments = this.traceRiverEdges(source, corners);
+      if (edgeSegments.length === 0) continue;
 
-      const coords = new HexCoordinates(cell.q, cell.r);
-      const centerPos = coords.toWorldPosition(cell.elevation);
+      // Build connected quad strip for this river
+      let totalLength = 0;
+      for (const seg of edgeSegments) {
+        if (!renderedEdges.has(seg.edgeKey)) {
+          totalLength++;
+        }
+      }
+      if (totalLength === 0) continue;
 
-      for (const dir of cell.riverDirections) {
-        // Get neighbor to create unique edge key
-        const neighbor = this.grid.getNeighbor(cell, dir);
-        if (!neighbor) continue;
+      let segmentIndex = 0;
+      for (let i = 0; i < edgeSegments.length; i++) {
+        const seg = edgeSegments[i];
 
-        const edgeKey = this.getEdgeKey(cell.q, cell.r, neighbor.q, neighbor.r);
-        if (renderedEdges.has(edgeKey)) continue;
-        renderedEdges.add(edgeKey);
+        if (renderedEdges.has(seg.edgeKey)) continue;
+        renderedEdges.add(seg.edgeKey);
 
-        // Get edge corners
-        const edgeIndex = dir as number;
-        const c1 = corners[edgeIndex];
-        const c2 = corners[(edgeIndex + 1) % 6];
+        // Four vertices for this edge quad
+        vertices.push(seg.corner1X - seg.perpX, seg.y, seg.corner1Z - seg.perpZ);
+        vertices.push(seg.corner1X + seg.perpX, seg.y, seg.corner1Z + seg.perpZ);
+        vertices.push(seg.corner2X + seg.perpX, seg.y, seg.corner2Z + seg.perpZ);
+        vertices.push(seg.corner2X - seg.perpX, seg.y, seg.corner2Z - seg.perpZ);
 
-        // World positions of corners
-        const corner1X = centerPos.x + c1.x;
-        const corner1Z = centerPos.z + c1.z;
-        const corner2X = centerPos.x + c2.x;
-        const corner2Z = centerPos.z + c2.z;
+        // UVs based on position in river
+        const vStart = segmentIndex / totalLength;
+        const vEnd = (segmentIndex + 1) / totalLength;
+        uvs.push(0, vStart);
+        uvs.push(1, vStart);
+        uvs.push(1, vEnd);
+        uvs.push(0, vEnd);
 
-        // Y position: use higher of the two cells to stay on top
-        const y = Math.max(cell.elevation, neighbor.elevation) * HexMetrics.elevationStep + EdgeRiverRenderer.HEIGHT_OFFSET;
-
-        // Edge direction and perpendicular
-        const edgeDX = corner2X - corner1X;
-        const edgeDZ = corner2Z - corner1Z;
-        const edgeLen = Math.sqrt(edgeDX * edgeDX + edgeDZ * edgeDZ);
-        const perpX = -edgeDZ / edgeLen * halfWidth;
-        const perpZ = edgeDX / edgeLen * halfWidth;
-
-        // Four vertices: two at each corner, offset perpendicular to edge
-        vertices.push(corner1X - perpX, y, corner1Z - perpZ); // 0: corner1 left
-        vertices.push(corner1X + perpX, y, corner1Z + perpZ); // 1: corner1 right
-        vertices.push(corner2X + perpX, y, corner2Z + perpZ); // 2: corner2 right
-        vertices.push(corner2X - perpX, y, corner2Z - perpZ); // 3: corner2 left
-
-        // UVs
-        uvs.push(0, 0);
-        uvs.push(1, 0);
-        uvs.push(1, 1);
-        uvs.push(0, 1);
-
-        // Two triangles
+        // Two triangles for quad
         indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
         vertexIndex += 4;
+
+        // Add connecting triangle at corners if there's a next segment
+        if (i < edgeSegments.length - 1) {
+          const nextSeg = edgeSegments[i + 1];
+          if (!renderedEdges.has(nextSeg.edgeKey)) {
+            // Add triangular connector between this edge's corner2 and next edge's corner1
+            // This fills the gap at the shared corner
+            vertices.push(seg.corner2X - seg.perpX, seg.y, seg.corner2Z - seg.perpZ);
+            vertices.push(seg.corner2X + seg.perpX, seg.y, seg.corner2Z + seg.perpZ);
+            vertices.push(nextSeg.corner1X - nextSeg.perpX, nextSeg.y, nextSeg.corner1Z - nextSeg.perpZ);
+            vertices.push(nextSeg.corner1X + nextSeg.perpX, nextSeg.y, nextSeg.corner1Z + nextSeg.perpZ);
+
+            uvs.push(0, vEnd);
+            uvs.push(1, vEnd);
+            uvs.push(0, vEnd);
+            uvs.push(1, vEnd);
+
+            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 3);
+            indices.push(vertexIndex, vertexIndex + 3, vertexIndex + 2);
+            vertexIndex += 4;
+          }
+        }
+
+        segmentIndex++;
       }
     }
 
@@ -190,6 +216,80 @@ export class EdgeRiverRenderer {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.name = 'rivers';
     this.scene.add(this.mesh);
+  }
+
+  /**
+   * Trace a river path and collect all edge segments with their geometry.
+   */
+  private traceRiverEdges(
+    source: { q: number; r: number; elevation: number; riverDirections: HexDirection[] },
+    corners: Array<{ x: number; z: number }>
+  ): Array<{
+    edgeKey: string;
+    corner1X: number; corner1Z: number;
+    corner2X: number; corner2Z: number;
+    perpX: number; perpZ: number;
+    y: number;
+  }> {
+    const segments: Array<{
+      edgeKey: string;
+      corner1X: number; corner1Z: number;
+      corner2X: number; corner2Z: number;
+      perpX: number; perpZ: number;
+      y: number;
+    }> = [];
+
+    let current: { q: number; r: number; elevation: number; riverDirections: HexDirection[] } | undefined = source;
+    const visited = new Set<string>();
+    const halfWidth = EdgeRiverRenderer.RIVER_WIDTH;
+
+    while (current && current.riverDirections.length > 0) {
+      const key = `${current.q},${current.r}`;
+      if (visited.has(key)) break;
+      visited.add(key);
+
+      const coords = new HexCoordinates(current.q, current.r);
+      const centerPos = coords.toWorldPosition(current.elevation);
+
+      const dir = current.riverDirections[0];
+      const neighbor = this.grid.getNeighbor(current as any, dir);
+      if (!neighbor) break;
+
+      const edgeKey = this.getEdgeKey(current.q, current.r, neighbor.q, neighbor.r);
+
+      // Get edge corners
+      const edgeIndex = dir as number;
+      const c1 = corners[edgeIndex];
+      const c2 = corners[(edgeIndex + 1) % 6];
+
+      // World positions of corners
+      const corner1X = centerPos.x + c1.x;
+      const corner1Z = centerPos.z + c1.z;
+      const corner2X = centerPos.x + c2.x;
+      const corner2Z = centerPos.z + c2.z;
+
+      // Y position: use higher of the two cells
+      const y = Math.max(current.elevation, neighbor.elevation) * HexMetrics.elevationStep + EdgeRiverRenderer.HEIGHT_OFFSET;
+
+      // Edge direction and perpendicular
+      const edgeDX = corner2X - corner1X;
+      const edgeDZ = corner2Z - corner1Z;
+      const edgeLen = Math.sqrt(edgeDX * edgeDX + edgeDZ * edgeDZ);
+      const perpX = -edgeDZ / edgeLen * halfWidth;
+      const perpZ = edgeDX / edgeLen * halfWidth;
+
+      segments.push({
+        edgeKey,
+        corner1X, corner1Z,
+        corner2X, corner2Z,
+        perpX, perpZ,
+        y,
+      });
+
+      current = neighbor;
+    }
+
+    return segments;
   }
 
   /**
