@@ -48,96 +48,36 @@ export class EdgeRiverRenderer {
     const indices: number[] = [];
     let vertexIndex = 0;
 
-    // Get hex corners for edge calculations
-    const corners = HexMetrics.getCorners();
-
-    // Track which edges have been rendered to avoid duplicates
-    const renderedEdges = new Set<string>();
-
+    // Find river sources (cells with outgoing rivers but no incoming)
+    const hasIncoming = new Set<string>();
     for (const cell of this.grid.getAllCells()) {
-      if (cell.riverDirections.length === 0) continue;
-
-      const coords = new HexCoordinates(cell.q, cell.r);
-      const centerPos = coords.toWorldPosition(cell.elevation);
-      const baseY = centerPos.y + EdgeRiverRenderer.HEIGHT_OFFSET;
-
-      for (const direction of cell.riverDirections) {
-        // Create unique edge key to avoid duplicate rendering
-        const neighbor = this.grid.getNeighbor(cell, direction);
-        if (!neighbor) continue;
-
-        const edgeKey = this.getEdgeKey(cell.q, cell.r, neighbor.q, neighbor.r);
-        if (renderedEdges.has(edgeKey)) continue;
-        renderedEdges.add(edgeKey);
-
-        // Get edge corners based on direction
-        // Direction maps to edge between corners[dir] and corners[(dir+1)%6]
-        // But we need to map HexDirection to the correct edge index
-        const edgeIndex = this.directionToEdgeIndex(direction);
-        const corner1 = corners[edgeIndex];
-        const corner2 = corners[(edgeIndex + 1) % 6];
-
-        // Calculate edge midpoint and perpendicular for width
-        const edgeMidX = centerPos.x + (corner1.x + corner2.x) / 2;
-        const edgeMidZ = centerPos.z + (corner1.z + corner2.z) / 2;
-
-        // Edge direction vector
-        const edgeDX = corner2.x - corner1.x;
-        const edgeDZ = corner2.z - corner1.z;
-        const edgeLen = Math.sqrt(edgeDX * edgeDX + edgeDZ * edgeDZ);
-
-        // Perpendicular vector (for river width)
-        const perpX = -edgeDZ / edgeLen;
-        const perpZ = edgeDX / edgeLen;
-
-        // River quad vertices (along the edge, with width perpendicular)
-        const halfWidth = EdgeRiverRenderer.RIVER_WIDTH;
-        const halfLength = edgeLen * 0.4; // Cover 80% of edge
-
-        // Calculate neighbor elevation for smooth transition
-        const neighborCoords = new HexCoordinates(neighbor.q, neighbor.r);
-        const neighborPos = neighborCoords.toWorldPosition(neighbor.elevation);
-        const neighborY = neighborPos.y + EdgeRiverRenderer.HEIGHT_OFFSET;
-
-        // Use average Y for the river surface at the edge
-        const avgY = (baseY + neighborY) / 2;
-
-        // Edge direction (along the edge line)
-        const edgeNormX = edgeDX / edgeLen;
-        const edgeNormZ = edgeDZ / edgeLen;
-
-        // Four corners of the river quad
-        // v0: corner1 side, -width
-        // v1: corner1 side, +width
-        // v2: corner2 side, +width
-        // v3: corner2 side, -width
-        const v0x = edgeMidX - edgeNormX * halfLength - perpX * halfWidth;
-        const v0z = edgeMidZ - edgeNormZ * halfLength - perpZ * halfWidth;
-        const v1x = edgeMidX - edgeNormX * halfLength + perpX * halfWidth;
-        const v1z = edgeMidZ - edgeNormZ * halfLength + perpZ * halfWidth;
-        const v2x = edgeMidX + edgeNormX * halfLength + perpX * halfWidth;
-        const v2z = edgeMidZ + edgeNormZ * halfLength + perpZ * halfWidth;
-        const v3x = edgeMidX + edgeNormX * halfLength - perpX * halfWidth;
-        const v3z = edgeMidZ + edgeNormZ * halfLength - perpZ * halfWidth;
-
-        // Add vertices
-        vertices.push(v0x, avgY, v0z);
-        vertices.push(v1x, avgY, v1z);
-        vertices.push(v2x, avgY, v2z);
-        vertices.push(v3x, avgY, v3z);
-
-        // UV coordinates for flow animation
-        // V coordinate along flow direction
-        uvs.push(0, 0);
-        uvs.push(1, 0);
-        uvs.push(1, 1);
-        uvs.push(0, 1);
-
-        // Two triangles for quad
-        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-        indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
-        vertexIndex += 4;
+      for (const dir of cell.riverDirections) {
+        const neighbor = this.grid.getNeighbor(cell, dir);
+        if (neighbor) {
+          hasIncoming.add(`${neighbor.q},${neighbor.r}`);
+        }
       }
+    }
+
+    // Find sources
+    const sources = this.grid.getAllCells().filter(cell =>
+      cell.riverDirections.length > 0 && !hasIncoming.has(`${cell.q},${cell.r}`)
+    );
+
+    // Track rendered paths to avoid duplicates
+    const renderedCells = new Set<string>();
+
+    // Trace and render each river path
+    for (const source of sources) {
+      const path = this.traceRiverPath(source);
+      if (path.length < 2) continue;
+
+      // Build quad strip along path
+      const result = this.buildRiverStrip(path, vertexIndex, renderedCells);
+      vertices.push(...result.vertices);
+      uvs.push(...result.uvs);
+      indices.push(...result.indices);
+      vertexIndex = result.nextVertexIndex;
     }
 
     if (vertices.length === 0) return;
@@ -219,6 +159,137 @@ export class EdgeRiverRenderer {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.name = 'rivers';
     this.scene.add(this.mesh);
+  }
+
+  /**
+   * Trace a river path from source to end (water or dead end).
+   */
+  private traceRiverPath(source: { q: number; r: number; elevation: number; riverDirections: HexDirection[] }): Array<{ x: number; y: number; z: number }> {
+    const path: Array<{ x: number; y: number; z: number }> = [];
+    let current: { q: number; r: number; elevation: number; riverDirections: HexDirection[] } | undefined = source;
+    const visited = new Set<string>();
+
+    while (current && current.riverDirections.length > 0) {
+      const key = `${current.q},${current.r}`;
+      if (visited.has(key)) break;
+      visited.add(key);
+
+      // Add edge midpoint for this cell's outgoing river
+      const coords = new HexCoordinates(current.q, current.r);
+      const centerPos = coords.toWorldPosition(current.elevation);
+      const corners = HexMetrics.getCorners();
+
+      const dir = current.riverDirections[0]; // Follow first river direction
+      const edgeIndex = dir as number;
+      const corner1 = corners[edgeIndex];
+      const corner2 = corners[(edgeIndex + 1) % 6];
+
+      const edgeMidX = centerPos.x + (corner1.x + corner2.x) / 2;
+      const edgeMidZ = centerPos.z + (corner1.z + corner2.z) / 2;
+      const y = centerPos.y + EdgeRiverRenderer.HEIGHT_OFFSET;
+
+      path.push({ x: edgeMidX, y, z: edgeMidZ });
+
+      // Move to neighbor
+      const neighbor = this.grid.getNeighbor(current as any, dir);
+      if (!neighbor) break;
+
+      current = neighbor;
+    }
+
+    // Add final point if we ended at water or dead end
+    if (current) {
+      const coords = new HexCoordinates(current.q, current.r);
+      const pos = coords.toWorldPosition(current.elevation);
+      path.push({ x: pos.x, y: pos.y + EdgeRiverRenderer.HEIGHT_OFFSET, z: pos.z });
+    }
+
+    return path;
+  }
+
+  /**
+   * Build a quad strip along a river path.
+   */
+  private buildRiverStrip(
+    path: Array<{ x: number; y: number; z: number }>,
+    startIndex: number,
+    renderedCells: Set<string>
+  ): { vertices: number[]; uvs: number[]; indices: number[]; nextVertexIndex: number } {
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    let vertexIndex = startIndex;
+
+    const halfWidth = EdgeRiverRenderer.RIVER_WIDTH;
+    let totalLength = 0;
+
+    // Calculate total path length for UV mapping
+    for (let i = 1; i < path.length; i++) {
+      const dx = path[i].x - path[i - 1].x;
+      const dz = path[i].z - path[i - 1].z;
+      totalLength += Math.sqrt(dx * dx + dz * dz);
+    }
+
+    let currentLength = 0;
+
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+
+      // Calculate direction for perpendicular
+      let dirX: number, dirZ: number;
+      if (i === 0 && path.length > 1) {
+        dirX = path[1].x - p.x;
+        dirZ = path[1].z - p.z;
+      } else if (i === path.length - 1 && path.length > 1) {
+        dirX = p.x - path[i - 1].x;
+        dirZ = p.z - path[i - 1].z;
+      } else if (path.length > 2) {
+        // Average of prev and next directions for smooth curves
+        dirX = path[i + 1].x - path[i - 1].x;
+        dirZ = path[i + 1].z - path[i - 1].z;
+      } else {
+        dirX = 1;
+        dirZ = 0;
+      }
+
+      const len = Math.sqrt(dirX * dirX + dirZ * dirZ);
+      if (len > 0) {
+        dirX /= len;
+        dirZ /= len;
+      }
+
+      // Perpendicular
+      const perpX = -dirZ;
+      const perpZ = dirX;
+
+      // Two vertices at this point (left and right of river)
+      vertices.push(p.x - perpX * halfWidth, p.y, p.z - perpZ * halfWidth);
+      vertices.push(p.x + perpX * halfWidth, p.y, p.z + perpZ * halfWidth);
+
+      // UV: x across width, y along length
+      const v = totalLength > 0 ? currentLength / totalLength : 0;
+      uvs.push(0, v);
+      uvs.push(1, v);
+
+      // Update length for next iteration
+      if (i < path.length - 1) {
+        const dx = path[i + 1].x - p.x;
+        const dz = path[i + 1].z - p.z;
+        currentLength += Math.sqrt(dx * dx + dz * dz);
+      }
+
+      // Create triangles (connecting to previous pair of vertices)
+      if (i > 0) {
+        const prev = vertexIndex - 2;
+        const curr = vertexIndex;
+        indices.push(prev, prev + 1, curr);
+        indices.push(prev + 1, curr + 1, curr);
+      }
+
+      vertexIndex += 2;
+    }
+
+    return { vertices, uvs, indices, nextVertexIndex: vertexIndex };
   }
 
   /**
