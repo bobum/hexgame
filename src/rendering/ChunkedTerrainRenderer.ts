@@ -3,6 +3,7 @@ import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexMeshBuilder } from './HexMeshBuilder';
 import { LODHexBuilder, LODDistances } from './LODHexBuilder';
+import { createTerrainMaterial, updateTerrainMaterial } from './TerrainShaderMaterial';
 import { HexCell } from '../types';
 
 /**
@@ -29,7 +30,7 @@ export class ChunkedTerrainRenderer {
   private scene: THREE.Scene;
   private grid: HexGrid;
   private chunks: Map<string, TerrainChunk> = new Map();
-  private material: THREE.MeshLambertMaterial;
+  private material: THREE.ShaderMaterial;
 
   static readonly CHUNK_SIZE = 16;
 
@@ -37,10 +38,14 @@ export class ChunkedTerrainRenderer {
     this.scene = scene;
     this.grid = grid;
 
-    this.material = new THREE.MeshLambertMaterial({
-      vertexColors: true,
-      flatShading: true,
-    });
+    this.material = createTerrainMaterial();
+  }
+
+  /**
+   * Update shader time uniform for animated effects.
+   */
+  updateShader(deltaTime: number): void {
+    updateTerrainMaterial(this.material, deltaTime);
   }
 
   private getChunkKey(chunkX: number, chunkZ: number): string {

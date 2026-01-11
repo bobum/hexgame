@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { HexMetrics, getTerrainColor, varyColor } from '../core/HexMetrics';
+import { HexMetrics, getTerrainColor, varyColor, getTerrainTypeIndex } from '../core/HexMetrics';
 import { HexCoordinates } from '../core/HexCoordinates';
-import { HexCell } from '../types';
+import { HexCell, TerrainType } from '../types';
 
 /**
  * Distance thresholds for LOD switching (in world units).
@@ -13,12 +13,15 @@ export const LODDistances = {
 
 /**
  * Builds simplified hex geometry for lower LOD levels.
+ * Includes terrain type attribute for shader-based rendering.
  */
 export class LODHexBuilder {
   private vertices: number[] = [];
   private colors: number[] = [];
+  private terrainTypes: number[] = [];
   private indices: number[] = [];
   private vertexIndex = 0;
+  private currentTerrainType: TerrainType = TerrainType.Plains;
 
   private corners: THREE.Vector3[];
 
@@ -37,6 +40,7 @@ export class LODHexBuilder {
   reset(): void {
     this.vertices = [];
     this.colors = [];
+    this.terrainTypes = [];
     this.indices = [];
     this.vertexIndex = 0;
   }
@@ -48,6 +52,7 @@ export class LODHexBuilder {
     const coords = new HexCoordinates(cell.q, cell.r);
     const center = coords.toWorldPosition(cell.elevation);
     const baseColor = varyColor(getTerrainColor(cell.terrainType), 0.08);
+    this.currentTerrainType = cell.terrainType;
 
     // Build hex top as 6 triangles from center
     for (let i = 0; i < 6; i++) {
@@ -69,6 +74,7 @@ export class LODHexBuilder {
     const coords = new HexCoordinates(cell.q, cell.r);
     const center = coords.toWorldPosition(cell.elevation);
     const baseColor = varyColor(getTerrainColor(cell.terrainType), 0.08);
+    this.currentTerrainType = cell.terrainType;
 
     // Simple quad approximation
     const size = HexMetrics.outerRadius * 0.85;
@@ -96,6 +102,10 @@ export class LODHexBuilder {
     this.colors.push(color.r, color.g, color.b);
     this.colors.push(color.r, color.g, color.b);
 
+    // Add terrain type for each vertex (for shader)
+    const terrainTypeFloat = getTerrainTypeIndex(this.currentTerrainType);
+    this.terrainTypes.push(terrainTypeFloat, terrainTypeFloat, terrainTypeFloat);
+
     this.indices.push(this.vertexIndex, this.vertexIndex + 1, this.vertexIndex + 2);
     this.vertexIndex += 3;
   }
@@ -104,6 +114,9 @@ export class LODHexBuilder {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.vertices, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(this.colors, 3));
+    // For terrain shader compatibility
+    geometry.setAttribute('terrainColor', new THREE.Float32BufferAttribute(this.colors, 3));
+    geometry.setAttribute('terrainType', new THREE.Float32BufferAttribute(this.terrainTypes, 1));
     geometry.setIndex(this.indices);
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();

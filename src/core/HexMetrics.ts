@@ -67,3 +67,24 @@ export function varyColor(color: THREE.Color, amount: number = 0.05): THREE.Colo
   hsl.l = Math.max(0, Math.min(1, hsl.l));
   return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
 }
+
+// Terrain type to numeric index for shader
+const TerrainTypeIndices: Record<TerrainType, number> = {
+  [TerrainType.Ocean]: 0,
+  [TerrainType.Coast]: 1,
+  [TerrainType.Plains]: 2,
+  [TerrainType.Forest]: 3,
+  [TerrainType.Hills]: 4,
+  [TerrainType.Mountains]: 5,
+  [TerrainType.Snow]: 6,
+  [TerrainType.Desert]: 7,
+  [TerrainType.Tundra]: 8,
+  [TerrainType.Jungle]: 9,
+  [TerrainType.Savanna]: 10,
+  [TerrainType.Taiga]: 11,
+};
+
+// Get numeric index for terrain type (for shaders)
+export function getTerrainTypeIndex(terrain: TerrainType): number {
+  return TerrainTypeIndices[terrain];
+}

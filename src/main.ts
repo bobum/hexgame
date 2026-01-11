@@ -376,6 +376,11 @@ class HexGame {
     // Update water animation
     this.waterRenderer.update(deltaTime);
 
+    // Update terrain shader (time uniform for potential animations)
+    if (!this.useInstancing) {
+      this.terrainRenderer.updateShader(deltaTime);
+    }
+
     // Update hover detection
     this.updateHover();
 
