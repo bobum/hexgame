@@ -17,12 +17,15 @@ function mulberry32(seed: number): () => number {
 
 /**
  * Generates rivers flowing from high elevation to water.
- * Uses steepest descent algorithm with weighted random selection.
+ * Uses steepest descent algorithm - rivers can ONLY flow downhill.
  */
 export class RiverGenerator {
   private grid: HexGrid;
   private config: MapConfig;
   private random: () => number;
+
+  // Minimum number of edges for a valid river
+  private static readonly MIN_RIVER_LENGTH = 3;
 
   constructor(grid: HexGrid, config: MapConfig) {
     this.grid = grid;
@@ -144,23 +147,26 @@ export class RiverGenerator {
 
   /**
    * Trace a river from source to water using steepest descent.
-   * Returns the length of the river created.
+   * Rivers can ONLY flow downhill. If stuck or too short, discard entirely.
+   * Returns the length of the river created (0 if discarded).
    */
   private traceRiver(source: HexCell): number {
     let current = source;
-    let length = 0;
     const visited = new Set<string>();
+
+    // Track cells we add river segments to, so we can remove them if river is too short
+    const riverCells: { cell: HexCell; direction: HexDirection }[] = [];
 
     while (current.elevation >= HexMetrics.waterLevel) {
       const key = `${current.q},${current.r}`;
       if (visited.has(key)) break; // Avoid loops
       visited.add(key);
 
-      // Find best direction to flow
+      // Find best direction to flow (strictly downhill only)
       const flowDir = this.findFlowDirection(current);
 
       if (flowDir === null) {
-        // Can't flow anywhere - dead end
+        // Can't flow anywhere - dead end, stop here
         break;
       }
 
@@ -168,31 +174,43 @@ export class RiverGenerator {
       const neighbor = this.grid.getNeighbor(current, flowDir);
       if (!neighbor) break;
 
-      // Check if neighbor already has a river (no merging)
+      // Record this segment (don't add to cell yet)
+      riverCells.push({ cell: current, direction: flowDir });
+
+      // Check if neighbor already has a river (merge point)
       if (neighbor.riverDirections.length > 0) {
-        // End river here, flowing into existing river
-        current.riverDirections.push(flowDir);
-        length++;
         break;
       }
 
-      // Add river segment
-      current.riverDirections.push(flowDir);
-      length++;
+      // Check if we reached water
+      if (neighbor.elevation < HexMetrics.waterLevel) {
+        break;
+      }
 
       // Move to next cell
       current = neighbor;
 
       // Safety limit
-      if (length > 100) break;
+      if (riverCells.length > 100) break;
     }
 
-    return length;
+    // Check minimum length - discard if too short
+    if (riverCells.length < RiverGenerator.MIN_RIVER_LENGTH) {
+      return 0; // River too short, don't create it
+    }
+
+    // River is long enough - actually add the segments to cells
+    for (const { cell, direction } of riverCells) {
+      cell.riverDirections.push(direction);
+    }
+
+    return riverCells.length;
   }
 
   /**
    * Find the best direction for water to flow from a cell.
-   * Prefers steepest downhill, with randomness for variety.
+   * ONLY allows strictly downhill flow (no flat terrain).
+   * Prefers steepest descent, with randomness for variety.
    */
   private findFlowDirection(cell: HexCell): HexDirection | null {
     const candidates: { dir: HexDirection; weight: number }[] = [];
@@ -204,20 +222,11 @@ export class RiverGenerator {
       // Calculate elevation difference (positive = downhill)
       const elevationDiff = cell.elevation - neighbor.elevation;
 
-      // Skip uphill (can't flow uphill)
-      if (elevationDiff < 0) continue;
+      // ONLY allow strictly downhill (elevation must decrease)
+      if (elevationDiff <= 0) continue;
 
-      // Weight based on steepness
-      let weight = 1;
-      if (elevationDiff > 0) {
-        // Downhill - more weight for steeper descent
-        weight = 1 + elevationDiff * 3;
-      }
-
-      // Extra weight if flowing toward water
-      if (neighbor.elevation < HexMetrics.waterLevel) {
-        weight += 5;
-      }
+      // Weight based on steepness - steeper = more likely
+      const weight = 1 + elevationDiff * 3;
 
       candidates.push({ dir, weight });
     }
