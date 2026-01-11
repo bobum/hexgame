@@ -282,6 +282,7 @@ class HexGame {
     helpFolder.add({ text: 'Mouse Wheel: Zoom' }, 'text').name('');
     helpFolder.add({ text: 'Q / E: Rotate' }, 'text').name('');
     helpFolder.add({ text: 'R / F: Tilt Up/Down' }, 'text').name('');
+    helpFolder.add({ text: 'Z / X: Height Up/Down' }, 'text').name('');
     helpFolder.add({ text: 'Right Drag: Rotate + Tilt' }, 'text').name('');
     helpFolder.add({ text: 'Middle Drag: Pan' }, 'text').name('');
   }

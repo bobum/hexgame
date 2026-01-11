@@ -182,6 +182,11 @@ export class MapCamera {
       );
     }
 
+    // Handle keyboard Y-axis movement (Z = up, X = down)
+    const ySpeed = panSpeed * 0.5;
+    if (this.keys.has('z')) this.targetTarget.y += ySpeed;
+    if (this.keys.has('x')) this.targetTarget.y -= ySpeed;
+
     // Clamp target to bounds
     if (this.bounds) {
       this.targetTarget.x = THREE.MathUtils.clamp(
@@ -195,6 +200,9 @@ export class MapCamera {
         this.bounds.maxZ
       );
     }
+
+    // Clamp Y to prevent going under the map (min 0, max 30)
+    this.targetTarget.y = THREE.MathUtils.clamp(this.targetTarget.y, 0, 30);
 
     // Smooth interpolation
     const smoothing = 1 - Math.pow(0.001, deltaTime);
