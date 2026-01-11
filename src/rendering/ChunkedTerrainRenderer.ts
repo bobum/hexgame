@@ -125,7 +125,7 @@ export class ChunkedTerrainRenderer {
     // Offset mesh to compensate for LOD position
     highMesh.position.set(-chunk.centerX, 0, -chunk.centerZ);
 
-    // MEDIUM detail - hex tops only
+    // MEDIUM detail - hex tops only (with per-hex skirts built in)
     const medBuilder = new LODHexBuilder();
     for (const cell of chunk.cells) {
       medBuilder.buildCellMedium(cell);
@@ -135,7 +135,7 @@ export class ChunkedTerrainRenderer {
     medMesh.receiveShadow = true;
     medMesh.position.set(-chunk.centerX, 0, -chunk.centerZ);
 
-    // LOW detail - simple quads
+    // LOW detail - simple quads (with per-hex skirts built in)
     const lowBuilder = new LODHexBuilder();
     for (const cell of chunk.cells) {
       lowBuilder.buildCellLow(cell);
