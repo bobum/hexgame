@@ -25,8 +25,9 @@ export class InstancedHexRenderer {
   private hexMesh: THREE.InstancedMesh | null = null;
   private material: THREE.MeshLambertMaterial;
 
-  // Walls (merged geometry, not instanced - too complex to rotate correctly)
-  private wallMesh: THREE.Mesh | null = null;
+  // Walls (instanced)
+  private wallGeometry: THREE.BufferGeometry;
+  private wallMesh: THREE.InstancedMesh | null = null;
   private wallMaterial: THREE.MeshLambertMaterial;
 
   // Maps cell key to instance index
@@ -39,16 +40,52 @@ export class InstancedHexRenderer {
     // Create hex top geometry (flat hexagon)
     this.hexGeometry = this.createHexGeometry();
 
+    // Create wall geometry (unit quad at origin, in YZ plane, facing +X)
+    this.wallGeometry = this.createWallGeometry();
+
     // Materials
     this.material = new THREE.MeshLambertMaterial({
-      vertexColors: false, // Using instance colors instead
+      vertexColors: false,
       flatShading: true,
     });
 
     this.wallMaterial = new THREE.MeshLambertMaterial({
-      vertexColors: true, // Walls use vertex colors like HexMeshBuilder
+      vertexColors: false,
       flatShading: true,
     });
+  }
+
+  /**
+   * Create unit wall geometry: 1x1 quad at origin, in YZ plane, facing +X.
+   * Will be scaled/rotated/translated per instance.
+   */
+  private createWallGeometry(): THREE.BufferGeometry {
+    // Unit quad centered at origin, facing +X
+    // Vertices in YZ plane from (-0.5,-0.5) to (0.5,0.5)
+    const vertices = new Float32Array([
+      // Triangle 1
+      0, 0.5, -0.5,   // top-left
+      0, -0.5, 0.5,   // bottom-right
+      0, -0.5, -0.5,  // bottom-left
+      // Triangle 2
+      0, 0.5, -0.5,   // top-left
+      0, 0.5, 0.5,    // top-right
+      0, -0.5, 0.5,   // bottom-right
+    ]);
+
+    const normals = new Float32Array([
+      1, 0, 0,
+      1, 0, 0,
+      1, 0, 0,
+      1, 0, 0,
+      1, 0, 0,
+      1, 0, 0,
+    ]);
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    return geometry;
   }
 
   /**
@@ -140,7 +177,6 @@ export class InstancedHexRenderer {
 
   /**
    * Get the edge index (0-5) that faces the given angle.
-   * Matches HexMeshBuilder logic exactly.
    */
   private getEdgeIndexForAngle(angle: number): number {
     let normalizedAngle = angle;
@@ -159,41 +195,26 @@ export class InstancedHexRenderer {
   }
 
   /**
-   * Build walls as merged geometry (same approach as HexMeshBuilder).
-   * Instancing walls is too complex due to rotation issues.
+   * Build walls using instancing.
+   * Unit quad at origin -> scale/rotate/translate to each edge.
    */
   private buildWalls(landCells: HexCell[]): void {
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-    let vertexIndex = 0;
-
     const corners = HexMetrics.getCorners();
+    const edgeLength = HexMetrics.outerRadius; // Hex edge length = outer radius
 
-    const addTriangle = (
-      v1: THREE.Vector3,
-      v2: THREE.Vector3,
-      v3: THREE.Vector3,
+    // Collect wall data
+    const wallData: {
+      x: number; y: number; z: number;
+      angle: number;
+      height: number;
       color: THREE.Color
-    ) => {
-      vertices.push(v1.x, v1.y, v1.z);
-      vertices.push(v2.x, v2.y, v2.z);
-      vertices.push(v3.x, v3.y, v3.z);
-
-      colors.push(color.r, color.g, color.b);
-      colors.push(color.r, color.g, color.b);
-      colors.push(color.r, color.g, color.b);
-
-      indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-      vertexIndex += 3;
-    };
+    }[] = [];
 
     for (const cell of landCells) {
       const coords = new HexCoordinates(cell.q, cell.r);
       const center = coords.toWorldPosition(cell.elevation);
       const wallColor = varyColor(getTerrainColor(cell.terrainType), 0.08).multiplyScalar(0.65);
 
-      // Check all 6 directions
       for (let dir = 0; dir < 6; dir++) {
         const neighbor = this.grid.getNeighbor(cell, dir);
 
@@ -205,7 +226,7 @@ export class InstancedHexRenderer {
         }
 
         if (wallHeight > 0) {
-          // Calculate which edge this direction corresponds to
+          // Find which edge this direction corresponds to
           const neighborCoords = coords.getNeighbor(dir);
           const neighborPos = neighborCoords.toWorldPosition(0);
           const dx = neighborPos.x - center.x;
@@ -213,33 +234,60 @@ export class InstancedHexRenderer {
           const angle = Math.atan2(dz, dx);
           const edgeIndex = this.getEdgeIndexForAngle(angle);
 
-          // Get corner positions for this edge
-          const corner1 = corners[edgeIndex];
-          const corner2 = corners[(edgeIndex + 1) % 6];
+          // Edge midpoint (relative to hex center)
+          const c1 = corners[edgeIndex];
+          const c2 = corners[(edgeIndex + 1) % 6];
+          const midX = (c1.x + c2.x) / 2;
+          const midZ = (c1.z + c2.z) / 2;
 
-          // Build wall quad (same as HexMeshBuilder.buildWallOnEdge)
-          const topLeft = new THREE.Vector3(center.x + corner1.x, center.y, center.z + corner1.z);
-          const topRight = new THREE.Vector3(center.x + corner2.x, center.y, center.z + corner2.z);
-          const bottomLeft = new THREE.Vector3(topLeft.x, center.y - wallHeight, topLeft.z);
-          const bottomRight = new THREE.Vector3(topRight.x, center.y - wallHeight, topRight.z);
+          // Edge facing angle (outward from center)
+          const edgeAngle = Math.atan2(midZ, midX);
 
-          // Two triangles for the quad
-          addTriangle(topLeft, bottomRight, bottomLeft, wallColor);
-          addTriangle(topLeft, topRight, bottomRight, wallColor);
+          // Wall center position in world space
+          // Top of wall is at center.y, bottom at center.y - wallHeight
+          // So wall center Y = center.y - wallHeight/2
+          wallData.push({
+            x: center.x + midX,
+            y: center.y - wallHeight / 2,
+            z: center.z + midZ,
+            angle: edgeAngle,
+            height: wallHeight,
+            color: wallColor.clone(),
+          });
         }
       }
     }
 
-    if (vertices.length === 0) return;
+    if (wallData.length === 0) return;
 
-    // Create merged wall geometry
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
+    // Create instanced mesh
+    this.wallMesh = new THREE.InstancedMesh(
+      this.wallGeometry,
+      this.wallMaterial,
+      wallData.length
+    );
 
-    this.wallMesh = new THREE.Mesh(geometry, this.wallMaterial);
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const yAxis = new THREE.Vector3(0, 1, 0);
+
+    wallData.forEach((wall, i) => {
+      position.set(wall.x, wall.y, wall.z);
+      // Rotate by -angle because Y rotation takes +X toward -Z
+      quaternion.setFromAxisAngle(yAxis, -wall.angle);
+      scale.set(1, wall.height, edgeLength);
+
+      matrix.compose(position, quaternion, scale);
+      this.wallMesh!.setMatrixAt(i, matrix);
+      this.wallMesh!.setColorAt(i, wall.color);
+    });
+
+    this.wallMesh.instanceMatrix.needsUpdate = true;
+    if (this.wallMesh.instanceColor) {
+      this.wallMesh.instanceColor.needsUpdate = true;
+    }
     this.wallMesh.castShadow = true;
     this.wallMesh.receiveShadow = true;
 
@@ -281,8 +329,7 @@ export class InstancedHexRenderer {
   }
 
   get wallCount(): number {
-    // Return triangle count for walls (merged geometry)
-    return this.wallMesh?.geometry.index?.count ? this.wallMesh.geometry.index.count / 3 : 0;
+    return this.wallMesh?.count ?? 0;
   }
 
   dispose(): void {
@@ -294,7 +341,7 @@ export class InstancedHexRenderer {
 
     if (this.wallMesh) {
       this.scene.remove(this.wallMesh);
-      this.wallMesh.geometry.dispose();
+      this.wallMesh.dispose();
       this.wallMesh = null;
     }
 
@@ -304,6 +351,7 @@ export class InstancedHexRenderer {
   disposeAll(): void {
     this.dispose();
     this.hexGeometry.dispose();
+    this.wallGeometry.dispose();
     this.material.dispose();
     this.wallMaterial.dispose();
   }
