@@ -142,15 +142,18 @@ export class EdgeRiverRenderer {
         const perpX = -edgeDZ / edgeLen * halfWidth;
         const perpZ = edgeDX / edgeLen * halfWidth;
 
-        // Y position: use higher of the two cells
-        const y = Math.max(cell.elevation, neighbor.elevation) * HexMetrics.elevationStep
+        // Y positions for both cells
+        const highY = Math.max(cell.elevation, neighbor.elevation) * HexMetrics.elevationStep
           + EdgeRiverRenderer.HEIGHT_OFFSET;
+        const lowY = Math.min(cell.elevation, neighbor.elevation) * HexMetrics.elevationStep
+          + EdgeRiverRenderer.HEIGHT_OFFSET;
+        const elevationDiff = cell.elevation - neighbor.elevation;
 
-        // Draw quad along the edge
-        vertices.push(c1.x - perpX, y, c1.z - perpZ);
-        vertices.push(c1.x + perpX, y, c1.z + perpZ);
-        vertices.push(c2.x + perpX, y, c2.z + perpZ);
-        vertices.push(c2.x - perpX, y, c2.z - perpZ);
+        // Draw horizontal quad along the edge (at higher elevation)
+        vertices.push(c1.x - perpX, highY, c1.z - perpZ);
+        vertices.push(c1.x + perpX, highY, c1.z + perpZ);
+        vertices.push(c2.x + perpX, highY, c2.z + perpZ);
+        vertices.push(c2.x - perpX, highY, c2.z - perpZ);
 
         uvs.push(0, 0);
         uvs.push(1, 0);
@@ -160,6 +163,36 @@ export class EdgeRiverRenderer {
         indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
         vertexIndex += 4;
+
+        // If river flows downhill, draw waterfall connecting upper river to lower river
+        // Waterfall only exists where river continues below (neighbor has river or is water)
+        if (elevationDiff > 0) {
+          const neighborHasRiver = neighbor.riverDirections.length > 0 ||
+                                   neighbor.elevation < HexMetrics.waterLevel;
+
+          if (neighborHasRiver) {
+            // Waterfall goes down the vertical wall edge at corner c2
+            // Width along the edge direction so it sits on the wall face
+            const edgeNormX = edgeDX / edgeLen * halfWidth;
+            const edgeNormZ = edgeDZ / edgeLen * halfWidth;
+
+            // Draw waterfall quad on the vertical edge at c2
+            vertices.push(c2.x - edgeNormX, highY, c2.z - edgeNormZ);  // top (toward c1)
+            vertices.push(c2.x + edgeNormX, highY, c2.z + edgeNormZ);  // top (away from c1)
+            vertices.push(c2.x + edgeNormX, lowY, c2.z + edgeNormZ);   // bottom (away from c1)
+            vertices.push(c2.x - edgeNormX, lowY, c2.z - edgeNormZ);   // bottom (toward c1)
+
+            // UVs for waterfall - V goes from top to bottom for downward flow
+            uvs.push(0, 0);
+            uvs.push(1, 0);
+            uvs.push(1, 1);
+            uvs.push(0, 1);
+
+            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
+            vertexIndex += 4;
+          }
+        }
       }
 
       // If this cell has both incoming and outgoing rivers, draw connecting path
@@ -167,13 +200,14 @@ export class EdgeRiverRenderer {
       if (incoming.length > 0 && outgoing.length > 0) {
         for (const inDir of incoming) {
           for (const outDir of outgoing) {
-            // Get the shared corner between incoming and outgoing edges
+            // Get corners for incoming and outgoing edges
             const [inC1, inC2] = EdgeRiverRenderer.DIRECTION_TO_CORNERS[inDir];
             const [outC1, outC2] = EdgeRiverRenderer.DIRECTION_TO_CORNERS[outDir];
 
-            // Find path from incoming edge to outgoing edge along hex boundary
-            // The path goes through corners between the two edges
-            const pathCorners = this.findCornerPath(inC2, outC1);
+            // Find path from incoming edge START (inC1, where waterfall ends)
+            // to outgoing edge START (outC1, where next edge begins)
+            // This ensures the path connects waterfall to the next river segment
+            const pathCorners = this.findCornerPath(inC1, outC1);
 
             if (pathCorners.length >= 2) {
               const y = cell.elevation * HexMetrics.elevationStep + EdgeRiverRenderer.HEIGHT_OFFSET;
