@@ -7,12 +7,28 @@ import { UnitType, UnitData } from '../types';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexMetrics } from '../core/HexMetrics';
 
-// Player colors
-const PLAYER_COLORS = [
+// Player colors for land units
+const PLAYER_COLORS_LAND = [
   new THREE.Color(0x4488ff), // Player 1: Blue
   new THREE.Color(0xff4444), // Player 2: Red
   new THREE.Color(0x44ff44), // Player 3: Green
-  new THREE.Color(0xffff44), // Player 4: Yellow
+  new THREE.Color(0xff8844), // Player 4: Orange
+];
+
+// Player colors for naval units (yellow/gold tones to distinguish)
+const PLAYER_COLORS_NAVAL = [
+  new THREE.Color(0xffff44), // Player 1: Yellow
+  new THREE.Color(0xffcc00), // Player 2: Gold
+  new THREE.Color(0xccff44), // Player 3: Lime Yellow
+  new THREE.Color(0xffaa00), // Player 4: Amber
+];
+
+// Marine (amphibious) uses cyan/teal
+const PLAYER_COLORS_AMPHIBIOUS = [
+  new THREE.Color(0x44ffff), // Player 1: Cyan
+  new THREE.Color(0x00cccc), // Player 2: Teal
+  new THREE.Color(0x44ccff), // Player 3: Sky Blue
+  new THREE.Color(0x00ffcc), // Player 4: Aqua
 ];
 
 export class UnitRenderer {
@@ -23,11 +39,17 @@ export class UnitRenderer {
   private infantryMesh: THREE.InstancedMesh | null = null;
   private cavalryMesh: THREE.InstancedMesh | null = null;
   private archerMesh: THREE.InstancedMesh | null = null;
+  private galleyMesh: THREE.InstancedMesh | null = null;
+  private warshipMesh: THREE.InstancedMesh | null = null;
+  private marineMesh: THREE.InstancedMesh | null = null;
 
   // Geometries
   private infantryGeometry: THREE.BufferGeometry;
   private cavalryGeometry: THREE.BufferGeometry;
   private archerGeometry: THREE.BufferGeometry;
+  private galleyGeometry: THREE.BufferGeometry;
+  private warshipGeometry: THREE.BufferGeometry;
+  private marineGeometry: THREE.BufferGeometry;
 
   // Shared material
   private material: THREE.MeshLambertMaterial;
@@ -42,6 +64,9 @@ export class UnitRenderer {
   private infantryUnitIds: number[] = [];
   private cavalryUnitIds: number[] = [];
   private archerUnitIds: number[] = [];
+  private galleyUnitIds: number[] = [];
+  private warshipUnitIds: number[] = [];
+  private marineUnitIds: number[] = [];
 
   // Currently selected unit IDs
   private selectedUnitIds: Set<number> = new Set();
@@ -54,6 +79,9 @@ export class UnitRenderer {
     this.infantryGeometry = this.createInfantryGeometry();
     this.cavalryGeometry = this.createCavalryGeometry();
     this.archerGeometry = this.createArcherGeometry();
+    this.galleyGeometry = this.createGalleyGeometry();
+    this.warshipGeometry = this.createWarshipGeometry();
+    this.marineGeometry = this.createMarineGeometry();
 
     // Shared material with vertex colors
     this.material = new THREE.MeshLambertMaterial({
@@ -106,6 +134,36 @@ export class UnitRenderer {
   }
 
   /**
+   * Galley: Small boat shape (elongated box)
+   */
+  private createGalleyGeometry(): THREE.BufferGeometry {
+    const geometry = new THREE.BoxGeometry(0.6, 0.2, 0.25);
+    geometry.translate(0, 0.1, 0);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  /**
+   * Warship: Larger boat with more prominent shape
+   */
+  private createWarshipGeometry(): THREE.BufferGeometry {
+    const geometry = new THREE.BoxGeometry(0.7, 0.3, 0.35);
+    geometry.translate(0, 0.15, 0);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  /**
+   * Marine: Similar to infantry but with distinctive shape
+   */
+  private createMarineGeometry(): THREE.BufferGeometry {
+    const geometry = new THREE.CylinderGeometry(0.12, 0.2, 0.45, 6);
+    geometry.translate(0, 0.25, 0);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  /**
    * Build or rebuild all unit meshes.
    */
   build(): void {
@@ -115,6 +173,9 @@ export class UnitRenderer {
     this.infantryUnitIds = [];
     this.cavalryUnitIds = [];
     this.archerUnitIds = [];
+    this.galleyUnitIds = [];
+    this.warshipUnitIds = [];
+    this.marineUnitIds = [];
 
     const units = this.unitManager.getAllUnits();
 
@@ -123,13 +184,17 @@ export class UnitRenderer {
       [UnitType.Infantry]: units.filter(u => u.type === UnitType.Infantry),
       [UnitType.Cavalry]: units.filter(u => u.type === UnitType.Cavalry),
       [UnitType.Archer]: units.filter(u => u.type === UnitType.Archer),
+      [UnitType.Galley]: units.filter(u => u.type === UnitType.Galley),
+      [UnitType.Warship]: units.filter(u => u.type === UnitType.Warship),
+      [UnitType.Marine]: units.filter(u => u.type === UnitType.Marine),
     };
 
     // Create infantry instances
     if (byType[UnitType.Infantry].length > 0) {
       const { mesh, unitIds } = this.createInstancedMesh(
         this.infantryGeometry,
-        byType[UnitType.Infantry]
+        byType[UnitType.Infantry],
+        'land'
       );
       this.infantryMesh = mesh;
       this.infantryUnitIds = unitIds;
@@ -140,7 +205,8 @@ export class UnitRenderer {
     if (byType[UnitType.Cavalry].length > 0) {
       const { mesh, unitIds } = this.createInstancedMesh(
         this.cavalryGeometry,
-        byType[UnitType.Cavalry]
+        byType[UnitType.Cavalry],
+        'land'
       );
       this.cavalryMesh = mesh;
       this.cavalryUnitIds = unitIds;
@@ -151,11 +217,48 @@ export class UnitRenderer {
     if (byType[UnitType.Archer].length > 0) {
       const { mesh, unitIds } = this.createInstancedMesh(
         this.archerGeometry,
-        byType[UnitType.Archer]
+        byType[UnitType.Archer],
+        'land'
       );
       this.archerMesh = mesh;
       this.archerUnitIds = unitIds;
       this.scene.add(this.archerMesh);
+    }
+
+    // Create galley instances (naval - yellow)
+    if (byType[UnitType.Galley].length > 0) {
+      const { mesh, unitIds } = this.createInstancedMesh(
+        this.galleyGeometry,
+        byType[UnitType.Galley],
+        'naval'
+      );
+      this.galleyMesh = mesh;
+      this.galleyUnitIds = unitIds;
+      this.scene.add(this.galleyMesh);
+    }
+
+    // Create warship instances (naval - yellow)
+    if (byType[UnitType.Warship].length > 0) {
+      const { mesh, unitIds } = this.createInstancedMesh(
+        this.warshipGeometry,
+        byType[UnitType.Warship],
+        'naval'
+      );
+      this.warshipMesh = mesh;
+      this.warshipUnitIds = unitIds;
+      this.scene.add(this.warshipMesh);
+    }
+
+    // Create marine instances (amphibious - cyan)
+    if (byType[UnitType.Marine].length > 0) {
+      const { mesh, unitIds } = this.createInstancedMesh(
+        this.marineGeometry,
+        byType[UnitType.Marine],
+        'amphibious'
+      );
+      this.marineMesh = mesh;
+      this.marineUnitIds = unitIds;
+      this.scene.add(this.marineMesh);
     }
 
     this.needsRebuild = false;
@@ -170,7 +273,8 @@ export class UnitRenderer {
    */
   private createInstancedMesh(
     geometry: THREE.BufferGeometry,
-    units: UnitData[]
+    units: UnitData[],
+    domain: 'land' | 'naval' | 'amphibious' = 'land'
   ): { mesh: THREE.InstancedMesh; unitIds: number[] } {
     const mesh = new THREE.InstancedMesh(
       geometry,
@@ -183,6 +287,11 @@ export class UnitRenderer {
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3(1, 1, 1);
     const unitIds: number[] = [];
+
+    // Select color palette based on domain
+    const colorPalette = domain === 'naval' ? PLAYER_COLORS_NAVAL
+      : domain === 'amphibious' ? PLAYER_COLORS_AMPHIBIOUS
+      : PLAYER_COLORS_LAND;
 
     for (let i = 0; i < units.length && i < this.maxInstances; i++) {
       const unit = units[i];
@@ -198,8 +307,8 @@ export class UnitRenderer {
       matrix.compose(position, quaternion, scale);
       mesh.setMatrixAt(i, matrix);
 
-      // Set color based on player
-      const color = PLAYER_COLORS[unit.playerId % PLAYER_COLORS.length];
+      // Set color based on player and domain
+      const color = colorPalette[unit.playerId % colorPalette.length];
       mesh.setColorAt(i, color);
     }
 
@@ -244,14 +353,17 @@ export class UnitRenderer {
   private applySelectionColors(): void {
     const selectedColor = new THREE.Color(0xffffff); // White for selected
 
-    // Update infantry
-    this.updateMeshColors(this.infantryMesh, this.infantryUnitIds, selectedColor);
+    // Update land units
+    this.updateMeshColors(this.infantryMesh, this.infantryUnitIds, selectedColor, PLAYER_COLORS_LAND);
+    this.updateMeshColors(this.cavalryMesh, this.cavalryUnitIds, selectedColor, PLAYER_COLORS_LAND);
+    this.updateMeshColors(this.archerMesh, this.archerUnitIds, selectedColor, PLAYER_COLORS_LAND);
 
-    // Update cavalry
-    this.updateMeshColors(this.cavalryMesh, this.cavalryUnitIds, selectedColor);
+    // Update naval units
+    this.updateMeshColors(this.galleyMesh, this.galleyUnitIds, selectedColor, PLAYER_COLORS_NAVAL);
+    this.updateMeshColors(this.warshipMesh, this.warshipUnitIds, selectedColor, PLAYER_COLORS_NAVAL);
 
-    // Update archers
-    this.updateMeshColors(this.archerMesh, this.archerUnitIds, selectedColor);
+    // Update amphibious units
+    this.updateMeshColors(this.marineMesh, this.marineUnitIds, selectedColor, PLAYER_COLORS_AMPHIBIOUS);
   }
 
   /**
@@ -260,7 +372,8 @@ export class UnitRenderer {
   private updateMeshColors(
     mesh: THREE.InstancedMesh | null,
     unitIds: number[],
-    selectedColor: THREE.Color
+    selectedColor: THREE.Color,
+    colorPalette: THREE.Color[]
   ): void {
     if (!mesh || unitIds.length === 0) return;
 
@@ -272,7 +385,7 @@ export class UnitRenderer {
       if (this.selectedUnitIds.has(unitId)) {
         mesh.setColorAt(i, selectedColor);
       } else {
-        const playerColor = PLAYER_COLORS[unit.playerId % PLAYER_COLORS.length];
+        const playerColor = colorPalette[unit.playerId % colorPalette.length];
         mesh.setColorAt(i, playerColor);
       }
     }
@@ -310,6 +423,21 @@ export class UnitRenderer {
       this.archerMesh.dispose();
       this.archerMesh = null;
     }
+    if (this.galleyMesh) {
+      this.scene.remove(this.galleyMesh);
+      this.galleyMesh.dispose();
+      this.galleyMesh = null;
+    }
+    if (this.warshipMesh) {
+      this.scene.remove(this.warshipMesh);
+      this.warshipMesh.dispose();
+      this.warshipMesh = null;
+    }
+    if (this.marineMesh) {
+      this.scene.remove(this.marineMesh);
+      this.marineMesh.dispose();
+      this.marineMesh = null;
+    }
   }
 
   /**
@@ -320,6 +448,9 @@ export class UnitRenderer {
     this.infantryGeometry.dispose();
     this.cavalryGeometry.dispose();
     this.archerGeometry.dispose();
+    this.galleyGeometry.dispose();
+    this.warshipGeometry.dispose();
+    this.marineGeometry.dispose();
     this.material.dispose();
   }
 }

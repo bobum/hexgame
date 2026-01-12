@@ -1,9 +1,16 @@
 import { HexCell } from '../types';
 import { HexGrid } from '../core/HexGrid';
 import { HexCoordinates } from '../core/HexCoordinates';
+import { HexDirection, getNeighborDirection } from '../core/HexDirection';
 import { UnitManager } from '../units/UnitManager';
+import { UnitType } from '../units/UnitTypes';
 import { PriorityQueue } from './PriorityQueue';
-import { getMovementCost, isPassable } from './MovementCosts';
+import {
+  getMovementCost,
+  getMovementCostForUnit,
+  isPassable,
+  isPassableForUnit,
+} from './MovementCosts';
 
 /**
  * Result of a pathfinding operation.
@@ -43,12 +50,15 @@ export class Pathfinder {
       ignoreUnits?: boolean;
       /** Maximum cost to search (limits search area) */
       maxCost?: number;
+      /** Unit type for domain-aware pathfinding (land/naval/amphibious) */
+      unitType?: UnitType;
     } = {}
   ): PathResult {
-    const { ignoreUnits = false, maxCost = Infinity } = options;
+    const { ignoreUnits = false, maxCost = Infinity, unitType } = options;
 
-    // Quick check: destination must be passable
-    if (!isPassable(end)) {
+    // Quick check: destination must be passable for this unit type
+    const destPassable = unitType ? isPassableForUnit(end, unitType) : isPassable(end);
+    if (!destPassable) {
       return { path: [], cost: Infinity, reachable: false };
     }
 
@@ -100,7 +110,11 @@ export class Pathfinder {
           }
         }
 
-        const moveCost = getMovementCost(current, neighbor);
+        // Calculate movement cost (domain-aware if unit type provided)
+        const direction = getNeighborDirection(current, neighbor);
+        const moveCost = unitType
+          ? getMovementCostForUnit(current, neighbor, unitType, direction)
+          : getMovementCost(current, neighbor);
 
         // Skip impassable terrain
         if (!isFinite(moveCost)) {
@@ -145,9 +159,11 @@ export class Pathfinder {
     movementPoints: number,
     options: {
       ignoreUnits?: boolean;
+      /** Unit type for domain-aware pathfinding (land/naval/amphibious) */
+      unitType?: UnitType;
     } = {}
   ): Map<HexCell, number> {
-    const { ignoreUnits = false } = options;
+    const { ignoreUnits = false, unitType } = options;
     const reachable = new Map<HexCell, number>();
     const frontier = new PriorityQueue<HexCell>();
     const costSoFar = new Map<string, number>();
@@ -171,7 +187,11 @@ export class Pathfinder {
           }
         }
 
-        const moveCost = getMovementCost(current, neighbor);
+        // Calculate movement cost (domain-aware if unit type provided)
+        const direction = getNeighborDirection(current, neighbor);
+        const moveCost = unitType
+          ? getMovementCostForUnit(current, neighbor, unitType, direction)
+          : getMovementCost(current, neighbor);
 
         // Skip impassable
         if (!isFinite(moveCost)) {

@@ -2,12 +2,17 @@
  * Manages all units in the game.
  * Uses object pooling for efficient unit creation/destruction.
  */
-import * as THREE from 'three';
-import { UnitData, UnitType, UnitStats } from '../types';
 import { HexCoordinates } from '../core/HexCoordinates';
 import { HexGrid } from '../core/HexGrid';
 import { SpatialHash } from '../utils/SpatialHash';
 import { ObjectPool } from '../utils/ObjectPool';
+import {
+  UnitData,
+  UnitType,
+  UnitStats,
+  canTraverseLand,
+  canTraverseWater,
+} from './UnitTypes';
 
 export class UnitManager {
   private units: Map<number, UnitData> = new Map();
@@ -38,6 +43,7 @@ export class UnitManager {
         attack: 10,
         defense: 8,
         playerId: 0,
+        hasMoved: false,
       }),
       (unit) => {
         unit.id = 0;
@@ -45,6 +51,7 @@ export class UnitManager {
         unit.r = 0;
         unit.health = 100;
         unit.movement = 2;
+        unit.hasMoved = false;
       }
     );
 
@@ -56,10 +63,19 @@ export class UnitManager {
    * Create a new unit at the specified hex.
    */
   createUnit(type: UnitType, q: number, r: number, playerId: number): UnitData | null {
-    // Check if hex is valid and passable
+    // Check if hex is valid
     const cell = this.grid.getCellAt(q, r);
-    if (!cell || cell.elevation < 0) {
-      return null; // Can't place on water
+    if (!cell) {
+      return null;
+    }
+
+    // Check domain compatibility
+    const isWater = cell.elevation < 0;
+    if (isWater && !canTraverseWater(type)) {
+      return null; // Land unit can't be placed on water
+    }
+    if (!isWater && !canTraverseLand(type)) {
+      return null; // Naval unit can't be placed on land
     }
 
     // Check if hex is already occupied
@@ -82,6 +98,7 @@ export class UnitManager {
     unit.attack = stats.attack;
     unit.defense = stats.defense;
     unit.playerId = playerId;
+    unit.hasMoved = false;
 
     // Add to tracking
     this.units.set(unit.id, unit);
@@ -107,20 +124,38 @@ export class UnitManager {
 
   /**
    * Move a unit to a new hex.
+   * @param movementCost - Optional movement cost to deduct (if not provided, doesn't deduct)
    */
-  moveUnit(unitId: number, toQ: number, toR: number): boolean {
+  moveUnit(unitId: number, toQ: number, toR: number, movementCost?: number): boolean {
     const unit = this.units.get(unitId);
     if (!unit) return false;
 
     // Check destination is valid
     const cell = this.grid.getCellAt(toQ, toR);
-    if (!cell || cell.elevation < 0) return false;
+    if (!cell) return false;
+
+    // Check domain compatibility
+    const isWater = cell.elevation < 0;
+    if (isWater && !canTraverseWater(unit.type)) {
+      return false; // Land unit can't move to water
+    }
+    if (!isWater && !canTraverseLand(unit.type)) {
+      return false; // Naval unit can't move to land
+    }
 
     // Check not occupied
     if (this.getUnitAt(toQ, toR)) return false;
 
+    // Check movement cost if provided
+    if (movementCost !== undefined) {
+      if (unit.movement < movementCost) {
+        return false; // Not enough movement
+      }
+      unit.movement -= movementCost;
+      unit.hasMoved = true;
+    }
+
     // Update spatial hash
-    const oldPos = new HexCoordinates(unit.q, unit.r).toWorldPosition(0);
     this.spatialHash.remove(unit);
 
     // Update position
@@ -131,6 +166,48 @@ export class UnitManager {
     this.spatialHash.insert(unit, newPos.x, newPos.z);
 
     return true;
+  }
+
+  /**
+   * Spend movement points for a unit.
+   */
+  spendMovement(unitId: number, cost: number): boolean {
+    const unit = this.units.get(unitId);
+    if (!unit || unit.movement < cost) return false;
+
+    unit.movement -= cost;
+    unit.hasMoved = true;
+    return true;
+  }
+
+  /**
+   * Reset movement for all units (called at start of turn).
+   */
+  resetAllMovement(): void {
+    for (const unit of this.units.values()) {
+      unit.movement = unit.maxMovement;
+      unit.hasMoved = false;
+    }
+  }
+
+  /**
+   * Reset movement for units of a specific player.
+   */
+  resetPlayerMovement(playerId: number): void {
+    for (const unit of this.units.values()) {
+      if (unit.playerId === playerId) {
+        unit.movement = unit.maxMovement;
+        unit.hasMoved = false;
+      }
+    }
+  }
+
+  /**
+   * Check if a unit can move (has movement points left).
+   */
+  canMove(unitId: number): boolean {
+    const unit = this.units.get(unitId);
+    return unit !== undefined && unit.movement > 0;
   }
 
   /**
@@ -199,25 +276,58 @@ export class UnitManager {
   }
 
   /**
-   * Spawn random units for testing.
+   * Spawn random land units for testing.
    */
   spawnRandomUnits(count: number, playerId: number = 1): number {
-    const cells = this.grid.getAllCells().filter(c => c.elevation >= 0);
+    const landCells = this.grid.getAllCells().filter(c => c.elevation >= 0);
     let spawned = 0;
 
-    const types = [UnitType.Infantry, UnitType.Cavalry, UnitType.Archer];
+    const landTypes = [UnitType.Infantry, UnitType.Cavalry, UnitType.Archer];
 
-    for (let i = 0; i < count && cells.length > 0; i++) {
-      const idx = Math.floor(Math.random() * cells.length);
-      const cell = cells[idx];
-      const type = types[Math.floor(Math.random() * types.length)];
+    for (let i = 0; i < count && landCells.length > 0; i++) {
+      const idx = Math.floor(Math.random() * landCells.length);
+      const cell = landCells[idx];
+      const type = landTypes[Math.floor(Math.random() * landTypes.length)];
 
       if (this.createUnit(type, cell.q, cell.r, playerId)) {
         spawned++;
-        cells.splice(idx, 1); // Remove cell so we don't double-place
+        landCells.splice(idx, 1); // Remove cell so we don't double-place
       }
     }
 
     return spawned;
+  }
+
+  /**
+   * Spawn random naval units for testing.
+   */
+  spawnRandomNavalUnits(count: number, playerId: number = 1): number {
+    const waterCells = this.grid.getAllCells().filter(c => c.elevation < 0);
+    let spawned = 0;
+
+    const navalTypes = [UnitType.Galley, UnitType.Warship];
+
+    for (let i = 0; i < count && waterCells.length > 0; i++) {
+      const idx = Math.floor(Math.random() * waterCells.length);
+      const cell = waterCells[idx];
+      const type = navalTypes[Math.floor(Math.random() * navalTypes.length)];
+
+      if (this.createUnit(type, cell.q, cell.r, playerId)) {
+        spawned++;
+        waterCells.splice(idx, 1);
+      }
+    }
+
+    return spawned;
+  }
+
+  /**
+   * Spawn a mix of land and naval units for testing.
+   */
+  spawnMixedUnits(landCount: number, navalCount: number, playerId: number = 1): { land: number; naval: number } {
+    return {
+      land: this.spawnRandomUnits(landCount, playerId),
+      naval: this.spawnRandomNavalUnits(navalCount, playerId),
+    };
   }
 }

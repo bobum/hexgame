@@ -52,3 +52,24 @@ export const AllDirections: HexDirection[] = [
   HexDirection.W,
   HexDirection.NW,
 ];
+
+/**
+ * Get the direction from one cell to an adjacent neighbor cell.
+ * Returns undefined if cells are not adjacent.
+ */
+export function getNeighborDirection(
+  from: { q: number; r: number },
+  to: { q: number; r: number }
+): HexDirection | undefined {
+  const dq = to.q - from.q;
+  const dr = to.r - from.r;
+
+  for (const dir of AllDirections) {
+    const [oq, or] = DirectionOffsets[dir];
+    if (oq === dq && or === dr) {
+      return dir;
+    }
+  }
+
+  return undefined;
+}
