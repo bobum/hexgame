@@ -2,6 +2,98 @@
 
 This document provides context for AI agents working with the hexgame codebase.
 
+## Hard Rules
+
+These rules must never be violated:
+
+- **Git**: NEVER commit/push directly to main. Always create a feature branch and PR.
+- **Three.js**: ALWAYS dispose geometries, materials, and textures when removing objects.
+- **Testing**: ALL tests must pass locally BEFORE creating a PR.
+- **Coordinates**: NEVER mix cube coords (q,r,s) with offset coords (col,row) in calculations.
+
+## Git Workflow
+
+> **ABSOLUTE RULE: NEVER COMMIT OR PUSH DIRECTLY TO MAIN**
+
+### Required Process for ALL Changes
+
+1. **Create a feature branch** from main:
+   ```bash
+   git checkout main && git pull
+   git checkout -b feature/your-change-description
+   ```
+
+2. **Make changes and commit** to the feature branch
+
+3. **Push the feature branch** and create PR:
+   ```bash
+   git push -u origin feature/your-change-description
+   ```
+
+### Branch Naming
+- `feature/` — New features or enhancements
+- `fix/` — Bug fixes
+- `chore/` — Maintenance, refactoring, docs
+
+## MCP Server Usage (AUTOMATIC)
+
+When MCP servers are available, use them **automatically without asking**:
+
+**DO:**
+- Automatically invoke MCP tools when you recognize the need
+- Use context tools when looking up library documentation (Three.js, etc.)
+- Use search tools when looking for code patterns
+
+**DON'T:**
+- Ask permission to use an MCP server
+- Announce "I will use X to..." (just do it)
+- Explain why you're using an MCP (unless asked)
+
+MCP servers are tools. Use them when needed, transparently.
+
+## Testing Requirements (MANDATORY)
+
+> **ALL tests MUST pass locally BEFORE creating a PR**
+
+### Pre-PR Checklist
+
+Before creating ANY pull request:
+
+1. ✅ `npm run test` passes with 0 failures
+2. ✅ `npm run typecheck` passes with 0 errors
+3. ✅ New features have corresponding tests
+4. ✅ Three.js resources are properly disposed
+
+### Running Tests
+
+```bash
+npm run test           # Run all tests
+npm run typecheck      # Type checking
+npm run test:coverage  # Coverage report
+```
+
+## Automatic Behaviors
+
+### On Task Completion (MANDATORY)
+
+Before marking any implementation task complete, run:
+
+```bash
+npm run test && npm run typecheck
+```
+
+Do not:
+- Mark a task complete without running tests
+- Push commits without verifying tests pass
+- Assume "my changes are isolated" — run the full suite
+
+### On PR Merge
+
+When a PR is merged:
+1. Switch to main branch
+2. Pull latest changes
+3. Delete the local feature branch
+
 ## Project Overview
 
 Hexgame is a web-based hex grid strategy game built with **Three.js** and **TypeScript**. It features procedural map generation, turn-based gameplay, A* pathfinding, and multiple unit types across land/naval/amphibious domains.
