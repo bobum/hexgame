@@ -13,7 +13,7 @@ import { FeatureRenderer } from './rendering/FeatureRenderer';
 import { MapCamera } from './camera/MapCamera';
 import { MapConfig, defaultMapConfig, HexCell, UnitType } from './types';
 import { PerformanceMonitor } from './utils/PerformanceMonitor';
-import { UnitManager, UnitRenderer } from './units';
+import { UnitManager, UnitRenderer, TurnManager, TurnPhase, PLAYER_HUMAN } from './units';
 import { Pathfinder } from './pathfinding';
 import { PathRenderer } from './rendering/PathRenderer';
 
@@ -36,6 +36,7 @@ class HexGame {
   private featureRenderer!: FeatureRenderer;
   private unitManager!: UnitManager;
   private unitRenderer!: UnitRenderer;
+  private turnManager!: TurnManager;
   private pathfinder!: Pathfinder;
   private pathRenderer!: PathRenderer;
 
@@ -67,6 +68,8 @@ class HexGame {
     // Units
     unitCount: number;
     poolStats: string;
+    // Turn info
+    turnInfo: string;
   };
 
   // Interaction
@@ -145,6 +148,8 @@ class HexGame {
       // Units
       unitCount: 0,
       poolStats: '',
+      // Turn info
+      turnInfo: 'Turn 1 - Player',
     };
     this.gui = new GUI();
     this.setupDebugUI();
@@ -261,24 +266,46 @@ class HexGame {
     }, 'runStressTest').name('Run Stress Test');
     perfFolder.open();
 
+    // Turn panel
+    const turnFolder = this.gui.addFolder('Turn');
+    turnFolder.add(this.debugInfo, 'turnInfo').name('Status').listen();
+    turnFolder.add({
+      endTurn: () => {
+        if (this.turnManager?.isHumanTurn) {
+          this.turnManager.endTurn();
+          this.debugInfo.turnInfo = this.turnManager.getStatus();
+          this.clearSelection();
+          console.log('Turn ended:', this.debugInfo.turnInfo);
+        }
+      }
+    }, 'endTurn').name('End Turn');
+    turnFolder.open();
+
     // Units panel
     const unitsFolder = this.gui.addFolder('Units');
     unitsFolder.add(this.debugInfo, 'unitCount').name('Unit Count').listen();
     unitsFolder.add(this.debugInfo, 'poolStats').name('Pool Stats').listen();
     unitsFolder.add({
-      spawn10: () => {
-        const spawned = this.unitManager.spawnRandomUnits(10, 1);
-        console.log(`Spawned ${spawned} units`);
+      spawn10Land: () => {
+        const spawned = this.unitManager.spawnRandomUnits(10, PLAYER_HUMAN);
+        console.log(`Spawned ${spawned} land units for player`);
         this.unitRenderer.markDirty();
       }
-    }, 'spawn10').name('Spawn 10 Units');
+    }, 'spawn10Land').name('Spawn 10 Land');
     unitsFolder.add({
-      spawn100: () => {
-        const spawned = this.unitManager.spawnRandomUnits(100, 1);
-        console.log(`Spawned ${spawned} units`);
+      spawn10Naval: () => {
+        const spawned = this.unitManager.spawnRandomNavalUnits(10, PLAYER_HUMAN);
+        console.log(`Spawned ${spawned} naval units for player`);
         this.unitRenderer.markDirty();
       }
-    }, 'spawn100').name('Spawn 100 Units');
+    }, 'spawn10Naval').name('Spawn 10 Naval');
+    unitsFolder.add({
+      spawn10AI: () => {
+        const result = this.unitManager.spawnMixedUnits(5, 5, 2); // AI is player 2
+        console.log(`Spawned ${result.land} land + ${result.naval} naval units for AI`);
+        this.unitRenderer.markDirty();
+      }
+    }, 'spawn10AI').name('Spawn 10 AI');
     unitsFolder.add({
       clearUnits: () => {
         this.unitManager.clear();
@@ -446,15 +473,15 @@ class HexGame {
   private handleClick(ctrlKey: boolean): void {
     this.raycaster.setFromCamera(this.mouse, this.mapCamera.camera);
 
-    // Collect terrain meshes for raycasting
-    const terrainObjects: THREE.Object3D[] = [];
+    // Collect terrain and water meshes for raycasting
+    const raycastTargets: THREE.Object3D[] = [];
     this.scene.traverse((obj) => {
-      if (obj.name.startsWith('chunk_')) {
-        terrainObjects.push(obj);
+      if (obj.name.startsWith('chunk_') || obj.name === 'water_surface') {
+        raycastTargets.push(obj);
       }
     });
 
-    const intersects = this.raycaster.intersectObjects(terrainObjects, true);
+    const intersects = this.raycaster.intersectObjects(raycastTargets, true);
 
     if (intersects.length === 0) {
       if (!ctrlKey) this.clearSelection();
@@ -466,6 +493,17 @@ class HexGame {
     const unit = this.unitManager.getUnitAt(coords.q, coords.r);
 
     if (!unit) {
+      if (!ctrlKey) this.clearSelection();
+      return;
+    }
+
+    // Only allow selecting units during human player's turn
+    if (!this.turnManager?.isHumanTurn) {
+      return;
+    }
+
+    // Only allow selecting the human player's units
+    if (unit.playerId !== PLAYER_HUMAN) {
       if (!ctrlKey) this.clearSelection();
       return;
     }
@@ -503,12 +541,26 @@ class HexGame {
    * Handle right-click to move selected unit.
    */
   private handleRightClick(): void {
+    // Only allow movement during human player's turn in movement phase
+    if (!this.turnManager?.isHumanTurn || !this.turnManager.canMove()) {
+      return;
+    }
+
     // Need exactly one unit selected
     if (this.selectedUnitIds.size !== 1) return;
 
     const unitId = Array.from(this.selectedUnitIds)[0];
     const unit = this.unitManager.getUnit(unitId);
     if (!unit) return;
+
+    // Only move player's own units
+    if (unit.playerId !== PLAYER_HUMAN) return;
+
+    // Check if unit has movement left
+    if (unit.movement <= 0) {
+      console.log('Unit has no movement left');
+      return;
+    }
 
     // Get the target cell from hover
     if (!this.hoveredCell) return;
@@ -517,8 +569,10 @@ class HexGame {
     const startCell = this.grid.getCellAt(unit.q, unit.r);
     if (!startCell) return;
 
-    // Find path to destination
-    const result = this.pathfinder.findPath(startCell, this.hoveredCell);
+    // Find path to destination using unit type for domain-aware pathfinding
+    const result = this.pathfinder.findPath(startCell, this.hoveredCell, {
+      unitType: unit.type,
+    });
 
     if (!result.reachable) {
       console.log('No path to destination');
@@ -531,14 +585,16 @@ class HexGame {
       return;
     }
 
-    // Move unit to destination
+    // Move unit to destination (deduct movement cost)
     const destCell = this.hoveredCell;
-    const moved = this.unitManager.moveUnit(unit.id, destCell.q, destCell.r);
+    const moved = this.unitManager.moveUnit(unit.id, destCell.q, destCell.r, result.cost);
 
     if (moved) {
-      console.log(`Unit moved to (${destCell.q}, ${destCell.r}), cost: ${result.cost.toFixed(1)}`);
+      console.log(`Unit moved to (${destCell.q}, ${destCell.r}), cost: ${result.cost.toFixed(1)}, remaining: ${unit.movement}`);
       // Refresh unit renderer
       this.unitRenderer.markDirty();
+      // Update turn info
+      this.debugInfo.turnInfo = this.turnManager.getStatus();
       // Update reachable cells from new position
       this.updateSelectionVisuals();
     }
@@ -627,12 +683,18 @@ class HexGame {
       if (this.selectedUnitIds.size === 1) {
         const unitId = Array.from(this.selectedUnitIds)[0];
         const unit = this.unitManager.getUnit(unitId);
-        if (unit) {
+        if (unit && unit.movement > 0) {
           const startCell = this.grid.getCellAt(unit.q, unit.r);
           if (startCell) {
-            const reachable = this.pathfinder.getReachableCells(startCell, unit.movement);
+            // Use unit type for domain-aware reachable cells
+            const reachable = this.pathfinder.getReachableCells(startCell, unit.movement, {
+              unitType: unit.type,
+            });
             this.pathRenderer.showReachableCells(reachable);
           }
+        } else {
+          // Unit has no movement left
+          this.pathRenderer.hideReachableCells();
         }
       } else {
         this.pathRenderer.hideReachableCells();
@@ -681,6 +743,11 @@ class HexGame {
     // Create unit system
     this.unitManager = new UnitManager(this.grid);
     this.unitRenderer = new UnitRenderer(this.scene, this.unitManager);
+
+    // Create turn manager
+    this.turnManager = new TurnManager(this.unitManager);
+    this.turnManager.startGame();
+    this.debugInfo.turnInfo = this.turnManager.getStatus();
 
     // Create pathfinding system
     this.pathfinder = new Pathfinder(this.grid, this.unitManager);
@@ -763,6 +830,11 @@ class HexGame {
     // Create unit system
     this.unitManager = new UnitManager(this.grid);
     this.unitRenderer = new UnitRenderer(this.scene, this.unitManager);
+
+    // Create turn manager
+    this.turnManager = new TurnManager(this.unitManager);
+    this.turnManager.startGame();
+    this.debugInfo.turnInfo = this.turnManager.getStatus();
 
     // Create pathfinding system
     this.pathfinder = new Pathfinder(this.grid, this.unitManager);
@@ -874,16 +946,16 @@ class HexGame {
 
     this.raycaster.setFromCamera(this.mouse, this.mapCamera.camera);
 
-    // Collect terrain meshes (LOD chunks) for raycasting
-    const terrainObjects: THREE.Object3D[] = [];
+    // Collect terrain and water meshes for raycasting
+    const raycastTargets: THREE.Object3D[] = [];
     this.scene.traverse((obj) => {
-      if (obj.name.startsWith('chunk_')) {
-        terrainObjects.push(obj);
+      if (obj.name.startsWith('chunk_') || obj.name === 'water_surface') {
+        raycastTargets.push(obj);
       }
     });
 
-    // Raycast against terrain geometry
-    const intersects = this.raycaster.intersectObjects(terrainObjects, true);
+    // Raycast against terrain/water geometry
+    const intersects = this.raycaster.intersectObjects(raycastTargets, true);
 
     if (intersects.length > 0) {
       // Use the intersection point on the terrain mesh
@@ -950,6 +1022,12 @@ class HexGame {
       return;
     }
 
+    // Don't show path if unit has no movement left
+    if (unit.movement <= 0) {
+      this.pathRenderer.hidePath();
+      return;
+    }
+
     const startCell = this.grid.getCellAt(unit.q, unit.r);
     if (!startCell) {
       this.pathRenderer.hidePath();
@@ -962,8 +1040,10 @@ class HexGame {
       return;
     }
 
-    // Find path
-    const result = this.pathfinder.findPath(startCell, targetCell);
+    // Find path using unit type for domain-aware pathfinding
+    const result = this.pathfinder.findPath(startCell, targetCell, {
+      unitType: unit.type,
+    });
 
     if (result.reachable && result.path.length > 0) {
       this.pathRenderer.showPath(result.path);

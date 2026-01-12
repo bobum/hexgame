@@ -121,6 +121,7 @@ export class WaterRenderer {
     });
 
     this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.name = 'water_surface';
     this.scene.add(this.mesh);
   }
 

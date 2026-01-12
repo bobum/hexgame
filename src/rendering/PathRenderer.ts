@@ -114,7 +114,9 @@ export class PathRenderer {
       if (index >= this.maxReachableInstances) break;
 
       const coords = new HexCoordinates(cell.q, cell.r);
-      const worldPos = coords.toWorldPosition(cell.elevation);
+      // For water cells (elevation < 0), render at water surface level
+      const renderElevation = Math.max(cell.elevation, 0);
+      const worldPos = coords.toWorldPosition(renderElevation);
 
       matrix.makeTranslation(worldPos.x, worldPos.y + 0.05, worldPos.z);
       this.reachableMeshes.setMatrixAt(index, matrix);
@@ -163,7 +165,9 @@ export class PathRenderer {
     const points: THREE.Vector3[] = [];
     for (const cell of path) {
       const coords = new HexCoordinates(cell.q, cell.r);
-      const worldPos = coords.toWorldPosition(cell.elevation);
+      // For water cells (elevation < 0), render at water surface level
+      const renderElevation = Math.max(cell.elevation, 0);
+      const worldPos = coords.toWorldPosition(renderElevation);
       points.push(new THREE.Vector3(worldPos.x, worldPos.y + 0.2, worldPos.z));
     }
 
@@ -197,7 +201,9 @@ export class PathRenderer {
     if (!this.destinationMarker) return;
 
     const coords = new HexCoordinates(cell.q, cell.r);
-    const worldPos = coords.toWorldPosition(cell.elevation);
+    // For water cells (elevation < 0), render at water surface level
+    const renderElevation = Math.max(cell.elevation, 0);
+    const worldPos = coords.toWorldPosition(renderElevation);
     this.destinationMarker.position.set(worldPos.x, worldPos.y + 0.1, worldPos.z);
     this.destinationMarker.visible = true;
   }
