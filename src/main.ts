@@ -14,6 +14,8 @@ import { MapCamera } from './camera/MapCamera';
 import { MapConfig, defaultMapConfig, HexCell, UnitType } from './types';
 import { PerformanceMonitor } from './utils/PerformanceMonitor';
 import { UnitManager, UnitRenderer } from './units';
+import { Pathfinder } from './pathfinding';
+import { PathRenderer } from './rendering/PathRenderer';
 
 /**
  * Main application class for the hex map game.
@@ -34,6 +36,8 @@ class HexGame {
   private featureRenderer!: FeatureRenderer;
   private unitManager!: UnitManager;
   private unitRenderer!: UnitRenderer;
+  private pathfinder!: Pathfinder;
+  private pathRenderer!: PathRenderer;
 
   // Render mode
   private useInstancing: boolean = false;
@@ -415,6 +419,12 @@ class HexGame {
       }
     });
 
+    // Right-click - move selected unit
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.handleRightClick();
+    });
+
     // Create highlight mesh (hexagonal ring)
     const highlightGeo = new THREE.RingGeometry(0.7, 0.85, 6);
     highlightGeo.rotateX(-Math.PI / 2);
@@ -482,6 +492,56 @@ class HexGame {
   private clearSelection(): void {
     this.selectedUnitIds.clear();
     this.updateSelectionVisuals();
+    // Hide path visualization
+    if (this.pathRenderer) {
+      this.pathRenderer.hideReachableCells();
+      this.pathRenderer.hidePath();
+    }
+  }
+
+  /**
+   * Handle right-click to move selected unit.
+   */
+  private handleRightClick(): void {
+    // Need exactly one unit selected
+    if (this.selectedUnitIds.size !== 1) return;
+
+    const unitId = Array.from(this.selectedUnitIds)[0];
+    const unit = this.unitManager.getUnit(unitId);
+    if (!unit) return;
+
+    // Get the target cell from hover
+    if (!this.hoveredCell) return;
+
+    // Get start cell
+    const startCell = this.grid.getCellAt(unit.q, unit.r);
+    if (!startCell) return;
+
+    // Find path to destination
+    const result = this.pathfinder.findPath(startCell, this.hoveredCell);
+
+    if (!result.reachable) {
+      console.log('No path to destination');
+      return;
+    }
+
+    // Check if within movement range
+    if (result.cost > unit.movement) {
+      console.log(`Path cost ${result.cost.toFixed(1)} exceeds movement ${unit.movement}`);
+      return;
+    }
+
+    // Move unit to destination
+    const destCell = this.hoveredCell;
+    const moved = this.unitManager.moveUnit(unit.id, destCell.q, destCell.r);
+
+    if (moved) {
+      console.log(`Unit moved to (${destCell.q}, ${destCell.r}), cost: ${result.cost.toFixed(1)}`);
+      // Refresh unit renderer
+      this.unitRenderer.markDirty();
+      // Update reachable cells from new position
+      this.updateSelectionVisuals();
+    }
   }
 
   /**
@@ -561,6 +621,23 @@ class HexGame {
     if (this.unitRenderer) {
       this.unitRenderer.setSelectedUnits(this.selectedUnitIds);
     }
+
+    // Show reachable cells for single selected unit
+    if (this.pathRenderer && this.pathfinder) {
+      if (this.selectedUnitIds.size === 1) {
+        const unitId = Array.from(this.selectedUnitIds)[0];
+        const unit = this.unitManager.getUnit(unitId);
+        if (unit) {
+          const startCell = this.grid.getCellAt(unit.q, unit.r);
+          if (startCell) {
+            const reachable = this.pathfinder.getReachableCells(startCell, unit.movement);
+            this.pathRenderer.showReachableCells(reachable);
+          }
+        }
+      } else {
+        this.pathRenderer.hideReachableCells();
+      }
+    }
   }
 
   /**
@@ -604,6 +681,11 @@ class HexGame {
     // Create unit system
     this.unitManager = new UnitManager(this.grid);
     this.unitRenderer = new UnitRenderer(this.scene, this.unitManager);
+
+    // Create pathfinding system
+    this.pathfinder = new Pathfinder(this.grid, this.unitManager);
+    if (this.pathRenderer) this.pathRenderer.dispose();
+    this.pathRenderer = new PathRenderer(this.scene);
 
     // Build active renderer based on mode
     if (this.useInstancing) {
@@ -681,6 +763,11 @@ class HexGame {
     // Create unit system
     this.unitManager = new UnitManager(this.grid);
     this.unitRenderer = new UnitRenderer(this.scene, this.unitManager);
+
+    // Create pathfinding system
+    this.pathfinder = new Pathfinder(this.grid, this.unitManager);
+    if (this.pathRenderer) this.pathRenderer.dispose();
+    this.pathRenderer = new PathRenderer(this.scene);
 
     // Build active renderer based on mode
     if (this.useInstancing) {
@@ -816,12 +903,18 @@ class HexGame {
           this.highlightMesh.visible = true;
         }
 
+        // Update path preview if a single unit is selected
+        this.updatePathPreview(cell);
+
         // Update debug info
         this.debugInfo.hoveredHex = `(${cell.q}, ${cell.r}) ${cell.terrainType} E:${cell.elevation}`;
       } else {
         this.hoveredCell = null;
         if (this.highlightMesh) {
           this.highlightMesh.visible = false;
+        }
+        if (this.pathRenderer) {
+          this.pathRenderer.hidePath();
         }
         this.debugInfo.hoveredHex = 'None';
       }
@@ -831,7 +924,53 @@ class HexGame {
       if (this.highlightMesh) {
         this.highlightMesh.visible = false;
       }
+      if (this.pathRenderer) {
+        this.pathRenderer.hidePath();
+      }
       this.debugInfo.hoveredHex = 'None';
+    }
+  }
+
+  /**
+   * Update path preview from selected unit to hovered cell.
+   */
+  private updatePathPreview(targetCell: HexCell): void {
+    if (!this.pathRenderer || !this.pathfinder) return;
+
+    // Only show path if exactly one unit is selected
+    if (this.selectedUnitIds.size !== 1) {
+      this.pathRenderer.hidePath();
+      return;
+    }
+
+    const unitId = Array.from(this.selectedUnitIds)[0];
+    const unit = this.unitManager.getUnit(unitId);
+    if (!unit) {
+      this.pathRenderer.hidePath();
+      return;
+    }
+
+    const startCell = this.grid.getCellAt(unit.q, unit.r);
+    if (!startCell) {
+      this.pathRenderer.hidePath();
+      return;
+    }
+
+    // Don't show path to unit's current position
+    if (startCell.q === targetCell.q && startCell.r === targetCell.r) {
+      this.pathRenderer.hidePath();
+      return;
+    }
+
+    // Find path
+    const result = this.pathfinder.findPath(startCell, targetCell);
+
+    if (result.reachable && result.path.length > 0) {
+      this.pathRenderer.showPath(result.path);
+      // Color indicates if within movement range
+      this.pathRenderer.setPathValid(result.cost <= unit.movement);
+    } else {
+      this.pathRenderer.hidePath();
     }
   }
 
