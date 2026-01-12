@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/model-context-protocol/main/schema/mcp.schema.json",
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-server-filesystem",
+        "."
+      ],
+      "description": "Read and write project files"
+    },
+    "git": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-server-git",
+        "."
+      ],
+      "description": "Git operations for version control"
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-server-github"
+      ],
+      "env": {
+        "GITHUB_REPO": "bobum/hexgame"
+      },
+      "description": "GitHub API for issues, PRs, and actions"
+    },
+    "fetch": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-server-fetch"
+      ],
+      "description": "Fetch web content (Three.js docs, MDN, etc.)"
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-server-memory",
+        ".opencode/memory"
+      ],
+      "description": "Persistent memory for project context"
+    }
+  }
+}

@@ -1,0 +1,97 @@
+# OpenCode Configuration for Hexgame
+# https://opencode.ai/docs/configuration
+
+name: hexgame
+description: Hex grid strategy game with Three.js and TypeScript
+
+# Project settings
+project:
+  language: typescript
+  framework: vite
+  node_version: "20"
+
+# Default agent for general tasks
+default_agent: default
+
+# Model preferences
+models:
+  default: claude-sonnet-4-20250514
+  planning: claude-sonnet-4-20250514
+  fast: claude-3-5-haiku-20241022
+
+# Auto-load context files
+context:
+  always_include:
+    - AGENT.md
+  include_on_match:
+    - pattern: "src/core/**"
+      files:
+        - src/core/AGENT.md
+    - pattern: "src/generation/**"
+      files:
+        - src/generation/AGENT.md
+    - pattern: "src/pathfinding/**"
+      files:
+        - src/pathfinding/AGENT.md
+    - pattern: "src/units/**"
+      files:
+        - src/units/AGENT.md
+    - pattern: "src/rendering/**"
+      files:
+        - src/rendering/AGENT.md
+
+# MCP server configuration
+mcp:
+  servers:
+    - name: filesystem
+      enabled: true
+    - name: git
+      enabled: true
+    - name: github
+      enabled: true
+      config:
+        repo: bobum/hexgame
+    - name: fetch
+      enabled: true
+    - name: memory
+      enabled: true
+      config:
+        storage_path: .opencode/memory
+
+# LSP configuration
+lsp:
+  typescript:
+    enabled: true
+    server: typescript-language-server
+    root_markers:
+      - tsconfig.json
+      - package.json
+
+# Available skills
+skills:
+  - add-unit-type
+  - add-terrain
+  - add-feature
+  - run-tests
+  - benchmark
+
+# Code style preferences
+style:
+  # Use ES modules
+  imports: esm
+  # Prefer interfaces over types for objects
+  type_definitions: interface
+  # No semicolons (match existing style)
+  semicolons: true
+  # Single quotes
+  quotes: single
+  # 2 space indentation
+  indent: 2
+
+# File patterns to ignore
+ignore:
+  - node_modules/
+  - dist/
+  - coverage/
+  - "*.log"
+  - .git/
