@@ -76,6 +76,11 @@ class HexGame {
   private groundPlaneMesh: THREE.Mesh | null = null;
   private mouseMovedThisFrame: boolean = false;
 
+  // Unit selection
+  private selectedUnitIds: Set<number> = new Set();
+  private isBoxSelecting: boolean = false;
+  private boxSelectStart: { x: number; y: number } | null = null;
+
   // Animation
   private clock: THREE.Clock;
 
@@ -381,6 +386,33 @@ class HexGame {
       this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
       this.mouseMovedThisFrame = true; // Flag for throttled hover detection
+
+      // Update box selection if active
+      if (this.isBoxSelecting && this.boxSelectStart) {
+        this.updateSelectionBox(e.clientX, e.clientY);
+      }
+    });
+
+    // Mouse down - start box selection if shift is held
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 0 && e.shiftKey) {
+        this.isBoxSelecting = true;
+        this.boxSelectStart = { x: e.clientX, y: e.clientY };
+      }
+    });
+
+    // Mouse up - finish selection
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 0) {
+        if (this.isBoxSelecting && this.boxSelectStart) {
+          this.finishBoxSelect(e.clientX, e.clientY, e.ctrlKey);
+        } else {
+          this.handleClick(e.ctrlKey);
+        }
+        this.isBoxSelecting = false;
+        this.boxSelectStart = null;
+        this.hideSelectionBox();
+      }
     });
 
     // Create highlight mesh (hexagonal ring)
@@ -396,6 +428,139 @@ class HexGame {
     this.highlightMesh = new THREE.Mesh(highlightGeo, highlightMat);
     this.highlightMesh.visible = false;
     this.scene.add(this.highlightMesh);
+  }
+
+  /**
+   * Handle click on the map for unit selection.
+   */
+  private handleClick(ctrlKey: boolean): void {
+    this.raycaster.setFromCamera(this.mouse, this.mapCamera.camera);
+
+    // Collect terrain meshes for raycasting
+    const terrainObjects: THREE.Object3D[] = [];
+    this.scene.traverse((obj) => {
+      if (obj.name.startsWith('chunk_')) {
+        terrainObjects.push(obj);
+      }
+    });
+
+    const intersects = this.raycaster.intersectObjects(terrainObjects, true);
+
+    if (intersects.length === 0) {
+      if (!ctrlKey) this.clearSelection();
+      return;
+    }
+
+    const point = intersects[0].point;
+    const coords = HexCoordinates.fromWorldPosition(point);
+    const unit = this.unitManager.getUnitAt(coords.q, coords.r);
+
+    if (!unit) {
+      if (!ctrlKey) this.clearSelection();
+      return;
+    }
+
+    if (ctrlKey) {
+      // Toggle selection
+      if (this.selectedUnitIds.has(unit.id)) {
+        this.selectedUnitIds.delete(unit.id);
+      } else {
+        this.selectedUnitIds.add(unit.id);
+      }
+    } else {
+      // Replace selection
+      this.selectedUnitIds.clear();
+      this.selectedUnitIds.add(unit.id);
+    }
+
+    this.updateSelectionVisuals();
+  }
+
+  /**
+   * Clear all selected units.
+   */
+  private clearSelection(): void {
+    this.selectedUnitIds.clear();
+    this.updateSelectionVisuals();
+  }
+
+  /**
+   * Update the visual selection box during drag.
+   */
+  private updateSelectionBox(currentX: number, currentY: number): void {
+    const box = document.getElementById('selection-box');
+    if (!box || !this.boxSelectStart) return;
+
+    const left = Math.min(this.boxSelectStart.x, currentX);
+    const top = Math.min(this.boxSelectStart.y, currentY);
+    const width = Math.abs(currentX - this.boxSelectStart.x);
+    const height = Math.abs(currentY - this.boxSelectStart.y);
+
+    box.style.left = left + 'px';
+    box.style.top = top + 'px';
+    box.style.width = width + 'px';
+    box.style.height = height + 'px';
+    box.style.display = 'block';
+  }
+
+  /**
+   * Hide the selection box.
+   */
+  private hideSelectionBox(): void {
+    const box = document.getElementById('selection-box');
+    if (box) {
+      box.style.display = 'none';
+    }
+  }
+
+  /**
+   * Finish box selection and select all units within.
+   */
+  private finishBoxSelect(endX: number, endY: number, ctrlKey: boolean): void {
+    if (!this.boxSelectStart) return;
+
+    const minX = Math.min(this.boxSelectStart.x, endX);
+    const maxX = Math.max(this.boxSelectStart.x, endX);
+    const minY = Math.min(this.boxSelectStart.y, endY);
+    const maxY = Math.max(this.boxSelectStart.y, endY);
+
+    // Minimum drag distance to count as box select (prevents accidental box on click)
+    if (maxX - minX < 5 && maxY - minY < 5) {
+      return;
+    }
+
+    if (!ctrlKey) {
+      this.selectedUnitIds.clear();
+    }
+
+    // Check each unit's screen position
+    for (const unit of this.unitManager.getAllUnits()) {
+      const coords = new HexCoordinates(unit.q, unit.r);
+      const cell = this.grid.getCell(coords);
+      const elevation = cell ? cell.elevation : 0;
+      const worldPos = coords.toWorldPosition(elevation);
+
+      // Project to screen
+      const screenPos = worldPos.clone();
+      screenPos.project(this.mapCamera.camera);
+      const screenX = (screenPos.x + 1) / 2 * window.innerWidth;
+      const screenY = -(screenPos.y - 1) / 2 * window.innerHeight;
+
+      if (screenX >= minX && screenX <= maxX && screenY >= minY && screenY <= maxY) {
+        this.selectedUnitIds.add(unit.id);
+      }
+    }
+
+    this.updateSelectionVisuals();
+  }
+
+  /**
+   * Update visual feedback for selected units.
+   */
+  private updateSelectionVisuals(): void {
+    if (this.unitRenderer) {
+      this.unitRenderer.setSelectedUnits(this.selectedUnitIds);
+    }
   }
 
   /**

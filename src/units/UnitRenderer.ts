@@ -38,6 +38,14 @@ export class UnitRenderer {
   // Dirty flag for rebuilding
   private needsRebuild = true;
 
+  // Instance index → unit ID mapping per mesh type
+  private infantryUnitIds: number[] = [];
+  private cavalryUnitIds: number[] = [];
+  private archerUnitIds: number[] = [];
+
+  // Currently selected unit IDs
+  private selectedUnitIds: Set<number> = new Set();
+
   constructor(scene: THREE.Scene, unitManager: UnitManager) {
     this.scene = scene;
     this.unitManager = unitManager;
@@ -103,6 +111,11 @@ export class UnitRenderer {
   build(): void {
     this.dispose();
 
+    // Clear mappings
+    this.infantryUnitIds = [];
+    this.cavalryUnitIds = [];
+    this.archerUnitIds = [];
+
     const units = this.unitManager.getAllUnits();
 
     // Count units by type
@@ -114,41 +127,51 @@ export class UnitRenderer {
 
     // Create infantry instances
     if (byType[UnitType.Infantry].length > 0) {
-      this.infantryMesh = this.createInstancedMesh(
+      const { mesh, unitIds } = this.createInstancedMesh(
         this.infantryGeometry,
         byType[UnitType.Infantry]
       );
+      this.infantryMesh = mesh;
+      this.infantryUnitIds = unitIds;
       this.scene.add(this.infantryMesh);
     }
 
     // Create cavalry instances
     if (byType[UnitType.Cavalry].length > 0) {
-      this.cavalryMesh = this.createInstancedMesh(
+      const { mesh, unitIds } = this.createInstancedMesh(
         this.cavalryGeometry,
         byType[UnitType.Cavalry]
       );
+      this.cavalryMesh = mesh;
+      this.cavalryUnitIds = unitIds;
       this.scene.add(this.cavalryMesh);
     }
 
     // Create archer instances
     if (byType[UnitType.Archer].length > 0) {
-      this.archerMesh = this.createInstancedMesh(
+      const { mesh, unitIds } = this.createInstancedMesh(
         this.archerGeometry,
         byType[UnitType.Archer]
       );
+      this.archerMesh = mesh;
+      this.archerUnitIds = unitIds;
       this.scene.add(this.archerMesh);
     }
 
     this.needsRebuild = false;
+
+    // Reapply selection colors
+    this.applySelectionColors();
   }
 
   /**
    * Create an instanced mesh for a set of units.
+   * Returns both the mesh and the unit ID mapping.
    */
   private createInstancedMesh(
     geometry: THREE.BufferGeometry,
     units: UnitData[]
-  ): THREE.InstancedMesh {
+  ): { mesh: THREE.InstancedMesh; unitIds: number[] } {
     const mesh = new THREE.InstancedMesh(
       geometry,
       this.material.clone(),
@@ -159,9 +182,12 @@ export class UnitRenderer {
     const position = new THREE.Vector3();
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3(1, 1, 1);
+    const unitIds: number[] = [];
 
     for (let i = 0; i < units.length && i < this.maxInstances; i++) {
       const unit = units[i];
+      unitIds.push(unit.id);
+
       const coords = new HexCoordinates(unit.q, unit.r);
       const cell = coords.toWorldPosition(0);
 
@@ -185,7 +211,7 @@ export class UnitRenderer {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
-    return mesh;
+    return { mesh, unitIds };
   }
 
   /**
@@ -202,6 +228,58 @@ export class UnitRenderer {
    */
   markDirty(): void {
     this.needsRebuild = true;
+  }
+
+  /**
+   * Set which units are selected (updates visuals).
+   */
+  setSelectedUnits(selectedIds: Set<number>): void {
+    this.selectedUnitIds = selectedIds;
+    this.applySelectionColors();
+  }
+
+  /**
+   * Apply selection colors to all meshes.
+   */
+  private applySelectionColors(): void {
+    const selectedColor = new THREE.Color(0xffffff); // White for selected
+
+    // Update infantry
+    this.updateMeshColors(this.infantryMesh, this.infantryUnitIds, selectedColor);
+
+    // Update cavalry
+    this.updateMeshColors(this.cavalryMesh, this.cavalryUnitIds, selectedColor);
+
+    // Update archers
+    this.updateMeshColors(this.archerMesh, this.archerUnitIds, selectedColor);
+  }
+
+  /**
+   * Update colors for a single instanced mesh.
+   */
+  private updateMeshColors(
+    mesh: THREE.InstancedMesh | null,
+    unitIds: number[],
+    selectedColor: THREE.Color
+  ): void {
+    if (!mesh || unitIds.length === 0) return;
+
+    for (let i = 0; i < unitIds.length; i++) {
+      const unitId = unitIds[i];
+      const unit = this.unitManager.getUnit(unitId);
+      if (!unit) continue;
+
+      if (this.selectedUnitIds.has(unitId)) {
+        mesh.setColorAt(i, selectedColor);
+      } else {
+        const playerColor = PLAYER_COLORS[unit.playerId % PLAYER_COLORS.length];
+        mesh.setColorAt(i, playerColor);
+      }
+    }
+
+    if (mesh.instanceColor) {
+      mesh.instanceColor.needsUpdate = true;
+    }
   }
 
   /**
