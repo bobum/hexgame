@@ -22,23 +22,23 @@ models:
 # Auto-load context files
 context:
   always_include:
-    - AGENT.md
+    - AGENTS.md
   include_on_match:
     - pattern: "src/core/**"
       files:
-        - src/core/AGENT.md
+        - src/core/AGENTS.md
     - pattern: "src/generation/**"
       files:
-        - src/generation/AGENT.md
+        - src/generation/AGENTS.md
     - pattern: "src/pathfinding/**"
       files:
-        - src/pathfinding/AGENT.md
+        - src/pathfinding/AGENTS.md
     - pattern: "src/units/**"
       files:
-        - src/units/AGENT.md
+        - src/units/AGENTS.md
     - pattern: "src/rendering/**"
       files:
-        - src/rendering/AGENT.md
+        - src/rendering/AGENTS.md
 
 # MCP server configuration
 mcp:
