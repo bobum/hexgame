@@ -13,6 +13,18 @@ export const HexMetrics = {
   minElevation: -2,
   waterLevel: 0,                              // Sea level
 
+  // Terraces (Catlike Coding style)
+  terracesPerSlope: 2,                        // Number of flat terraces per slope
+  get terraceSteps(): number {                // Total interpolation steps (2*terracesPerSlope + 1)
+    return this.terracesPerSlope * 2 + 1;
+  },
+  get horizontalTerraceStepSize(): number {   // Horizontal interpolation step size
+    return 1.0 / this.terraceSteps;
+  },
+  get verticalTerraceStepSize(): number {     // Vertical interpolation step size
+    return 1.0 / (this.terracesPerSlope + 1);
+  },
+
   // Blend regions
   solidFactor: 0.8,                           // Inner solid hex portion
   blendFactor: 0.2,                           // Outer blend portion
@@ -37,6 +49,43 @@ export const HexMetrics = {
     return corners[((index % 6) + 6) % 6].clone();
   },
 };
+
+/**
+ * Terrace interpolation - the key to Catlike Coding style terraces.
+ * Horizontal interpolation is linear, vertical only changes on odd steps.
+ * This creates flat "platforms" separated by short slopes.
+ *
+ * @param a Start position
+ * @param b End position
+ * @param step Current step (1 to terraceSteps)
+ * @returns Interpolated position
+ */
+export function terraceLerp(a: THREE.Vector3, b: THREE.Vector3, step: number): THREE.Vector3 {
+  // Horizontal interpolation is linear
+  const h = step * HexMetrics.horizontalTerraceStepSize;
+
+  // Vertical interpolation only changes on odd steps
+  // step: 1 -> v = 1/3, step: 2 -> v = 1/3, step: 3 -> v = 2/3, step: 4 -> v = 2/3
+  const v = Math.floor((step + 1) / 2) * HexMetrics.verticalTerraceStepSize;
+
+  return new THREE.Vector3(
+    a.x + (b.x - a.x) * h,
+    a.y + (b.y - a.y) * v,
+    a.z + (b.z - a.z) * h
+  );
+}
+
+/**
+ * Interpolate color along terrace (same as terraceLerp but for colors).
+ */
+export function terraceColorLerp(a: THREE.Color, b: THREE.Color, step: number): THREE.Color {
+  const h = step * HexMetrics.horizontalTerraceStepSize;
+  return new THREE.Color(
+    a.r + (b.r - a.r) * h,
+    a.g + (b.g - a.g) * h,
+    a.b + (b.b - a.b) * h
+  );
+}
 
 // Terrain colors - stylized low-poly palette
 export const TerrainColors: Record<TerrainType, number> = {
