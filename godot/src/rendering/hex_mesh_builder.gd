@@ -54,40 +54,60 @@ func build_cell(cell: HexCell, grid: HexGrid) -> void:
 		else:
 			neighbor_colors[dir] = base_color
 
-	# 1. Build the solid center hexagon
-	_build_top_face(center, base_color)
+	# Check if we're using full hexes (no gaps) or Catlike Coding style (gaps for edges)
+	var use_full_hexes = HexMetrics.SOLID_FACTOR >= 0.99
 
-	# 2. Build edges for each direction
-	for dir in range(6):
-		var neighbor = neighbors[dir]
-		var edge_index = _get_edge_index_for_direction(dir)
+	if use_full_hexes:
+		# Simple mode: full hex tops with walls for elevation changes
+		_build_full_hex(center, base_color)
 
-		if not neighbor:
-			# Map edge - build a cliff down
-			var wall_height = (cell.elevation + 3) * HexMetrics.ELEVATION_STEP
-			_build_cliff(center, edge_index, wall_height, base_color)
-		else:
-			var elevation_diff = cell.elevation - neighbor.elevation
-			var neighbor_center = neighbor.get_world_position()
-			var neighbor_color = neighbor_colors[dir]
+		# Build walls for elevation drops
+		for dir in range(6):
+			var neighbor = neighbors[dir]
+			var edge_index = _get_edge_index_for_direction(dir)
 
-			if elevation_diff == 1:
-				# Single level slope - build terraces
-				_build_terraced_slope(center, neighbor_center, edge_index, base_color, neighbor_color)
-			elif elevation_diff > 1:
-				# Multi-level cliff
-				_build_flat_cliff(center, neighbor_center, edge_index, base_color, neighbor_color)
-			elif elevation_diff == 0 and dir <= 2:
-				# Same level - build flat edge bridge (only dirs 0-2 to avoid duplication)
-				_build_flat_edge(center, neighbor_center, edge_index, base_color, neighbor_color)
+			if not neighbor:
+				# Map edge - build cliff down
+				var wall_height = (cell.elevation + 3) * HexMetrics.ELEVATION_STEP
+				_build_cliff(center, edge_index, wall_height, base_color)
+			elif cell.elevation > neighbor.elevation:
+				# We're higher - build wall down to neighbor
+				var wall_height = (cell.elevation - neighbor.elevation) * HexMetrics.ELEVATION_STEP
+				_build_cliff(center, edge_index, wall_height, base_color)
+	else:
+		# Catlike Coding mode: solid center with edge/corner connections
+		_build_top_face(center, base_color)
 
-		# 3. Build corners (where three hexes meet)
-		# Only build in directions 0 and 1 following Catlike Coding's approach
-		if dir <= 1:
-			var prev_dir = (dir + 5) % 6
-			var prev_neighbor = neighbors[prev_dir]
-			if neighbor and prev_neighbor:
-				_build_corner(cell, center, base_color, dir, neighbor, prev_neighbor)
+		# Build edges for each direction
+		for dir in range(6):
+			var neighbor = neighbors[dir]
+			var edge_index = _get_edge_index_for_direction(dir)
+
+			if not neighbor:
+				# Map edge - build a cliff down
+				var wall_height = (cell.elevation + 3) * HexMetrics.ELEVATION_STEP
+				_build_cliff(center, edge_index, wall_height, base_color)
+			else:
+				var elevation_diff = cell.elevation - neighbor.elevation
+				var neighbor_center = neighbor.get_world_position()
+				var neighbor_color = neighbor_colors[dir]
+
+				if elevation_diff == 1:
+					# Single level slope - build terraces
+					_build_terraced_slope(center, neighbor_center, edge_index, base_color, neighbor_color)
+				elif elevation_diff > 1:
+					# Multi-level cliff
+					_build_flat_cliff(center, neighbor_center, edge_index, base_color, neighbor_color)
+				elif elevation_diff == 0 and dir <= 2:
+					# Same level - build flat edge bridge (only dirs 0-2 to avoid duplication)
+					_build_flat_edge(center, neighbor_center, edge_index, base_color, neighbor_color)
+
+			# Build corners (where three hexes meet)
+			if dir <= 1:
+				var prev_dir = (dir + 5) % 6
+				var prev_neighbor = neighbors[prev_dir]
+				if neighbor and prev_neighbor:
+					_build_corner(cell, center, base_color, dir, neighbor, prev_neighbor)
 
 
 ## Vary a color slightly for visual interest
