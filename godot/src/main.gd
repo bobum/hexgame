@@ -10,6 +10,7 @@ var map_generator: MapGenerator
 var mesh_instance: MeshInstance3D
 var water_instance: MeshInstance3D
 var water_material: ShaderMaterial
+var river_renderer: EdgeRiverRenderer
 var hex_hover: HexHover
 var current_seed: int = 0
 var game_ui: GameUI
@@ -109,6 +110,9 @@ func _build_terrain() -> void:
 	# Build water
 	_build_water()
 
+	# Build rivers
+	_build_rivers()
+
 	# Center camera on map
 	_center_camera()
 
@@ -194,6 +198,8 @@ func _on_noise_param_changed(param: String, value: float) -> void:
 				map_generator.sea_level = value
 			"mountain_level":
 				map_generator.mountain_level = value
+			"river_percentage":
+				map_generator.river_percentage = value
 		# Regenerate with current settings
 		_regenerate_map()
 
@@ -264,6 +270,18 @@ func _build_water() -> void:
 	print("Water mesh added to scene")
 
 
+func _build_rivers() -> void:
+	# Remove existing river renderer
+	if river_renderer:
+		river_renderer.queue_free()
+		river_renderer = null
+
+	river_renderer = EdgeRiverRenderer.new()
+	hex_grid_node.add_child(river_renderer)
+	river_renderer.setup(grid)
+	river_renderer.build()
+
+
 func _process(delta: float) -> void:
 	# Update water animation
 	if water_material:
@@ -273,6 +291,10 @@ func _process(delta: float) -> void:
 	# Update unit renderer
 	if unit_renderer:
 		unit_renderer.update()
+
+	# Update river animation
+	if river_renderer:
+		river_renderer.update(delta)
 
 
 func _center_camera() -> void:
@@ -309,6 +331,9 @@ func _regenerate_map() -> void:
 		water_instance.queue_free()
 		water_instance = null
 		water_material = null
+	if river_renderer:
+		river_renderer.queue_free()
+		river_renderer = null
 
 	# Clear units
 	if unit_manager:
@@ -364,6 +389,9 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 		water_instance.queue_free()
 		water_instance = null
 		water_material = null
+	if river_renderer:
+		river_renderer.queue_free()
+		river_renderer = null
 
 	# Clear units
 	if unit_manager:

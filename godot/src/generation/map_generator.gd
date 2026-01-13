@@ -5,10 +5,12 @@ extends RefCounted
 
 var noise: FastNoiseLite
 var grid: HexGrid
+var river_generator: RiverGenerator
 
 # Generation parameters
 var sea_level: float = 0.35
 var mountain_level: float = 0.75
+var river_percentage: float = 0.1
 
 # Noise parameters (exposed for UI)
 var noise_scale: float = 0.02:
@@ -44,6 +46,9 @@ func generate(hex_grid: HexGrid, seed_val: int = 0) -> void:
 
 	# Assign biomes
 	_assign_biomes()
+
+	# Generate rivers
+	_generate_rivers(seed_val)
 
 
 func _generate_elevation() -> void:
@@ -101,3 +106,18 @@ func _get_biome(elevation: int, moisture: float) -> TerrainType.Type:
 		return TerrainType.Type.FOREST
 	else:
 		return TerrainType.Type.JUNGLE
+
+
+func _generate_rivers(seed_val: int) -> void:
+	if river_percentage <= 0:
+		return
+
+	river_generator = RiverGenerator.new(grid)
+	river_generator.generate(seed_val, river_percentage)
+
+	# Count rivers for debugging
+	var river_count = 0
+	for cell in grid.get_all_cells():
+		river_count += cell.river_directions.size()
+	if river_count > 0:
+		print("Generated %d river segments" % river_count)

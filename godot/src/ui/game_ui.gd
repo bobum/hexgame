@@ -39,6 +39,7 @@ var noise_scale_slider: HSlider
 var octaves_slider: HSlider
 var sea_level_slider: HSlider
 var mountain_level_slider: HSlider
+var river_slider: HSlider
 
 var main_node: Node3D
 
@@ -274,6 +275,10 @@ func _create_terrain_section() -> void:
 	terrain_section.add_child(_create_labeled_slider("Mountains", 0.5, 1.0, 0.75, 0.01, "_on_mountain_level_changed"))
 	mountain_level_slider = terrain_section.get_child(terrain_section.get_child_count() - 1).get_child(1)
 
+	# River percentage slider (0.0 - 0.3)
+	terrain_section.add_child(_create_labeled_slider("Rivers", 0.0, 0.3, 0.1, 0.01, "_on_river_changed"))
+	river_slider = terrain_section.get_child(terrain_section.get_child_count() - 1).get_child(1)
+
 	# Insert after UnitsSection
 	var units_idx = units_section.get_index()
 	vbox.add_child(terrain_section)
@@ -325,6 +330,11 @@ func _on_sea_level_changed(value: float) -> void:
 func _on_mountain_level_changed(value: float) -> void:
 	_update_slider_label(mountain_level_slider, value)
 	noise_param_changed.emit("mountain_level", value)
+
+
+func _on_river_changed(value: float) -> void:
+	_update_slider_label(river_slider, value)
+	noise_param_changed.emit("river_percentage", value)
 
 
 func _update_slider_label(slider: HSlider, value: float, is_int: bool = false) -> void:
