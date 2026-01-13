@@ -551,10 +551,20 @@ export class HexMeshBuilder {
 
     if (leftEdgeType === 'slope') {
       if (rightEdgeType === 'slope') {
-        // Slope-Slope: terraced corner fanning from bottom (lowest)
-        this.triangulateCornerTerraces(
-          bottom, bottomColor, left, leftColor, right, rightColor
-        );
+        // Slope-Slope: check if left and right are at same elevation (SSF case)
+        const topEdgeType = this.getEdgeType(leftElevation, rightElevation);
+        if (topEdgeType === 'flat') {
+          // SSF: Slope-Slope-Flat - fan from bottom toward ONE of the tops
+          // This creates a proper fan that's visible from both interior and exterior
+          this.triangulateCornerSSF(
+            bottom, bottomColor, left, leftColor, right, rightColor
+          );
+        } else {
+          // Regular Slope-Slope: terraced corner fanning from bottom
+          this.triangulateCornerTerraces(
+            bottom, bottomColor, left, leftColor, right, rightColor
+          );
+        }
       } else if (rightEdgeType === 'cliff') {
         // Slope-Cliff: terraces on left, boundary triangles to right (cliff)
         this.triangulateCornerTerracesCliff(
@@ -576,8 +586,33 @@ export class HexMeshBuilder {
           left, leftColor, leftElevation,
           right, rightColor, rightElevation
         );
+      } else if (rightEdgeType === 'cliff') {
+        // Cliff-Cliff: check if left-right is a slope (CCSR/CCSL case)
+        const topEdgeType = this.getEdgeType(leftElevation, rightElevation);
+        if (topEdgeType === 'slope') {
+          // CCSR/CCSL: Both cliffs from bottom, but slope between left-right
+          // Need special handling with boundary at the lower top
+          if (leftElevation < rightElevation) {
+            // CCSR: Right is higher, left is lower top
+            this.triangulateCornerCCSR(
+              bottom, bottomColor,
+              left, leftColor,
+              right, rightColor
+            );
+          } else {
+            // CCSL: Left is higher, right is lower top
+            this.triangulateCornerCCSL(
+              bottom, bottomColor,
+              left, leftColor,
+              right, rightColor
+            );
+          }
+        } else {
+          // True Cliff-Cliff: simple triangle
+          this.addTriangleWithColors(bottom, bottomColor, left, leftColor, right, rightColor);
+        }
       } else {
-        // Cliff-Cliff or Cliff-Flat: simple triangle
+        // Cliff-Flat: simple triangle
         this.addTriangleWithColors(bottom, bottomColor, left, leftColor, right, rightColor);
       }
     } else {
@@ -725,6 +760,122 @@ export class HexMeshBuilder {
       // Simple triangle connecting right, left, and boundary
       this.addTriangleWithColors(right, rightColor, left, leftColor, boundary, boundaryColor);
     }
+  }
+
+  /**
+   * SSF: Slope-Slope-Flat - both edges from bottom are slopes, but left and right
+   * are at the same elevation. Creates a boundary fan from bottom toward both tops.
+   */
+  private triangulateCornerSSF(
+    bottom: THREE.Vector3, bottomColor: THREE.Color,
+    left: THREE.Vector3, leftColor: THREE.Color,
+    right: THREE.Vector3, rightColor: THREE.Color
+  ): void {
+    // For SSF, left and right are at the same elevation
+    // Create a fan from bottom, with terraces going toward both left and right
+    // Use left as the boundary vertex for the fan
+
+    // First terrace steps toward each side
+    let v3 = terraceLerp(bottom, left, 1);
+    let c3 = terraceColorLerp(bottomColor, leftColor, 1);
+    let v4 = terraceLerp(bottom, right, 1);
+    let c4 = terraceColorLerp(bottomColor, rightColor, 1);
+
+    // Initial triangle from bottom
+    this.addTriangleWithColors(bottom, bottomColor, v3, c3, v4, c4);
+
+    // Fan triangles on each side, meeting at the top
+    for (let i = 2; i <= HexMetrics.terraceSteps; i++) {
+      const v3prev = v3;
+      const c3prev = c3;
+      const v4prev = v4;
+      const c4prev = c4;
+
+      v3 = terraceLerp(bottom, left, i);
+      c3 = terraceColorLerp(bottomColor, leftColor, i);
+      v4 = terraceLerp(bottom, right, i);
+      c4 = terraceColorLerp(bottomColor, rightColor, i);
+
+      // Left side triangle
+      this.addTriangleWithColors(v3prev, c3prev, v3, c3, v4prev, c4prev);
+      // Right side triangle
+      this.addTriangleWithColors(v3, c3, v4, c4, v4prev, c4prev);
+    }
+
+    // Final triangles connecting to left and right
+    this.addTriangleWithColors(v3, c3, left, leftColor, v4, c4);
+    this.addTriangleWithColors(left, leftColor, right, rightColor, v4, c4);
+  }
+
+  /**
+   * CCSR: Cliff-Cliff with Slope, Right higher (left is lower top).
+   * Both edges from bottom are cliffs, but left-right is a slope.
+   * Boundary point on bottom->right cliff at left's elevation.
+   * Cliff triangle: bottom, left, boundary
+   * Fan: terrace steps from left toward right, all pointing to boundary.
+   */
+  private triangulateCornerCCSR(
+    bottom: THREE.Vector3, bottomColor: THREE.Color,
+    left: THREE.Vector3, leftColor: THREE.Color,
+    right: THREE.Vector3, rightColor: THREE.Color
+  ): void {
+    // Boundary is on the bottom->right cliff edge at left's elevation
+    // The interpolation factor is based on the height difference
+    const rightCliffHeight = right.y - bottom.y;
+    const leftHeight = left.y - bottom.y;
+    const b = leftHeight / rightCliffHeight;
+
+    const boundary = new THREE.Vector3(
+      bottom.x + (right.x - bottom.x) * b,
+      bottom.y + (right.y - bottom.y) * b,
+      bottom.z + (right.z - bottom.z) * b
+    );
+    const boundaryColor = new THREE.Color(
+      bottomColor.r + (rightColor.r - bottomColor.r) * b,
+      bottomColor.g + (rightColor.g - bottomColor.g) * b,
+      bottomColor.b + (rightColor.b - bottomColor.b) * b
+    );
+
+    // Cliff triangle: bottom, left, boundary
+    this.addTriangleWithColors(bottom, bottomColor, left, leftColor, boundary, boundaryColor);
+
+    // Fan from left toward right, all triangles point to boundary
+    this.triangulateBoundaryTriangle(left, leftColor, right, rightColor, boundary, boundaryColor);
+  }
+
+  /**
+   * CCSL: Cliff-Cliff with Slope, Left higher (right is lower top).
+   * Both edges from bottom are cliffs, but left-right is a slope.
+   * Boundary point on bottom->left cliff at right's elevation.
+   * Cliff triangle: bottom, boundary, right
+   * Fan: terrace steps from right toward left, all pointing to boundary.
+   */
+  private triangulateCornerCCSL(
+    bottom: THREE.Vector3, bottomColor: THREE.Color,
+    left: THREE.Vector3, leftColor: THREE.Color,
+    right: THREE.Vector3, rightColor: THREE.Color
+  ): void {
+    // Boundary is on the bottom->left cliff edge at right's elevation
+    const leftCliffHeight = left.y - bottom.y;
+    const rightHeight = right.y - bottom.y;
+    const b = rightHeight / leftCliffHeight;
+
+    const boundary = new THREE.Vector3(
+      bottom.x + (left.x - bottom.x) * b,
+      bottom.y + (left.y - bottom.y) * b,
+      bottom.z + (left.z - bottom.z) * b
+    );
+    const boundaryColor = new THREE.Color(
+      bottomColor.r + (leftColor.r - bottomColor.r) * b,
+      bottomColor.g + (leftColor.g - bottomColor.g) * b,
+      bottomColor.b + (leftColor.b - bottomColor.b) * b
+    );
+
+    // Cliff triangle: bottom, boundary, right
+    this.addTriangleWithColors(bottom, bottomColor, boundary, boundaryColor, right, rightColor);
+
+    // Fan from right toward left, all triangles point to boundary
+    this.triangulateBoundaryTriangle(right, rightColor, left, leftColor, boundary, boundaryColor);
   }
 
   /**
