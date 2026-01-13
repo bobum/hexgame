@@ -41,3 +41,20 @@ static func get_color(terrain: Type) -> Color:
 
 static func is_water(terrain: Type) -> bool:
 	return terrain == Type.OCEAN or terrain == Type.COAST
+
+
+static func get_name(terrain: Type) -> String:
+	match terrain:
+		Type.OCEAN: return "Ocean"
+		Type.COAST: return "Coast"
+		Type.PLAINS: return "Plains"
+		Type.FOREST: return "Forest"
+		Type.HILLS: return "Hills"
+		Type.MOUNTAINS: return "Mountains"
+		Type.SNOW: return "Snow"
+		Type.DESERT: return "Desert"
+		Type.TUNDRA: return "Tundra"
+		Type.JUNGLE: return "Jungle"
+		Type.SAVANNA: return "Savanna"
+		Type.TAIGA: return "Taiga"
+		_: return "Unknown"

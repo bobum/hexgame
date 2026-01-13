@@ -10,6 +10,7 @@ var map_generator: MapGenerator
 var mesh_instance: MeshInstance3D
 var water_instance: MeshInstance3D
 var water_material: ShaderMaterial
+var hex_hover: HexHover
 var current_seed: int = 0
 var game_ui: GameUI
 
@@ -65,6 +66,9 @@ func _initialize_game() -> void:
 	# Build and display terrain mesh
 	_build_terrain()
 
+	# Setup hover system
+	_setup_hover()
+
 
 func _build_terrain() -> void:
 	# Create mesh builder and generate geometry
@@ -91,6 +95,27 @@ func _build_terrain() -> void:
 
 	# Center camera on map
 	_center_camera()
+
+
+func _setup_hover() -> void:
+	hex_hover = HexHover.new()
+	add_child(hex_hover)
+	hex_hover.setup(grid, camera)
+
+	# Connect hover signals to UI
+	hex_hover.cell_hovered.connect(_on_cell_hovered)
+	hex_hover.cell_unhovered.connect(_on_cell_unhovered)
+
+
+func _on_cell_hovered(cell: HexCell) -> void:
+	if game_ui:
+		var terrain_name = TerrainType.get_name(cell.terrain_type)
+		game_ui.set_hovered_hex(cell.q, cell.r, terrain_name)
+
+
+func _on_cell_unhovered() -> void:
+	if game_ui:
+		game_ui.clear_hovered_hex()
 
 
 func _build_water() -> void:
@@ -155,6 +180,10 @@ func _regenerate_map() -> void:
 	map_generator.generate(grid, current_seed)
 	_build_terrain()
 
+	# Update hover with new grid
+	if hex_hover:
+		hex_hover.setup(grid, camera)
+
 
 ## Get the hex cell at a world position (for raycasting)
 func get_cell_at_world_pos(world_pos: Vector3) -> HexCell:
@@ -184,3 +213,7 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	# Generate and build
 	map_generator.generate(grid, current_seed)
 	_build_terrain()
+
+	# Update hover with new grid
+	if hex_hover:
+		hex_hover.setup(grid, camera)
