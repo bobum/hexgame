@@ -188,12 +188,22 @@ func _update_unit_counts() -> void:
 
 
 func _on_noise_param_changed(param: String, value: float) -> void:
+	# Handle flow_speed separately as it doesn't require map regeneration
+	if param == "flow_speed":
+		if river_renderer and river_renderer.material:
+			river_renderer.material.set_shader_parameter("flow_speed", value)
+		return
+
 	if map_generator:
 		match param:
 			"noise_scale":
 				map_generator.noise_scale = value
 			"octaves":
 				map_generator.octaves = int(value)
+			"persistence":
+				map_generator.persistence = value
+			"lacunarity":
+				map_generator.lacunarity = value
 			"sea_level":
 				map_generator.sea_level = value
 			"mountain_level":

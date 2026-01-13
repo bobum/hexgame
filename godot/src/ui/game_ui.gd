@@ -37,9 +37,15 @@ var unit_count_label: Label
 var terrain_section: VBoxContainer
 var noise_scale_slider: HSlider
 var octaves_slider: HSlider
+var persistence_slider: HSlider
+var lacunarity_slider: HSlider
 var sea_level_slider: HSlider
 var mountain_level_slider: HSlider
 var river_slider: HSlider
+
+# River settings section
+var river_section: VBoxContainer
+var flow_speed_slider: HSlider
 
 var main_node: Node3D
 
@@ -56,6 +62,7 @@ func _ready() -> void:
 	# Create dynamic UI sections
 	_create_units_section()
 	_create_terrain_section()
+	_create_river_section()
 	_create_turn_section()
 	_create_render_stats()
 
@@ -267,6 +274,14 @@ func _create_terrain_section() -> void:
 	terrain_section.add_child(_create_labeled_slider("Octaves", 1, 8, 4, 1, "_on_octaves_changed"))
 	octaves_slider = terrain_section.get_child(terrain_section.get_child_count() - 1).get_child(1)
 
+	# Persistence slider (0.1 - 0.9)
+	terrain_section.add_child(_create_labeled_slider("Persist", 0.1, 0.9, 0.5, 0.05, "_on_persistence_changed"))
+	persistence_slider = terrain_section.get_child(terrain_section.get_child_count() - 1).get_child(1)
+
+	# Lacunarity slider (1.5 - 3.0)
+	terrain_section.add_child(_create_labeled_slider("Lacunar", 1.5, 3.0, 2.0, 0.1, "_on_lacunarity_changed"))
+	lacunarity_slider = terrain_section.get_child(terrain_section.get_child_count() - 1).get_child(1)
+
 	# Sea Level slider (0.0 - 0.8)
 	terrain_section.add_child(_create_labeled_slider("Sea Level", 0.0, 0.8, 0.35, 0.01, "_on_sea_level_changed"))
 	sea_level_slider = terrain_section.get_child(terrain_section.get_child_count() - 1).get_child(1)
@@ -337,6 +352,21 @@ func _on_river_changed(value: float) -> void:
 	noise_param_changed.emit("river_percentage", value)
 
 
+func _on_persistence_changed(value: float) -> void:
+	_update_slider_label(persistence_slider, value)
+	noise_param_changed.emit("persistence", value)
+
+
+func _on_lacunarity_changed(value: float) -> void:
+	_update_slider_label(lacunarity_slider, value)
+	noise_param_changed.emit("lacunarity", value)
+
+
+func _on_flow_speed_changed(value: float) -> void:
+	_update_slider_label(flow_speed_slider, value)
+	noise_param_changed.emit("flow_speed", value)
+
+
 func _update_slider_label(slider: HSlider, value: float, is_int: bool = false) -> void:
 	if slider and slider.get_parent():
 		var parent = slider.get_parent()
@@ -357,3 +387,31 @@ func _create_render_stats() -> void:
 	triangles_label = Label.new()
 	triangles_label.text = "Triangles: 0"
 	info_section.add_child(triangles_label)
+
+
+func _create_river_section() -> void:
+	# Find the VBox in the panel
+	var vbox = $Panel/VBox
+
+	# Create river settings section
+	river_section = VBoxContainer.new()
+	river_section.name = "RiverSection"
+
+	# Add separator
+	var separator = HSeparator.new()
+	river_section.add_child(separator)
+
+	# Add header label
+	var header = Label.new()
+	header.text = "River Settings"
+	header.add_theme_font_size_override("font_size", 14)
+	river_section.add_child(header)
+
+	# Flow Speed slider (0.5 - 3.0)
+	river_section.add_child(_create_labeled_slider("Flow Spd", 0.5, 3.0, 1.5, 0.1, "_on_flow_speed_changed"))
+	flow_speed_slider = river_section.get_child(river_section.get_child_count() - 1).get_child(1)
+
+	# Insert after TerrainSection
+	var terrain_idx = terrain_section.get_index()
+	vbox.add_child(river_section)
+	vbox.move_child(river_section, terrain_idx + 1)

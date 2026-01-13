@@ -25,12 +25,28 @@ var octaves: int = 4:
 		if noise:
 			noise.fractal_octaves = val
 
+var persistence: float = 0.5:
+	set(val):
+		persistence = val
+		if noise:
+			noise.fractal_gain = val
+
+var lacunarity: float = 2.0:
+	set(val):
+		lacunarity = val
+		if noise:
+			noise.fractal_lacunarity = val
+
+var land_percentage: float = 0.5  # Inverse of sea_level essentially
+
 
 func _init() -> void:
 	noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	noise.frequency = 0.02
 	noise.fractal_octaves = 4
+	noise.fractal_gain = 0.5
+	noise.fractal_lacunarity = 2.0
 
 
 ## Generate a new map
