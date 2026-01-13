@@ -31,6 +31,7 @@ func build_grid_mesh(grid: HexGrid) -> ArrayMesh:
 	for cell in grid.get_all_cells():
 		build_cell(cell, grid)
 
+	print("Built mesh: %d vertices, %d triangles" % [vertices.size(), vertices.size() / 3])
 	return _create_mesh()
 
 
@@ -39,45 +40,27 @@ func build_cell(cell: HexCell, grid: HexGrid) -> void:
 	var center = cell.get_world_position()
 	var base_color = cell.get_color()
 
-	# Build solid center hexagon
-	_build_top_face(center, base_color)
-
-	# Build edge connections
-	for dir in range(6):
-		var neighbor = grid.get_neighbor(cell, dir)
-		var edge_index = _get_edge_index_for_direction(dir)
-
-		if neighbor == null:
-			# Edge of map - cliff
-			var wall_height = (cell.elevation - HexMetrics.MIN_ELEVATION) * HexMetrics.ELEVATION_STEP
-			if wall_height > 0:
-				_build_cliff(center, edge_index, wall_height, base_color)
-		else:
-			var elevation_diff = cell.elevation - neighbor.elevation
-			var neighbor_center = neighbor.get_world_position()
-			var neighbor_color = neighbor.get_color()
-
-			if elevation_diff == 1:
-				# Single level - terraced slope
-				_build_terraced_slope(center, neighbor_center, edge_index, base_color, neighbor_color)
-			elif elevation_diff > 1:
-				# Multi-level cliff
-				_build_flat_cliff(center, neighbor_center, edge_index, base_color, neighbor_color)
-			elif elevation_diff == 0 and dir <= 2:
-				# Same level - flat bridge
-				_build_flat_edge(center, neighbor_center, edge_index, base_color, neighbor_color)
-
-		# Build corners (directions 0 and 1 only)
-		if dir <= 1:
-			var prev_dir = (dir + 5) % 6
-			var prev_neighbor = grid.get_neighbor(cell, prev_dir)
-			if neighbor and prev_neighbor:
-				_build_corner(cell, center, base_color, dir, neighbor, prev_neighbor)
+	# Build FULL hexagon (not just solid center) to eliminate gaps
+	_build_full_hex(center, base_color)
 
 
 func _get_edge_index_for_direction(dir: int) -> int:
 	var dir_to_edge = [5, 4, 3, 2, 1, 0]
 	return dir_to_edge[dir]
+
+
+## Build full hexagon at full radius (no solid/blend regions)
+func _build_full_hex(center: Vector3, color: Color) -> void:
+	for i in range(6):
+		var c1 = corners[i]
+		var c2 = corners[(i + 1) % 6]
+
+		var v1 = center
+		var v2 = Vector3(center.x + c1.x, center.y, center.z + c1.z)
+		var v3 = Vector3(center.x + c2.x, center.y, center.z + c2.z)
+
+		# CW winding for upward-facing in Godot
+		_add_triangle(v1, v2, v3, color)
 
 
 func _build_top_face(center: Vector3, color: Color) -> void:
@@ -91,7 +74,7 @@ func _build_top_face(center: Vector3, color: Color) -> void:
 		var v2 = Vector3(center.x + c1.x * solid, center.y, center.z + c1.z * solid)
 		var v3 = Vector3(center.x + c2.x * solid, center.y, center.z + c2.z * solid)
 
-		_add_triangle(v1, v2, v3, color)
+		_add_triangle_with_colors(v1, color, v2, color, v3, color)
 
 
 func _build_cliff(center: Vector3, edge_index: int, height: float, color: Color) -> void:
@@ -135,8 +118,8 @@ func _build_terraced_slope(center: Vector3, neighbor_center: Vector3, edge_index
 		var c_next = HexMetrics.terrace_color_lerp(begin_color, end_color, step)
 
 		var avg_color = c_current.lerp(c_next, 0.5)
-		_add_triangle(v1, v4, v3, avg_color)
-		_add_triangle(v1, v2, v4, avg_color)
+		_add_triangle_with_colors(v1, avg_color, v4, avg_color, v3, avg_color)
+		_add_triangle_with_colors(v1, avg_color, v2, avg_color, v4, avg_color)
 
 		v1 = v3
 		v2 = v4
@@ -160,8 +143,8 @@ func _build_flat_cliff(center: Vector3, neighbor_center: Vector3, edge_index: in
 	var v4 = Vector3(neighbor_center.x + oc1.x * solid, neighbor_center.y, neighbor_center.z + oc1.z * solid)
 
 	var blend_color = color.lerp(neighbor_color, 0.5)
-	_add_triangle(v1, v2, v4, blend_color)
-	_add_triangle(v1, v4, v3, blend_color)
+	_add_triangle_with_colors(v1, blend_color, v2, blend_color, v4, blend_color)
+	_add_triangle_with_colors(v1, blend_color, v4, blend_color, v3, blend_color)
 
 
 func _build_flat_edge(center: Vector3, neighbor_center: Vector3, edge_index: int,
@@ -181,8 +164,8 @@ func _build_flat_edge(center: Vector3, neighbor_center: Vector3, edge_index: int
 	var v4 = Vector3(neighbor_center.x + oc1.x * solid, neighbor_center.y, neighbor_center.z + oc1.z * solid)
 
 	var blend_color = color.lerp(neighbor_color, 0.5)
-	_add_triangle(v1, v2, v4, blend_color)
-	_add_triangle(v1, v4, v3, blend_color)
+	_add_triangle_with_colors(v1, blend_color, v2, blend_color, v4, blend_color)
+	_add_triangle_with_colors(v1, blend_color, v4, blend_color, v3, blend_color)
 
 
 ## Build corner geometry where three hexes meet
@@ -457,7 +440,7 @@ func _triangulate_boundary_triangle(
 	_add_triangle_with_colors(v2, c2, left, left_color, boundary, boundary_color)
 
 
-## Add triangle with per-vertex colors (auto-corrects winding)
+## Add triangle with per-vertex colors (auto-corrects winding for Godot)
 func _add_triangle_with_colors(
 		v1: Vector3, c1: Color,
 		v2: Vector3, c2: Color,
@@ -473,7 +456,9 @@ func _add_triangle_with_colors(
 		(c1.b + c2.b + c3.b) / 3.0
 	)
 
-	if normal.y < 0:
+	# Godot uses CW winding for front faces when viewed from above
+	# Swap if normal points UP (need it to point down for correct front face)
+	if normal.y > 0:
 		_add_triangle(v1, v3, v2, avg_color)
 	else:
 		_add_triangle(v1, v2, v3, avg_color)
@@ -497,20 +482,9 @@ func _add_quad_with_colors(
 
 
 func _add_triangle(v1: Vector3, v2: Vector3, v3: Vector3, color: Color) -> void:
-	# Check winding and correct if needed
-	var edge1 = v2 - v1
-	var edge2 = v3 - v1
-	var normal = edge1.cross(edge2)
-
-	if normal.y < 0:
-		# Reverse winding
-		vertices.append(v1)
-		vertices.append(v3)
-		vertices.append(v2)
-	else:
-		vertices.append(v1)
-		vertices.append(v2)
-		vertices.append(v3)
+	vertices.append(v1)
+	vertices.append(v2)
+	vertices.append(v3)
 
 	colors.append(color)
 	colors.append(color)
@@ -523,17 +497,20 @@ func _add_triangle(v1: Vector3, v2: Vector3, v3: Vector3, color: Color) -> void:
 
 
 func _create_mesh() -> ArrayMesh:
-	var mesh = ArrayMesh.new()
-	var arrays = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_COLOR] = colors
-	arrays[Mesh.ARRAY_INDEX] = indices
-
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-
-	# Generate normals
+	# Use SurfaceTool to build the mesh properly
 	var st = SurfaceTool.new()
-	st.create_from(mesh, 0)
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	# Add each triangle
+	var num_triangles = vertices.size() / 3
+	for i in range(num_triangles):
+		var idx = i * 3
+		st.set_color(colors[idx])
+		st.add_vertex(vertices[idx])
+		st.set_color(colors[idx + 1])
+		st.add_vertex(vertices[idx + 1])
+		st.set_color(colors[idx + 2])
+		st.add_vertex(vertices[idx + 2])
+
 	st.generate_normals()
 	return st.commit()
