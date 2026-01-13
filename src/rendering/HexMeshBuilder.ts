@@ -98,9 +98,12 @@ export class HexMeshBuilder {
         const neighborCenter = new HexCoordinates(neighbor.q, neighbor.r).toWorldPosition(neighbor.elevation);
         const neighborColor = getTerrainColor(neighbor.terrainType);
 
-        if (elevationDiff > 0) {
-          // We're higher - build terraced slope (always, in any direction)
+        if (elevationDiff === 1) {
+          // Single level difference - build terraced slope
           this.buildTerracedSlope(center, neighborCenter, edgeIndex, baseColor, neighborColor);
+        } else if (elevationDiff > 1) {
+          // Multi-level difference (cliff) - build flat slope, no terraces
+          this.buildFlatCliff(center, neighborCenter, edgeIndex, baseColor, neighborColor);
         } else if (elevationDiff === 0 && dir <= 2) {
           // Same level - build flat bridge only in directions 0, 1, 2 to avoid duplicates
           this.buildFlatEdge(center, neighborCenter, edgeIndex, baseColor, neighborColor);
@@ -413,6 +416,46 @@ export class HexMeshBuilder {
   }
 
   /**
+   * Build a flat cliff (no terraces) for elevation difference >= 2.
+   * Simple flat quad from high cell to low cell.
+   */
+  private buildFlatCliff(
+    center: THREE.Vector3,
+    neighborCenter: THREE.Vector3,
+    edgeIndex: number,
+    color: THREE.Color,
+    neighborColor: THREE.Color
+  ): void {
+    const solid = HexMetrics.solidFactor;
+    const c1 = this.corners[edgeIndex];
+    const c2 = this.corners[(edgeIndex + 1) % 6];
+
+    // This cell's solid edge corners (higher elevation)
+    const v1 = new THREE.Vector3(center.x + c1.x * solid, center.y, center.z + c1.z * solid);
+    const v2 = new THREE.Vector3(center.x + c2.x * solid, center.y, center.z + c2.z * solid);
+
+    // Neighbor's solid edge corners (lower elevation)
+    const oppositeEdge = (edgeIndex + 3) % 6;
+    const oc1 = this.corners[oppositeEdge];
+    const oc2 = this.corners[(oppositeEdge + 1) % 6];
+
+    // Note: oc2 aligns with v1, oc1 aligns with v2 (corners are swapped)
+    const v3 = new THREE.Vector3(neighborCenter.x + oc2.x * solid, neighborCenter.y, neighborCenter.z + oc2.z * solid);
+    const v4 = new THREE.Vector3(neighborCenter.x + oc1.x * solid, neighborCenter.y, neighborCenter.z + oc1.z * solid);
+
+    // Blend colors
+    const blendColor = new THREE.Color(
+      (color.r + neighborColor.r) / 2,
+      (color.g + neighborColor.g) / 2,
+      (color.b + neighborColor.b) / 2
+    );
+
+    // Build quad (two triangles) - CCW winding for upward-facing
+    this.addTriangle(v1, v2, v4, blendColor);
+    this.addTriangle(v1, v4, v3, blendColor);
+  }
+
+  /**
    * Build corner geometry where three hexes meet.
    * Handles terraced corners following Catlike Coding approach.
    */
@@ -491,7 +534,12 @@ export class HexMeshBuilder {
   /**
    * Triangulate a corner with bottom vertex first, then left and right.
    * Determines edge types and calls appropriate method.
-   * Key insight: for Slope-Flat cases, terraces fan from the HIGH vertex.
+   * Following Catlike Coding Part 3 sections 5.0-5.1:
+   * - Slope-Slope: Full terraced fan
+   * - Slope-Cliff / Cliff-Slope: Terrace fan on slope side, boundary triangles to cliff
+   * - Cliff-Cliff: Simple triangle
+   * - Slope-Flat / Flat-Slope: Terraced from high point
+   * - Flat-Flat: Simple triangle
    */
   private triangulateCorner(
     bottom: THREE.Vector3, bottomColor: THREE.Color, bottomElevation: number,
@@ -507,20 +555,41 @@ export class HexMeshBuilder {
         this.triangulateCornerTerraces(
           bottom, bottomColor, left, leftColor, right, rightColor
         );
+      } else if (rightEdgeType === 'cliff') {
+        // Slope-Cliff: terraces on left, boundary triangles to right (cliff)
+        this.triangulateCornerTerracesCliff(
+          bottom, bottomColor, bottomElevation,
+          left, leftColor, leftElevation,
+          right, rightColor, rightElevation
+        );
       } else {
-        // Slope-Flat: left is higher, right is same as bottom
-        // Terraces fan from LEFT (the high point) down to both right and bottom
+        // Slope-Flat: left is higher, terraces fan from LEFT
         this.triangulateCornerTerraces(
           left, leftColor, right, rightColor, bottom, bottomColor
         );
       }
-    } else {
+    } else if (leftEdgeType === 'cliff') {
       if (rightEdgeType === 'slope') {
-        // Flat-Slope: right is higher, left is same as bottom
-        // Terraces fan from RIGHT (the high point) down to both bottom and left
+        // Cliff-Slope: boundary triangles on left (cliff), terraces on right
+        this.triangulateCornerCliffTerraces(
+          bottom, bottomColor, bottomElevation,
+          left, leftColor, leftElevation,
+          right, rightColor, rightElevation
+        );
+      } else {
+        // Cliff-Cliff or Cliff-Flat: simple triangle
+        this.addTriangleWithColors(bottom, bottomColor, left, leftColor, right, rightColor);
+      }
+    } else {
+      // Left is flat
+      if (rightEdgeType === 'slope') {
+        // Flat-Slope: right is higher, terraces fan from RIGHT
         this.triangulateCornerTerraces(
           right, rightColor, bottom, bottomColor, left, leftColor
         );
+      } else if (rightEdgeType === 'cliff') {
+        // Flat-Cliff: simple triangle
+        this.addTriangleWithColors(bottom, bottomColor, left, leftColor, right, rightColor);
       } else {
         // Flat-Flat: simple triangle
         this.addTriangleWithColors(bottom, bottomColor, left, leftColor, right, rightColor);
@@ -530,12 +599,13 @@ export class HexMeshBuilder {
 
   /**
    * Determine edge type based on elevation difference.
-   * For terraced terrain, any elevation difference is a slope (terraced).
+   * Only single-level differences get terraces; multi-level are flat cliffs.
    */
-  private getEdgeType(e1: number, e2: number): 'flat' | 'slope' {
+  private getEdgeType(e1: number, e2: number): 'flat' | 'slope' | 'cliff' {
     const diff = Math.abs(e1 - e2);
     if (diff === 0) return 'flat';
-    return 'slope';  // All elevation differences get terraced
+    if (diff === 1) return 'slope';  // Only diff=1 gets terraces
+    return 'cliff';  // diff >= 2 is a flat cliff
   }
 
   /**
@@ -571,6 +641,120 @@ export class HexMeshBuilder {
 
     // Final quad to left and right vertices
     this.addQuadWithColors(v3, c3, v4, c4, left, leftColor, right, rightColor);
+  }
+
+  /**
+   * Triangulate a corner where left edge is slope, right edge is cliff.
+   * Terraces fan on left side, boundary triangles connect to cliff (right).
+   * If left-right is also a slope, creates a second fan at top.
+   * Following Catlike Coding Part 3 section 5.1.
+   */
+  private triangulateCornerTerracesCliff(
+    bottom: THREE.Vector3, bottomColor: THREE.Color, bottomElevation: number,
+    left: THREE.Vector3, leftColor: THREE.Color, leftElevation: number,
+    right: THREE.Vector3, rightColor: THREE.Color, rightElevation: number
+  ): void {
+    // Boundary is calculated as simple linear interpolation based on elevation
+    // b = 1 / (cliff elevation difference)
+    const b = 1.0 / (rightElevation - bottomElevation);
+    const boundary = new THREE.Vector3(
+      bottom.x + (right.x - bottom.x) * b,
+      bottom.y + (right.y - bottom.y) * b,
+      bottom.z + (right.z - bottom.z) * b
+    );
+    const boundaryColor = new THREE.Color(
+      bottomColor.r + (rightColor.r - bottomColor.r) * b,
+      bottomColor.g + (rightColor.g - bottomColor.g) * b,
+      bottomColor.b + (rightColor.b - bottomColor.b) * b
+    );
+
+    // Bottom fan: terraces from bottom toward left, all pointing to boundary
+    this.triangulateBoundaryTriangle(
+      bottom, bottomColor, left, leftColor, boundary, boundaryColor
+    );
+
+    // Check if left-right edge is also a slope (creates double-slope scenario)
+    if (this.getEdgeType(leftElevation, rightElevation) === 'slope') {
+      // Top fan: terraces from left toward right, all pointing to boundary
+      this.triangulateBoundaryTriangle(
+        left, leftColor, right, rightColor, boundary, boundaryColor
+      );
+    } else {
+      // Simple triangle connecting left, right, and boundary
+      this.addTriangleWithColors(left, leftColor, right, rightColor, boundary, boundaryColor);
+    }
+  }
+
+  /**
+   * Triangulate a corner where left edge is cliff, right edge is slope.
+   * Boundary triangles connect to cliff (left), terraces fan on right side.
+   * If left-right is also a slope, creates a second fan at top.
+   * Following Catlike Coding Part 3 section 5.1.
+   */
+  private triangulateCornerCliffTerraces(
+    bottom: THREE.Vector3, bottomColor: THREE.Color, bottomElevation: number,
+    left: THREE.Vector3, leftColor: THREE.Color, leftElevation: number,
+    right: THREE.Vector3, rightColor: THREE.Color, rightElevation: number
+  ): void {
+    // Boundary is calculated as simple linear interpolation based on elevation
+    // b = 1 / (cliff elevation difference)
+    const b = 1.0 / (leftElevation - bottomElevation);
+    const boundary = new THREE.Vector3(
+      bottom.x + (left.x - bottom.x) * b,
+      bottom.y + (left.y - bottom.y) * b,
+      bottom.z + (left.z - bottom.z) * b
+    );
+    const boundaryColor = new THREE.Color(
+      bottomColor.r + (leftColor.r - bottomColor.r) * b,
+      bottomColor.g + (leftColor.g - bottomColor.g) * b,
+      bottomColor.b + (leftColor.b - bottomColor.b) * b
+    );
+
+    // Bottom fan: terraces from bottom toward right, all pointing to boundary
+    this.triangulateBoundaryTriangle(
+      bottom, bottomColor, right, rightColor, boundary, boundaryColor
+    );
+
+    // Check if left-right edge is also a slope (creates double-slope scenario)
+    if (this.getEdgeType(leftElevation, rightElevation) === 'slope') {
+      // Top fan: terraces from right toward left, all pointing to boundary
+      this.triangulateBoundaryTriangle(
+        right, rightColor, left, leftColor, boundary, boundaryColor
+      );
+    } else {
+      // Simple triangle connecting right, left, and boundary
+      this.addTriangleWithColors(right, rightColor, left, leftColor, boundary, boundaryColor);
+    }
+  }
+
+  /**
+   * Triangulate a boundary triangle - a fan of triangles from begin toward left,
+   * all pointing to the boundary vertex.
+   * Following Catlike Coding's TriangulateBoundaryTriangle.
+   */
+  private triangulateBoundaryTriangle(
+    begin: THREE.Vector3, beginColor: THREE.Color,
+    left: THREE.Vector3, leftColor: THREE.Color,
+    boundary: THREE.Vector3, boundaryColor: THREE.Color
+  ): void {
+    // First terrace step
+    let v2 = terraceLerp(begin, left, 1);
+    let c2 = terraceColorLerp(beginColor, leftColor, 1);
+
+    // Initial triangle from begin to first step to boundary
+    this.addTriangleWithColors(begin, beginColor, v2, c2, boundary, boundaryColor);
+
+    // Middle steps - triangles fanning toward boundary
+    for (let i = 2; i < HexMetrics.terraceSteps; i++) {
+      const v1 = v2;
+      const c1 = c2;
+      v2 = terraceLerp(begin, left, i);
+      c2 = terraceColorLerp(beginColor, leftColor, i);
+      this.addTriangleWithColors(v1, c1, v2, c2, boundary, boundaryColor);
+    }
+
+    // Final triangle connecting last step to left vertex and boundary
+    this.addTriangleWithColors(v2, c2, left, leftColor, boundary, boundaryColor);
   }
 
   /**
