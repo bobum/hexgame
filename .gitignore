@@ -1,3 +1,7 @@
+# ===================
+# Web (Node.js/Vite)
+# ===================
+
 # Logs
 logs
 *.log
@@ -7,21 +11,63 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build output
 dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# ===================
+# Godot
+# ===================
+
+# Godot 4+ specific ignores
+.godot/
+
+# Godot-specific ignores
+*.translation
+
+# Imported resources
+.import/
+
+# Export templates
+export_presets.cfg
+
+# Mono-specific (C# support)
+.mono/
+data_*/
+mono_crash.*.json
+
+# ===================
+# Editor/IDE
+# ===================
+
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# AI tool local settings
+# ===================
+# OS Generated
+# ===================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ===================
+# AI Tools
+# ===================
+
 .claude/
