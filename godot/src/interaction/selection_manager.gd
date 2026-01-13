@@ -10,6 +10,7 @@ var unit_renderer: UnitRenderer
 var grid: HexGrid
 var camera: Camera3D
 var pathfinder: Pathfinder
+var path_renderer: PathRenderer
 
 # Selected unit IDs
 var selected_unit_ids: Dictionary = {}  # Set<int>
@@ -22,12 +23,13 @@ var box_select_start: Vector2 = Vector2.ZERO
 var selection_box: ColorRect
 
 
-func setup(p_unit_manager: UnitManager, p_unit_renderer: UnitRenderer, p_grid: HexGrid, p_camera: Camera3D, p_pathfinder: Pathfinder = null) -> void:
+func setup(p_unit_manager: UnitManager, p_unit_renderer: UnitRenderer, p_grid: HexGrid, p_camera: Camera3D, p_pathfinder: Pathfinder = null, p_path_renderer: PathRenderer = null) -> void:
 	unit_manager = p_unit_manager
 	unit_renderer = p_unit_renderer
 	grid = p_grid
 	camera = p_camera
 	pathfinder = p_pathfinder
+	path_renderer = p_path_renderer
 
 
 func _input(event: InputEvent) -> void:
@@ -225,12 +227,74 @@ func _hide_selection_box() -> void:
 		selection_box.visible = false
 
 
+## Update path preview when hovering over a cell
+func update_path_preview(target_cell: HexCell) -> void:
+	if path_renderer == null or pathfinder == null:
+		return
+
+	# Only show path if exactly one unit selected
+	if selected_unit_ids.size() != 1:
+		path_renderer.hide_path()
+		return
+
+	var unit_id = selected_unit_ids.keys()[0]
+	var unit = unit_manager.get_unit(unit_id)
+	if unit == null:
+		path_renderer.hide_path()
+		return
+
+	var start_cell = grid.get_cell(unit.q, unit.r)
+	if start_cell == null:
+		path_renderer.hide_path()
+		return
+
+	# Don't show path to current position
+	if start_cell.q == target_cell.q and start_cell.r == target_cell.r:
+		path_renderer.hide_path()
+		return
+
+	# Find path
+	var result = pathfinder.find_path(start_cell, target_cell, {
+		"unit_type": unit.type,
+	})
+
+	if result["reachable"] and result["path"].size() > 0:
+		path_renderer.show_path(result["path"])
+		# Color indicates if within movement range
+		path_renderer.set_path_valid(result["cost"] <= unit.movement)
+	else:
+		path_renderer.hide_path()
+
+
+## Clear path preview when not hovering
+func clear_path_preview() -> void:
+	if path_renderer:
+		path_renderer.hide_path()
+
+
 func _update_selection_visuals() -> void:
 	if unit_renderer:
 		var ids: Array[int] = []
 		for id in selected_unit_ids.keys():
 			ids.append(id)
 		unit_renderer.set_selected_units(ids)
+
+	# Show reachable cells for single selected unit
+	if path_renderer and pathfinder:
+		if selected_unit_ids.size() == 1:
+			var unit_id = selected_unit_ids.keys()[0]
+			var unit = unit_manager.get_unit(unit_id)
+			if unit and unit.movement > 0:
+				var start_cell = grid.get_cell(unit.q, unit.r)
+				if start_cell:
+					var reachable = pathfinder.get_reachable_cells(start_cell, float(unit.movement), {
+						"unit_type": unit.type
+					})
+					path_renderer.show_reachable_cells(reachable)
+			else:
+				path_renderer.hide_reachable_cells()
+		else:
+			path_renderer.hide_reachable_cells()
 
 	selection_changed.emit(get_selected_ids())
 

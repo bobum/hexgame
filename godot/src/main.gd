@@ -19,6 +19,7 @@ var unit_manager: UnitManager
 var unit_renderer: UnitRenderer
 var selection_manager: SelectionManager
 var pathfinder: Pathfinder
+var path_renderer: PathRenderer
 
 # Map settings
 var map_width: int = 32
@@ -120,11 +121,17 @@ func _on_cell_hovered(cell: HexCell) -> void:
 	if game_ui:
 		var terrain_name = TerrainType.get_terrain_name(cell.terrain_type)
 		game_ui.set_hovered_hex(cell.q, cell.r, terrain_name)
+	# Update path preview when hovering
+	if selection_manager:
+		selection_manager.update_path_preview(cell)
 
 
 func _on_cell_unhovered() -> void:
 	if game_ui:
 		game_ui.clear_hovered_hex()
+	# Clear path preview
+	if selection_manager:
+		selection_manager.clear_path_preview()
 
 
 func _on_selection_changed(selected_ids: Array[int]) -> void:
@@ -151,10 +158,15 @@ func _setup_units() -> void:
 	# Setup pathfinder
 	pathfinder = Pathfinder.new(grid, unit_manager)
 
+	# Setup path renderer
+	path_renderer = PathRenderer.new()
+	hex_grid_node.add_child(path_renderer)
+	path_renderer.setup(grid)
+
 	# Setup selection manager
 	selection_manager = SelectionManager.new()
 	add_child(selection_manager)
-	selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder)
+	selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer)
 	selection_manager.selection_changed.connect(_on_selection_changed)
 
 
@@ -244,7 +256,7 @@ func _regenerate_map() -> void:
 
 		if selection_manager:
 			selection_manager.clear_selection()
-			selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder)
+			selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer)
 
 
 ## Get the hex cell at a world position (for raycasting)
@@ -297,4 +309,4 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 
 	if selection_manager:
 		selection_manager.clear_selection()
-		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder)
+		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer)
