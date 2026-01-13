@@ -413,9 +413,8 @@ export class HexMeshBuilder {
   }
 
   /**
-   * Build corner triangle where three hexes meet.
-   * The shared corner P is at the same world position for all three cells.
-   * Each cell's solid corner vertex is at: cellCenter + (P - cellCenter) * solid
+   * Build corner geometry where three hexes meet.
+   * Handles terraced corners following Catlike Coding approach.
    */
   private buildCorner(
     cell: HexCell,
@@ -430,12 +429,11 @@ export class HexMeshBuilder {
     const edgeIndex = this.getEdgeIndexForDirection(dir);
 
     // The shared corner position P (at full radius) - where all three cells meet
-    // This is the corner at the end of edge in direction dir
     const cornerIdx = (edgeIndex + 1) % 6;
     const cornerOffset = this.corners[cornerIdx];
     const P = new THREE.Vector3(
       center.x + cornerOffset.x,
-      0,  // XZ plane position of the shared corner
+      0,
       center.z + cornerOffset.z
     );
 
@@ -443,24 +441,17 @@ export class HexMeshBuilder {
     const n1Center = new HexCoordinates(neighbor1.q, neighbor1.r).toWorldPosition(neighbor1.elevation);
     const n2Center = new HexCoordinates(neighbor2.q, neighbor2.r).toWorldPosition(neighbor2.elevation);
 
-    // Current cell's solid corner: center + cornerOffset * solid
+    // Calculate solid corner vertices for each cell
     const v1 = new THREE.Vector3(
       center.x + cornerOffset.x * solid,
       center.y,
       center.z + cornerOffset.z * solid
     );
-
-    // Neighbor1's solid corner: n1Center + (P - n1Center) * solid
-    // Since |P - n1Center| = outerRadius for adjacent cells, this simplifies to:
-    // n1Center + (P - n1Center).normalized * outerRadius * solid
-    // But we can also just interpolate directly
     const v2 = new THREE.Vector3(
       n1Center.x + (P.x - n1Center.x) * solid,
       n1Center.y,
       n1Center.z + (P.z - n1Center.z) * solid
     );
-
-    // Neighbor2's solid corner: same approach
     const v3 = new THREE.Vector3(
       n2Center.x + (P.x - n2Center.x) * solid,
       n2Center.y,
@@ -468,16 +459,168 @@ export class HexMeshBuilder {
     );
 
     // Get colors
-    const n1Color = getTerrainColor(neighbor1.terrainType);
-    const n2Color = getTerrainColor(neighbor2.terrainType);
+    const c1 = color.clone();
+    const c2 = getTerrainColor(neighbor1.terrainType);
+    const c3 = getTerrainColor(neighbor2.terrainType);
+
+    // Sort by elevation to find bottom, left, right (Catlike Coding approach)
+    // Bottom is lowest, then we go counter-clockwise for left and right
+    const e1 = cell.elevation;
+    const e2 = neighbor1.elevation;
+    const e3 = neighbor2.elevation;
+
+    if (e1 <= e2) {
+      if (e1 <= e3) {
+        // e1 is lowest - current cell is bottom
+        this.triangulateCorner(v1, c1, e1, v2, c2, e2, v3, c3, e3);
+      } else {
+        // e3 is lowest - neighbor2 is bottom, rotate CCW
+        this.triangulateCorner(v3, c3, e3, v1, c1, e1, v2, c2, e2);
+      }
+    } else {
+      if (e2 <= e3) {
+        // e2 is lowest - neighbor1 is bottom, rotate CW
+        this.triangulateCorner(v2, c2, e2, v3, c3, e3, v1, c1, e1);
+      } else {
+        // e3 is lowest - neighbor2 is bottom, rotate CCW
+        this.triangulateCorner(v3, c3, e3, v1, c1, e1, v2, c2, e2);
+      }
+    }
+  }
+
+  /**
+   * Triangulate a corner with bottom vertex first, then left and right.
+   * Determines edge types and calls appropriate method.
+   * Key insight: for Slope-Flat cases, terraces fan from the HIGH vertex.
+   */
+  private triangulateCorner(
+    bottom: THREE.Vector3, bottomColor: THREE.Color, bottomElevation: number,
+    left: THREE.Vector3, leftColor: THREE.Color, leftElevation: number,
+    right: THREE.Vector3, rightColor: THREE.Color, rightElevation: number
+  ): void {
+    const leftEdgeType = this.getEdgeType(bottomElevation, leftElevation);
+    const rightEdgeType = this.getEdgeType(bottomElevation, rightElevation);
+
+    if (leftEdgeType === 'slope') {
+      if (rightEdgeType === 'slope') {
+        // Slope-Slope: terraced corner fanning from bottom (lowest)
+        this.triangulateCornerTerraces(
+          bottom, bottomColor, left, leftColor, right, rightColor
+        );
+      } else {
+        // Slope-Flat: left is higher, right is same as bottom
+        // Terraces fan from LEFT (the high point) down to both right and bottom
+        this.triangulateCornerTerraces(
+          left, leftColor, right, rightColor, bottom, bottomColor
+        );
+      }
+    } else {
+      if (rightEdgeType === 'slope') {
+        // Flat-Slope: right is higher, left is same as bottom
+        // Terraces fan from RIGHT (the high point) down to both bottom and left
+        this.triangulateCornerTerraces(
+          right, rightColor, bottom, bottomColor, left, leftColor
+        );
+      } else {
+        // Flat-Flat: simple triangle
+        this.addTriangleWithColors(bottom, bottomColor, left, leftColor, right, rightColor);
+      }
+    }
+  }
+
+  /**
+   * Determine edge type based on elevation difference.
+   * For terraced terrain, any elevation difference is a slope (terraced).
+   */
+  private getEdgeType(e1: number, e2: number): 'flat' | 'slope' {
+    const diff = Math.abs(e1 - e2);
+    if (diff === 0) return 'flat';
+    return 'slope';  // All elevation differences get terraced
+  }
+
+  /**
+   * Triangulate a corner where both edges are slopes (terraced).
+   * Creates fan of triangles/quads from bottom vertex.
+   */
+  private triangulateCornerTerraces(
+    bottom: THREE.Vector3, bottomColor: THREE.Color,
+    left: THREE.Vector3, leftColor: THREE.Color,
+    right: THREE.Vector3, rightColor: THREE.Color
+  ): void {
+    // First terrace step
+    let v3 = terraceLerp(bottom, left, 1);
+    let v4 = terraceLerp(bottom, right, 1);
+    let c3 = terraceColorLerp(bottomColor, leftColor, 1);
+    let c4 = terraceColorLerp(bottomColor, rightColor, 1);
+
+    // Initial triangle from bottom to first step
+    this.addTriangleWithColors(bottom, bottomColor, v3, c3, v4, c4);
+
+    // Middle quads
+    for (let i = 2; i < HexMetrics.terraceSteps; i++) {
+      const v1 = v3;
+      const v2 = v4;
+      const c1 = c3;
+      const c2 = c4;
+      v3 = terraceLerp(bottom, left, i);
+      v4 = terraceLerp(bottom, right, i);
+      c3 = terraceColorLerp(bottomColor, leftColor, i);
+      c4 = terraceColorLerp(bottomColor, rightColor, i);
+      this.addQuadWithColors(v1, c1, v2, c2, v3, c3, v4, c4);
+    }
+
+    // Final quad to left and right vertices
+    this.addQuadWithColors(v3, c3, v4, c4, left, leftColor, right, rightColor);
+  }
+
+  /**
+   * Add a triangle with per-vertex colors.
+   */
+  private addTriangleWithColors(
+    v1: THREE.Vector3, c1: THREE.Color,
+    v2: THREE.Vector3, c2: THREE.Color,
+    v3: THREE.Vector3, c3: THREE.Color
+  ): void {
+    // Calculate normal to determine winding
+    const edge1 = new THREE.Vector3().subVectors(v2, v1);
+    const edge2 = new THREE.Vector3().subVectors(v3, v1);
+    const normal = new THREE.Vector3().crossVectors(edge1, edge2);
+
     const avgColor = new THREE.Color(
-      (color.r + n1Color.r + n2Color.r) / 3,
-      (color.g + n1Color.g + n2Color.g) / 3,
-      (color.b + n1Color.b + n2Color.b) / 3
+      (c1.r + c2.r + c3.r) / 3,
+      (c1.g + c2.g + c3.g) / 3,
+      (c1.b + c2.b + c3.b) / 3
     );
 
-    // Build the corner triangle
-    this.addTriangleWithWindingCheck(v1, v2, v3, avgColor);
+    if (normal.y < 0) {
+      this.addTriangle(v1, v3, v2, avgColor);
+    } else {
+      this.addTriangle(v1, v2, v3, avgColor);
+    }
+  }
+
+  /**
+   * Add a quad with per-vertex colors.
+   * Layout: v1 is bottom-left, v2 is bottom-right, v3 is top-left, v4 is top-right
+   * Triangles share edge v2-v3 (diagonal), not just a vertex.
+   */
+  private addQuadWithColors(
+    v1: THREE.Vector3, c1: THREE.Color,
+    v2: THREE.Vector3, c2: THREE.Color,
+    v3: THREE.Vector3, c3: THREE.Color,
+    v4: THREE.Vector3, c4: THREE.Color
+  ): void {
+    const avgColor = new THREE.Color(
+      (c1.r + c2.r + c3.r + c4.r) / 4,
+      (c1.g + c2.g + c3.g + c4.g) / 4,
+      (c1.b + c2.b + c3.b + c4.b) / 4
+    );
+
+    // Two triangles sharing edge v2-v3:
+    // Triangle 1: v1 -> v2 -> v3 (bottom-left, bottom-right, top-left)
+    // Triangle 2: v2 -> v4 -> v3 (bottom-right, top-right, top-left)
+    this.addTriangleWithColors(v1, avgColor, v2, avgColor, v3, avgColor);
+    this.addTriangleWithColors(v2, avgColor, v4, avgColor, v3, avgColor);
   }
 
   /**
