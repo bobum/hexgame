@@ -20,6 +20,7 @@ var unit_renderer: UnitRenderer
 var selection_manager: SelectionManager
 var pathfinder: Pathfinder
 var path_renderer: PathRenderer
+var turn_manager: TurnManager
 
 # Map settings
 var map_width: int = 32
@@ -46,6 +47,7 @@ func _setup_ui() -> void:
 	# Connect signals
 	game_ui.regenerate_requested.connect(_on_ui_regenerate)
 	game_ui.random_seed_requested.connect(_on_ui_random_seed)
+	game_ui.end_turn_requested.connect(_on_end_turn)
 
 
 func _on_ui_regenerate(width: int, height: int, seed_val: int) -> void:
@@ -139,6 +141,18 @@ func _on_selection_changed(selected_ids: Array[int]) -> void:
 	# Could update UI here to show selected unit info
 
 
+func _on_end_turn() -> void:
+	if turn_manager:
+		turn_manager.end_turn()
+		_update_turn_display()
+		print(turn_manager.get_status())
+
+
+func _update_turn_display() -> void:
+	if game_ui and turn_manager:
+		game_ui.set_turn_status(turn_manager.get_status())
+
+
 func _setup_units() -> void:
 	# Create unit manager
 	unit_manager = UnitManager.new(grid)
@@ -163,11 +177,17 @@ func _setup_units() -> void:
 	hex_grid_node.add_child(path_renderer)
 	path_renderer.setup(grid)
 
+	# Setup turn manager (before selection manager so it can be passed)
+	turn_manager = TurnManager.new(unit_manager)
+	turn_manager.start_game()
+
 	# Setup selection manager
 	selection_manager = SelectionManager.new()
 	add_child(selection_manager)
-	selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer)
+	selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
 	selection_manager.selection_changed.connect(_on_selection_changed)
+
+	_update_turn_display()
 
 
 func _build_water() -> void:
@@ -254,9 +274,15 @@ func _regenerate_map() -> void:
 		# Update pathfinder
 		pathfinder = Pathfinder.new(grid, unit_manager)
 
+		# Update turn manager
+		turn_manager = TurnManager.new(unit_manager)
+		turn_manager.start_game()
+
 		if selection_manager:
 			selection_manager.clear_selection()
-			selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer)
+			selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
+
+		_update_turn_display()
 
 
 ## Get the hex cell at a world position (for raycasting)
@@ -307,6 +333,12 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	# Update pathfinder
 	pathfinder = Pathfinder.new(grid, unit_manager)
 
+	# Update turn manager
+	turn_manager = TurnManager.new(unit_manager)
+	turn_manager.start_game()
+
 	if selection_manager:
 		selection_manager.clear_selection()
-		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer)
+		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
+
+	_update_turn_display()

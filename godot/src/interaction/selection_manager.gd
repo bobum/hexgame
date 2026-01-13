@@ -11,6 +11,7 @@ var grid: HexGrid
 var camera: Camera3D
 var pathfinder: Pathfinder
 var path_renderer: PathRenderer
+var turn_manager: TurnManager
 
 # Selected unit IDs
 var selected_unit_ids: Dictionary = {}  # Set<int>
@@ -23,13 +24,14 @@ var box_select_start: Vector2 = Vector2.ZERO
 var selection_box: ColorRect
 
 
-func setup(p_unit_manager: UnitManager, p_unit_renderer: UnitRenderer, p_grid: HexGrid, p_camera: Camera3D, p_pathfinder: Pathfinder = null, p_path_renderer: PathRenderer = null) -> void:
+func setup(p_unit_manager: UnitManager, p_unit_renderer: UnitRenderer, p_grid: HexGrid, p_camera: Camera3D, p_pathfinder: Pathfinder = null, p_path_renderer: PathRenderer = null, p_turn_manager: TurnManager = null) -> void:
 	unit_manager = p_unit_manager
 	unit_renderer = p_unit_renderer
 	grid = p_grid
 	camera = p_camera
 	pathfinder = p_pathfinder
 	path_renderer = p_path_renderer
+	turn_manager = p_turn_manager
 
 
 func _input(event: InputEvent) -> void:
@@ -102,9 +104,18 @@ func _handle_right_click(screen_pos: Vector2) -> void:
 	if unit == null:
 		return
 
-	# Only move player's own units
-	if unit.player_id != 1:
-		return
+	# Check turn system - must be movement phase for current player's unit
+	if turn_manager:
+		if not turn_manager.can_move():
+			print("Not in movement phase")
+			return
+		if not turn_manager.is_current_player_unit(unit.player_id):
+			print("Not your turn")
+			return
+	else:
+		# Fallback: only move player 1's units
+		if unit.player_id != 1:
+			return
 
 	# Check if unit can move
 	if unit.movement <= 0:

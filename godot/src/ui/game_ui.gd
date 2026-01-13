@@ -5,6 +5,7 @@ extends Control
 
 signal regenerate_requested(width: int, height: int, seed_val: int)
 signal random_seed_requested
+signal end_turn_requested
 
 @onready var panel: PanelContainer = $Panel
 @onready var map_width_spin: SpinBox = $Panel/VBox/MapSection/GridContainer/WidthSpin
@@ -14,6 +15,11 @@ signal random_seed_requested
 @onready var cell_count_label: Label = $Panel/VBox/InfoSection/CellCountLabel
 @onready var hovered_label: Label = $Panel/VBox/InfoSection/HoveredLabel
 @onready var controls_label: Label = $Panel/VBox/ControlsSection/ControlsLabel
+
+# Turn system UI elements (added dynamically)
+var turn_section: VBoxContainer
+var turn_label: Label
+var end_turn_button: Button
 
 var main_node: Node3D
 
@@ -26,6 +32,9 @@ func _ready() -> void:
 
 	# Setup controls help text
 	controls_label.text = _get_controls_text()
+
+	# Create turn section UI
+	_create_turn_section()
 
 
 func _process(_delta: float) -> void:
@@ -83,3 +92,48 @@ Right Drag: Rotate
 Map Controls:
 Space: New Map
 G: Regenerate"""
+
+
+func _create_turn_section() -> void:
+	# Find the VBox in the panel
+	var vbox = $Panel/VBox
+
+	# Create turn section container
+	turn_section = VBoxContainer.new()
+	turn_section.name = "TurnSection"
+
+	# Add separator
+	var separator = HSeparator.new()
+	turn_section.add_child(separator)
+
+	# Add header label
+	var header = Label.new()
+	header.text = "Turn Info"
+	header.add_theme_font_size_override("font_size", 14)
+	turn_section.add_child(header)
+
+	# Add turn status label
+	turn_label = Label.new()
+	turn_label.text = "Turn 1 - Player (movement)"
+	turn_section.add_child(turn_label)
+
+	# Add End Turn button
+	end_turn_button = Button.new()
+	end_turn_button.text = "End Turn"
+	end_turn_button.pressed.connect(_on_end_turn_pressed)
+	turn_section.add_child(end_turn_button)
+
+	# Insert before controls section
+	var controls_section = vbox.get_node("ControlsSection")
+	var controls_idx = controls_section.get_index()
+	vbox.add_child(turn_section)
+	vbox.move_child(turn_section, controls_idx)
+
+
+func _on_end_turn_pressed() -> void:
+	end_turn_requested.emit()
+
+
+func set_turn_status(status: String) -> void:
+	if turn_label:
+		turn_label.text = status
