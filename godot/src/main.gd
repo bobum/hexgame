@@ -8,6 +8,8 @@ extends Node3D
 var grid: HexGrid
 var map_generator: MapGenerator
 var mesh_instance: MeshInstance3D
+var water_instance: MeshInstance3D
+var water_material: ShaderMaterial
 var current_seed: int = 0
 var game_ui: GameUI
 
@@ -84,8 +86,34 @@ func _build_terrain() -> void:
 	hex_grid_node.add_child(mesh_instance)
 	print("Terrain mesh added to scene")
 
+	# Build water
+	_build_water()
+
 	# Center camera on map
 	_center_camera()
+
+
+func _build_water() -> void:
+	var water_mesh = WaterRenderer.build_water_mesh(grid)
+	if water_mesh == null:
+		return
+
+	water_instance = MeshInstance3D.new()
+	water_instance.mesh = water_mesh
+
+	# Create animated water material
+	water_material = WaterRenderer.create_water_material()
+	water_instance.material_override = water_material
+
+	hex_grid_node.add_child(water_instance)
+	print("Water mesh added to scene")
+
+
+func _process(delta: float) -> void:
+	# Update water animation
+	if water_material:
+		var current_time = water_material.get_shader_parameter("time")
+		water_material.set_shader_parameter("time", current_time + delta)
 
 
 func _center_camera() -> void:
@@ -114,10 +142,14 @@ func _input(event: InputEvent) -> void:
 
 
 func _regenerate_map() -> void:
-	# Remove old mesh
+	# Remove old meshes
 	if mesh_instance:
 		mesh_instance.queue_free()
 		mesh_instance = null
+	if water_instance:
+		water_instance.queue_free()
+		water_instance = null
+		water_material = null
 
 	# Regenerate
 	map_generator.generate(grid, current_seed)
@@ -136,10 +168,14 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	map_height = height
 	current_seed = seed_val
 
-	# Remove old mesh
+	# Remove old meshes
 	if mesh_instance:
 		mesh_instance.queue_free()
 		mesh_instance = null
+	if water_instance:
+		water_instance.queue_free()
+		water_instance = null
+		water_material = null
 
 	# Reinitialize grid with new size
 	grid = HexGrid.new(map_width, map_height)
