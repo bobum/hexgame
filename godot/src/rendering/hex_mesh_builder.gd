@@ -35,13 +35,69 @@ func build_grid_mesh(grid: HexGrid) -> ArrayMesh:
 	return _create_mesh()
 
 
-## Build geometry for a single cell
+## Build geometry for a single cell (Catlike Coding pattern)
 func build_cell(cell: HexCell, grid: HexGrid) -> void:
 	var center = cell.get_world_position()
-	var base_color = cell.get_color()
+	var base_color = _vary_color(cell.get_color(), 0.08)
 
-	# Build FULL hexagon (not just solid center) to eliminate gaps
-	_build_full_hex(center, base_color)
+	# Gather all 6 neighbors and their colors
+	var neighbors: Array[HexCell] = []
+	var neighbor_colors: Array[Color] = []
+	neighbors.resize(6)
+	neighbor_colors.resize(6)
+
+	for dir in range(6):
+		var neighbor = grid.get_neighbor(cell, dir)
+		neighbors[dir] = neighbor
+		if neighbor:
+			neighbor_colors[dir] = _vary_color(neighbor.get_color(), 0.08)
+		else:
+			neighbor_colors[dir] = base_color
+
+	# 1. Build the solid center hexagon
+	_build_top_face(center, base_color)
+
+	# 2. Build edges for each direction
+	for dir in range(6):
+		var neighbor = neighbors[dir]
+		var edge_index = _get_edge_index_for_direction(dir)
+
+		if not neighbor:
+			# Map edge - build a cliff down
+			var wall_height = (cell.elevation + 3) * HexMetrics.ELEVATION_STEP
+			_build_cliff(center, edge_index, wall_height, base_color)
+		else:
+			var elevation_diff = cell.elevation - neighbor.elevation
+			var neighbor_center = neighbor.get_world_position()
+			var neighbor_color = neighbor_colors[dir]
+
+			if elevation_diff == 1:
+				# Single level slope - build terraces
+				_build_terraced_slope(center, neighbor_center, edge_index, base_color, neighbor_color)
+			elif elevation_diff > 1:
+				# Multi-level cliff
+				_build_flat_cliff(center, neighbor_center, edge_index, base_color, neighbor_color)
+			elif elevation_diff == 0 and dir <= 2:
+				# Same level - build flat edge bridge (only dirs 0-2 to avoid duplication)
+				_build_flat_edge(center, neighbor_center, edge_index, base_color, neighbor_color)
+
+		# 3. Build corners - disabled for now, using full hex tops instead
+		#if dir <= 1:
+		#	var prev_dir = (dir + 5) % 6
+		#	var prev_neighbor = neighbors[prev_dir]
+		#	if neighbor and prev_neighbor:
+		#		_build_corner(cell, center, base_color, dir, neighbor, prev_neighbor)
+		pass
+
+
+## Vary a color slightly for visual interest
+func _vary_color(color: Color, amount: float) -> Color:
+	var variation = randf_range(-amount, amount)
+	return Color(
+		clampf(color.r + variation, 0.0, 1.0),
+		clampf(color.g + variation, 0.0, 1.0),
+		clampf(color.b + variation, 0.0, 1.0)
+	)
 
 
 func _get_edge_index_for_direction(dir: int) -> int:
@@ -91,81 +147,95 @@ func _build_cliff(center: Vector3, edge_index: int, height: float, color: Color)
 	_add_triangle(top_left, top_right, bottom_right, wall_color)
 
 
-func _build_terraced_slope(center: Vector3, neighbor_center: Vector3, edge_index: int,
+func _build_terraced_slope(center: Vector3, neighbor_center: Vector3, _edge_index: int,
 		begin_color: Color, end_color: Color) -> void:
 	var solid = HexMetrics.SOLID_FACTOR
-	var c1 = corners[edge_index]
-	var c2 = corners[(edge_index + 1) % 6]
 
-	var top_left = Vector3(center.x + c1.x * solid, center.y, center.z + c1.z * solid)
-	var top_right = Vector3(center.x + c2.x * solid, center.y, center.z + c2.z * solid)
+	# Calculate edge direction and perpendicular
+	var to_neighbor = Vector3(neighbor_center.x - center.x, 0, neighbor_center.z - center.z)
+	var dist = to_neighbor.length()
+	var dir = to_neighbor / dist
+	var perp = Vector3(-dir.z, 0, dir.x)
 
-	var opposite_edge = (edge_index + 3) % 6
-	var oc1 = corners[opposite_edge]
-	var oc2 = corners[(opposite_edge + 1) % 6]
+	var edge_half_width = HexMetrics.OUTER_RADIUS * 0.5
 
-	var bottom_left = Vector3(neighbor_center.x + oc2.x * solid, neighbor_center.y, neighbor_center.z + oc2.z * solid)
-	var bottom_right = Vector3(neighbor_center.x + oc1.x * solid, neighbor_center.y, neighbor_center.z + oc1.z * solid)
+	# Top edge (my solid boundary toward neighbor)
+	var top_center = center + dir * HexMetrics.INNER_RADIUS * solid
+	top_center.y = center.y
+	var top_left = top_center - perp * edge_half_width
+	var top_right = top_center + perp * edge_half_width
 
-	# Build terraces
-	var v1 = top_left
-	var v2 = top_right
-	var c_current = begin_color
+	# Bottom edge (neighbor's solid boundary toward me)
+	var bottom_center = neighbor_center - dir * HexMetrics.INNER_RADIUS * solid
+	bottom_center.y = neighbor_center.y
+	var bottom_left = bottom_center - perp * edge_half_width
+	var bottom_right = bottom_center + perp * edge_half_width
 
-	for step in range(1, HexMetrics.get_terrace_steps() + 1):
-		var v3 = HexMetrics.terrace_lerp(top_left, bottom_left, step)
-		var v4 = HexMetrics.terrace_lerp(top_right, bottom_right, step)
-		var c_next = HexMetrics.terrace_color_lerp(begin_color, end_color, step)
-
-		var avg_color = c_current.lerp(c_next, 0.5)
-		_add_triangle_with_colors(v1, avg_color, v4, avg_color, v3, avg_color)
-		_add_triangle_with_colors(v1, avg_color, v2, avg_color, v4, avg_color)
-
-		v1 = v3
-		v2 = v4
-		c_current = c_next
+	# Simple flat slope (no terraces for now)
+	var blend_color = begin_color.lerp(end_color, 0.5)
+	_add_triangle(top_left, bottom_left, top_right, blend_color)
+	_add_triangle(top_right, bottom_left, bottom_right, blend_color)
 
 
-func _build_flat_cliff(center: Vector3, neighbor_center: Vector3, edge_index: int,
+func _build_flat_cliff(center: Vector3, neighbor_center: Vector3, _edge_index: int,
 		color: Color, neighbor_color: Color) -> void:
 	var solid = HexMetrics.SOLID_FACTOR
-	var c1 = corners[edge_index]
-	var c2 = corners[(edge_index + 1) % 6]
 
-	var v1 = Vector3(center.x + c1.x * solid, center.y, center.z + c1.z * solid)
-	var v2 = Vector3(center.x + c2.x * solid, center.y, center.z + c2.z * solid)
+	# Calculate edge direction and perpendicular
+	var to_neighbor = Vector3(neighbor_center.x - center.x, 0, neighbor_center.z - center.z)
+	var dist = to_neighbor.length()
+	var dir = to_neighbor / dist
+	var perp = Vector3(-dir.z, 0, dir.x)
 
-	var opposite_edge = (edge_index + 3) % 6
-	var oc1 = corners[opposite_edge]
-	var oc2 = corners[(opposite_edge + 1) % 6]
+	var edge_half_width = HexMetrics.OUTER_RADIUS * 0.5
 
-	var v3 = Vector3(neighbor_center.x + oc2.x * solid, neighbor_center.y, neighbor_center.z + oc2.z * solid)
-	var v4 = Vector3(neighbor_center.x + oc1.x * solid, neighbor_center.y, neighbor_center.z + oc1.z * solid)
+	# Top edge (my solid boundary)
+	var top_center = center + dir * HexMetrics.INNER_RADIUS * solid
+	top_center.y = center.y
+	var v1 = top_center - perp * edge_half_width
+	var v2 = top_center + perp * edge_half_width
+
+	# Bottom edge (neighbor's solid boundary)
+	var bottom_center = neighbor_center - dir * HexMetrics.INNER_RADIUS * solid
+	bottom_center.y = neighbor_center.y
+	var v3 = bottom_center - perp * edge_half_width
+	var v4 = bottom_center + perp * edge_half_width
 
 	var blend_color = color.lerp(neighbor_color, 0.5)
-	_add_triangle_with_colors(v1, blend_color, v2, blend_color, v4, blend_color)
-	_add_triangle_with_colors(v1, blend_color, v4, blend_color, v3, blend_color)
+	_add_triangle(v1, v3, v2, blend_color)
+	_add_triangle(v2, v3, v4, blend_color)
 
 
-func _build_flat_edge(center: Vector3, neighbor_center: Vector3, edge_index: int,
+func _build_flat_edge(center: Vector3, neighbor_center: Vector3, _edge_index: int,
 		color: Color, neighbor_color: Color) -> void:
 	var solid = HexMetrics.SOLID_FACTOR
-	var c1 = corners[edge_index]
-	var c2 = corners[(edge_index + 1) % 6]
 
-	var v1 = Vector3(center.x + c1.x * solid, center.y, center.z + c1.z * solid)
-	var v2 = Vector3(center.x + c2.x * solid, center.y, center.z + c2.z * solid)
+	# Calculate edge direction and perpendicular
+	var to_neighbor = Vector3(neighbor_center.x - center.x, 0, neighbor_center.z - center.z)
+	var dist = to_neighbor.length()
+	var dir = to_neighbor / dist
+	var perp = Vector3(-dir.z, 0, dir.x)  # Perpendicular in XZ plane
 
-	var opposite_edge = (edge_index + 3) % 6
-	var oc1 = corners[opposite_edge]
-	var oc2 = corners[(opposite_edge + 1) % 6]
+	# Edge half-width
+	var edge_half_width = HexMetrics.OUTER_RADIUS * 0.5
 
-	var v3 = Vector3(neighbor_center.x + oc2.x * solid, neighbor_center.y, neighbor_center.z + oc2.z * solid)
-	var v4 = Vector3(neighbor_center.x + oc1.x * solid, neighbor_center.y, neighbor_center.z + oc1.z * solid)
+	# My solid edge boundary (toward neighbor)
+	var my_edge_center = center + dir * HexMetrics.INNER_RADIUS * solid
+	my_edge_center.y = center.y
+	var v1 = my_edge_center - perp * edge_half_width  # My left
+	var v2 = my_edge_center + perp * edge_half_width  # My right
+
+	# Neighbor's solid edge boundary (toward me)
+	var neighbor_edge_center = neighbor_center - dir * HexMetrics.INNER_RADIUS * solid
+	neighbor_edge_center.y = neighbor_center.y
+	var v3 = neighbor_edge_center - perp * edge_half_width  # Neighbor left (aligns with v1)
+	var v4 = neighbor_edge_center + perp * edge_half_width  # Neighbor right (aligns with v2)
 
 	var blend_color = color.lerp(neighbor_color, 0.5)
-	_add_triangle_with_colors(v1, blend_color, v2, blend_color, v4, blend_color)
-	_add_triangle_with_colors(v1, blend_color, v4, blend_color, v3, blend_color)
+
+	# Build quad with CCW winding (v1-v2-v4, v1-v4-v3 but CCW)
+	_add_triangle(v1, v3, v2, blend_color)  # Bottom-left triangle
+	_add_triangle(v2, v3, v4, blend_color)  # Top-right triangle
 
 
 ## Build corner geometry where three hexes meet
@@ -456,12 +526,8 @@ func _add_triangle_with_colors(
 		(c1.b + c2.b + c3.b) / 3.0
 	)
 
-	# Godot uses CW winding for front faces when viewed from above
-	# Swap if normal points UP (need it to point down for correct front face)
-	if normal.y > 0:
-		_add_triangle(v1, v3, v2, avg_color)
-	else:
-		_add_triangle(v1, v2, v3, avg_color)
+	# Just add the triangle as-is - we'll disable culling in the material
+	_add_triangle(v1, v2, v3, avg_color)
 
 
 ## Add quad with per-vertex colors

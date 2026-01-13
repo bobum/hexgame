@@ -29,9 +29,9 @@ static func get_vertical_terrace_step_size() -> float:
 	return 1.0 / (TERRACES_PER_SLOPE + 1)
 
 
-# Blend regions
-const SOLID_FACTOR: float = 0.8  # Inner solid hex portion
-const BLEND_FACTOR: float = 0.2  # Outer blend portion
+# Blend regions (1.0 = no blend, hexes touch directly)
+const SOLID_FACTOR: float = 1.0  # Inner solid hex portion
+const BLEND_FACTOR: float = 0.0  # Outer blend portion
 
 
 ## Get the 6 corner positions for a hex (flat-topped, starting at 30 degrees)
