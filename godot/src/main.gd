@@ -48,6 +48,10 @@ func _setup_ui() -> void:
 	game_ui.regenerate_requested.connect(_on_ui_regenerate)
 	game_ui.random_seed_requested.connect(_on_ui_random_seed)
 	game_ui.end_turn_requested.connect(_on_end_turn)
+	game_ui.spawn_land_requested.connect(_on_spawn_land)
+	game_ui.spawn_naval_requested.connect(_on_spawn_naval)
+	game_ui.clear_units_requested.connect(_on_clear_units)
+	game_ui.noise_param_changed.connect(_on_noise_param_changed)
 
 
 func _on_ui_regenerate(width: int, height: int, seed_val: int) -> void:
@@ -141,6 +145,59 @@ func _on_selection_changed(selected_ids: Array[int]) -> void:
 	# Could update UI here to show selected unit info
 
 
+func _on_spawn_land(count: int) -> void:
+	if unit_manager:
+		var spawned = unit_manager.spawn_mixed_units(count, 0, 1)
+		print("Spawned %d land units" % spawned["land"])
+		if unit_renderer:
+			unit_renderer.setup(unit_manager, grid)
+			unit_renderer.build()
+		_update_unit_counts()
+
+
+func _on_spawn_naval(count: int) -> void:
+	if unit_manager:
+		var spawned = unit_manager.spawn_mixed_units(0, count, 1)
+		print("Spawned %d naval units" % spawned["naval"])
+		if unit_renderer:
+			unit_renderer.setup(unit_manager, grid)
+			unit_renderer.build()
+		_update_unit_counts()
+
+
+func _on_clear_units() -> void:
+	if unit_manager:
+		unit_manager.clear()
+		print("Cleared all units")
+		if unit_renderer:
+			unit_renderer.setup(unit_manager, grid)
+			unit_renderer.build()
+		if selection_manager:
+			selection_manager.clear_selection()
+		_update_unit_counts()
+
+
+func _update_unit_counts() -> void:
+	if game_ui and unit_manager:
+		var counts = unit_manager.get_unit_counts()
+		game_ui.set_unit_counts(counts["land"], counts["naval"])
+
+
+func _on_noise_param_changed(param: String, value: float) -> void:
+	if map_generator:
+		match param:
+			"noise_scale":
+				map_generator.noise_scale = value
+			"octaves":
+				map_generator.octaves = int(value)
+			"sea_level":
+				map_generator.sea_level = value
+			"mountain_level":
+				map_generator.mountain_level = value
+		# Regenerate with current settings
+		_regenerate_map()
+
+
 func _on_end_turn() -> void:
 	if turn_manager:
 		turn_manager.end_turn()
@@ -188,6 +245,7 @@ func _setup_units() -> void:
 	selection_manager.selection_changed.connect(_on_selection_changed)
 
 	_update_turn_display()
+	_update_unit_counts()
 
 
 func _build_water() -> void:
@@ -283,6 +341,7 @@ func _regenerate_map() -> void:
 			selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
 
 		_update_turn_display()
+		_update_unit_counts()
 
 
 ## Get the hex cell at a world position (for raycasting)
@@ -342,3 +401,4 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
 
 	_update_turn_display()
+	_update_unit_counts()

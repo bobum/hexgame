@@ -147,6 +147,18 @@ func get_unit_count() -> int:
 	return units.size()
 
 
+## Get counts by domain (land vs naval).
+func get_unit_counts() -> Dictionary:
+	var land = 0
+	var naval = 0
+	for unit in units.values():
+		if UnitTypes.get_domain(unit.type) == UnitTypes.Domain.NAVAL:
+			naval += 1
+		else:
+			land += 1
+	return {"land": land, "naval": naval}
+
+
 ## Clear all units.
 func clear() -> void:
 	units.clear()

@@ -10,6 +10,19 @@ var grid: HexGrid
 var sea_level: float = 0.35
 var mountain_level: float = 0.75
 
+# Noise parameters (exposed for UI)
+var noise_scale: float = 0.02:
+	set(val):
+		noise_scale = val
+		if noise:
+			noise.frequency = val
+
+var octaves: int = 4:
+	set(val):
+		octaves = val
+		if noise:
+			noise.fractal_octaves = val
+
 
 func _init() -> void:
 	noise = FastNoiseLite.new()
