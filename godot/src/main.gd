@@ -18,6 +18,7 @@ var game_ui: GameUI
 var unit_manager: UnitManager
 var unit_renderer: UnitRenderer
 var selection_manager: SelectionManager
+var pathfinder: Pathfinder
 
 # Map settings
 var map_width: int = 32
@@ -147,10 +148,13 @@ func _setup_units() -> void:
 	# Build unit meshes
 	unit_renderer.build()
 
+	# Setup pathfinder
+	pathfinder = Pathfinder.new(grid, unit_manager)
+
 	# Setup selection manager
 	selection_manager = SelectionManager.new()
 	add_child(selection_manager)
-	selection_manager.setup(unit_manager, unit_renderer, grid, camera)
+	selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder)
 	selection_manager.selection_changed.connect(_on_selection_changed)
 
 
@@ -235,9 +239,12 @@ func _regenerate_map() -> void:
 		if unit_renderer:
 			unit_renderer.setup(unit_manager, grid)
 			unit_renderer.build()
+		# Update pathfinder
+		pathfinder = Pathfinder.new(grid, unit_manager)
+
 		if selection_manager:
 			selection_manager.clear_selection()
-			selection_manager.setup(unit_manager, unit_renderer, grid, camera)
+			selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder)
 
 
 ## Get the hex cell at a world position (for raycasting)
@@ -284,6 +291,10 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	if unit_renderer:
 		unit_renderer.setup(unit_manager, grid)
 		unit_renderer.build()
+
+	# Update pathfinder
+	pathfinder = Pathfinder.new(grid, unit_manager)
+
 	if selection_manager:
 		selection_manager.clear_selection()
-		selection_manager.setup(unit_manager, unit_renderer, grid, camera)
+		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder)

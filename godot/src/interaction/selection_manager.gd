@@ -9,6 +9,7 @@ var unit_manager: UnitManager
 var unit_renderer: UnitRenderer
 var grid: HexGrid
 var camera: Camera3D
+var pathfinder: Pathfinder
 
 # Selected unit IDs
 var selected_unit_ids: Dictionary = {}  # Set<int>
@@ -21,11 +22,12 @@ var box_select_start: Vector2 = Vector2.ZERO
 var selection_box: ColorRect
 
 
-func setup(p_unit_manager: UnitManager, p_unit_renderer: UnitRenderer, p_grid: HexGrid, p_camera: Camera3D) -> void:
+func setup(p_unit_manager: UnitManager, p_unit_renderer: UnitRenderer, p_grid: HexGrid, p_camera: Camera3D, p_pathfinder: Pathfinder = null) -> void:
 	unit_manager = p_unit_manager
 	unit_renderer = p_unit_renderer
 	grid = p_grid
 	camera = p_camera
+	pathfinder = p_pathfinder
 
 
 func _input(event: InputEvent) -> void:
@@ -102,21 +104,49 @@ func _handle_right_click(screen_pos: Vector2) -> void:
 	if unit.player_id != 1:
 		return
 
+	# Check if unit can move
+	if unit.movement <= 0:
+		print("Unit has no movement left")
+		return
+
 	# Raycast to find target hex
 	var target_cell = _get_cell_at_screen_pos(screen_pos)
 	if target_cell == null:
 		return
 
-	# Check if unit can move there
-	var is_water = target_cell.elevation < 0
-	if is_water and not unit.can_traverse_water():
-		return
-	if not is_water and not unit.can_traverse_land():
+	# Get current cell
+	var start_cell = grid.get_cell(unit.q, unit.r)
+	if start_cell == null:
 		return
 
-	# Simple direct move (pathfinding will be added later)
-	if unit_manager.move_unit(unit_id, target_cell.q, target_cell.r, 1):
-		print("Moved unit %d to (%d, %d)" % [unit_id, target_cell.q, target_cell.r])
+	# Use pathfinding if available
+	if pathfinder != null:
+		var result = pathfinder.find_path(start_cell, target_cell, {
+			"unit_type": unit.type,
+			"max_cost": float(unit.movement)
+		})
+
+		if result["reachable"]:
+			var path: Array = result["path"]
+			var cost: float = result["cost"]
+
+			# Move along the path to the destination
+			if path.size() >= 2:
+				var end_cell = path[path.size() - 1]
+				if unit_manager.move_unit(unit_id, end_cell.q, end_cell.r, int(ceil(cost))):
+					print("Moved unit %d to (%d, %d) via %d cells, cost: %.1f" % [unit_id, end_cell.q, end_cell.r, path.size(), cost])
+		else:
+			print("No valid path to destination")
+	else:
+		# Fallback: Simple direct move (for testing)
+		var is_water = target_cell.elevation < 0
+		if is_water and not unit.can_traverse_water():
+			return
+		if not is_water and not unit.can_traverse_land():
+			return
+
+		if unit_manager.move_unit(unit_id, target_cell.q, target_cell.r, 1):
+			print("Moved unit %d to (%d, %d)" % [unit_id, target_cell.q, target_cell.r])
 
 
 func _start_box_select(screen_pos: Vector2) -> void:
