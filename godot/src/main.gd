@@ -51,6 +51,7 @@ func _setup_ui() -> void:
 	game_ui.end_turn_requested.connect(_on_end_turn)
 	game_ui.spawn_land_requested.connect(_on_spawn_land)
 	game_ui.spawn_naval_requested.connect(_on_spawn_naval)
+	game_ui.spawn_ai_requested.connect(_on_spawn_ai)
 	game_ui.clear_units_requested.connect(_on_clear_units)
 	game_ui.noise_param_changed.connect(_on_noise_param_changed)
 
@@ -163,6 +164,16 @@ func _on_spawn_naval(count: int) -> void:
 	if unit_manager:
 		var spawned = unit_manager.spawn_mixed_units(0, count, 1)
 		print("Spawned %d naval units" % spawned["naval"])
+		if unit_renderer:
+			unit_renderer.setup(unit_manager, grid)
+			unit_renderer.build()
+		_update_unit_counts()
+
+
+func _on_spawn_ai(land: int, naval: int) -> void:
+	if unit_manager:
+		var spawned = unit_manager.spawn_mixed_units(land, naval, 2)  # AI is player 2
+		print("Spawned %d land, %d naval AI units" % [spawned["land"], spawned["naval"]])
 		if unit_renderer:
 			unit_renderer.setup(unit_manager, grid)
 			unit_renderer.build()

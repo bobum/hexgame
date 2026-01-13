@@ -8,6 +8,7 @@ signal random_seed_requested
 signal end_turn_requested
 signal spawn_land_requested(count: int)
 signal spawn_naval_requested(count: int)
+signal spawn_ai_requested(land: int, naval: int)
 signal clear_units_requested
 signal noise_param_changed(param: String, value: float)
 
@@ -218,6 +219,12 @@ func _create_units_section() -> void:
 
 	units_section.add_child(spawn_hbox)
 
+	# Add AI spawn button
+	var spawn_ai_btn = Button.new()
+	spawn_ai_btn.text = "Spawn 10 AI"
+	spawn_ai_btn.pressed.connect(_on_spawn_ai_pressed)
+	units_section.add_child(spawn_ai_btn)
+
 	# Add clear button
 	var clear_btn = Button.new()
 	clear_btn.text = "Clear Units"
@@ -237,6 +244,10 @@ func _on_spawn_land_pressed() -> void:
 
 func _on_spawn_naval_pressed() -> void:
 	spawn_naval_requested.emit(5)
+
+
+func _on_spawn_ai_pressed() -> void:
+	spawn_ai_requested.emit(5, 5)  # 5 land, 5 naval for AI
 
 
 func _on_clear_units_pressed() -> void:
