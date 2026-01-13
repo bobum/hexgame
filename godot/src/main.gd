@@ -14,6 +14,10 @@ var hex_hover: HexHover
 var current_seed: int = 0
 var game_ui: GameUI
 
+# Unit system
+var unit_manager: UnitManager
+var unit_renderer: UnitRenderer
+
 # Map settings
 var map_width: int = 32
 var map_height: int = 32
@@ -69,6 +73,9 @@ func _initialize_game() -> void:
 	# Setup hover system
 	_setup_hover()
 
+	# Setup unit system
+	_setup_units()
+
 
 func _build_terrain() -> void:
 	# Create mesh builder and generate geometry
@@ -109,13 +116,30 @@ func _setup_hover() -> void:
 
 func _on_cell_hovered(cell: HexCell) -> void:
 	if game_ui:
-		var terrain_name = TerrainType.get_name(cell.terrain_type)
+		var terrain_name = TerrainType.get_terrain_name(cell.terrain_type)
 		game_ui.set_hovered_hex(cell.q, cell.r, terrain_name)
 
 
 func _on_cell_unhovered() -> void:
 	if game_ui:
 		game_ui.clear_hovered_hex()
+
+
+func _setup_units() -> void:
+	# Create unit manager
+	unit_manager = UnitManager.new(grid)
+
+	# Create unit renderer
+	unit_renderer = UnitRenderer.new()
+	hex_grid_node.add_child(unit_renderer)
+	unit_renderer.setup(unit_manager, grid)
+
+	# Spawn some test units
+	var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
+	print("Spawned %d land units, %d naval units" % [spawned["land"], spawned["naval"]])
+
+	# Build unit meshes
+	unit_renderer.build()
 
 
 func _build_water() -> void:
@@ -139,6 +163,10 @@ func _process(delta: float) -> void:
 	if water_material:
 		var current_time = water_material.get_shader_parameter("time")
 		water_material.set_shader_parameter("time", current_time + delta)
+
+	# Update unit renderer
+	if unit_renderer:
+		unit_renderer.update()
 
 
 func _center_camera() -> void:
@@ -176,6 +204,10 @@ func _regenerate_map() -> void:
 		water_instance = null
 		water_material = null
 
+	# Clear units
+	if unit_manager:
+		unit_manager.clear()
+
 	# Regenerate
 	map_generator.generate(grid, current_seed)
 	_build_terrain()
@@ -183,6 +215,14 @@ func _regenerate_map() -> void:
 	# Update hover with new grid
 	if hex_hover:
 		hex_hover.setup(grid, camera)
+
+	# Respawn units
+	if unit_manager:
+		var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
+		print("Respawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
+		if unit_renderer:
+			unit_renderer.setup(unit_manager, grid)
+			unit_renderer.build()
 
 
 ## Get the hex cell at a world position (for raycasting)
@@ -206,6 +246,10 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 		water_instance = null
 		water_material = null
 
+	# Clear units
+	if unit_manager:
+		unit_manager.clear()
+
 	# Reinitialize grid with new size
 	grid = HexGrid.new(map_width, map_height)
 	grid.initialize()
@@ -217,3 +261,11 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	# Update hover with new grid
 	if hex_hover:
 		hex_hover.setup(grid, camera)
+
+	# Setup new unit manager with new grid
+	unit_manager = UnitManager.new(grid)
+	var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
+	print("Spawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
+	if unit_renderer:
+		unit_renderer.setup(unit_manager, grid)
+		unit_renderer.build()

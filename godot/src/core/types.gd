@@ -43,7 +43,7 @@ static func is_water(terrain: Type) -> bool:
 	return terrain == Type.OCEAN or terrain == Type.COAST
 
 
-static func get_name(terrain: Type) -> String:
+static func get_terrain_name(terrain: Type) -> String:
 	match terrain:
 		Type.OCEAN: return "Ocean"
 		Type.COAST: return "Coast"
