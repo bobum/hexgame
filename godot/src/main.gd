@@ -17,6 +17,7 @@ var game_ui: GameUI
 # Unit system
 var unit_manager: UnitManager
 var unit_renderer: UnitRenderer
+var selection_manager: SelectionManager
 
 # Map settings
 var map_width: int = 32
@@ -125,6 +126,11 @@ func _on_cell_unhovered() -> void:
 		game_ui.clear_hovered_hex()
 
 
+func _on_selection_changed(selected_ids: Array[int]) -> void:
+	print("Selection changed: %d units selected" % selected_ids.size())
+	# Could update UI here to show selected unit info
+
+
 func _setup_units() -> void:
 	# Create unit manager
 	unit_manager = UnitManager.new(grid)
@@ -140,6 +146,12 @@ func _setup_units() -> void:
 
 	# Build unit meshes
 	unit_renderer.build()
+
+	# Setup selection manager
+	selection_manager = SelectionManager.new()
+	add_child(selection_manager)
+	selection_manager.setup(unit_manager, unit_renderer, grid, camera)
+	selection_manager.selection_changed.connect(_on_selection_changed)
 
 
 func _build_water() -> void:
@@ -223,6 +235,9 @@ func _regenerate_map() -> void:
 		if unit_renderer:
 			unit_renderer.setup(unit_manager, grid)
 			unit_renderer.build()
+		if selection_manager:
+			selection_manager.clear_selection()
+			selection_manager.setup(unit_manager, unit_renderer, grid, camera)
 
 
 ## Get the hex cell at a world position (for raycasting)
@@ -269,3 +284,6 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	if unit_renderer:
 		unit_renderer.setup(unit_manager, grid)
 		unit_renderer.build()
+	if selection_manager:
+		selection_manager.clear_selection()
+		selection_manager.setup(unit_manager, unit_renderer, grid, camera)
