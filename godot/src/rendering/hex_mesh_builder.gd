@@ -24,14 +24,20 @@ func reset() -> void:
 	vertex_index = 0
 
 
+var _corner_count: int = 0
+var _edge_count: int = 0
+
 ## Build mesh for entire grid
 func build_grid_mesh(grid: HexGrid) -> ArrayMesh:
 	reset()
+	_corner_count = 0
+	_edge_count = 0
 
 	for cell in grid.get_all_cells():
 		build_cell(cell, grid)
 
 	print("Built mesh: %d vertices, %d triangles" % [vertices.size(), vertices.size() / 3])
+	print("Built %d edges, %d corners" % [_edge_count, _corner_count])
 	return _create_mesh()
 
 
@@ -125,6 +131,20 @@ func _get_edge_index_for_direction(dir: int) -> int:
 	return dir_to_edge[dir]
 
 
+## Get the corner index of neighbor that touches the shared corner
+## For dir=0: neighbor1 (NE) corner=2, neighbor2 (NW, prev_dir=5) corner=4
+## For dir=1: neighbor1 (E) corner=1, neighbor2 (NE, prev_dir=0) corner=3
+func _get_neighbor_corner_index(dir: int, is_prev_neighbor: bool = false) -> int:
+	if dir == 0:
+		return 4 if is_prev_neighbor else 2
+	elif dir == 1:
+		return 3 if is_prev_neighbor else 1
+	elif dir == 5:  # prev_dir for dir=0
+		return 4
+	else:  # dir == 0 as prev_dir for dir=1
+		return 3
+
+
 ## Build full hexagon at full radius (no solid/blend regions)
 func _build_full_hex(center: Vector3, color: Color) -> void:
 	for i in range(6):
@@ -169,6 +189,7 @@ func _build_cliff(center: Vector3, edge_index: int, height: float, color: Color)
 
 func _build_terraced_slope(center: Vector3, neighbor_center: Vector3, edge_index: int,
 		begin_color: Color, end_color: Color) -> void:
+	_edge_count += 1
 	var solid = HexMetrics.SOLID_FACTOR
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
@@ -236,6 +257,7 @@ func _build_terraced_slope(center: Vector3, neighbor_center: Vector3, edge_index
 
 func _build_flat_cliff(center: Vector3, neighbor_center: Vector3, edge_index: int,
 		color: Color, neighbor_color: Color) -> void:
+	_edge_count += 1
 	var solid = HexMetrics.SOLID_FACTOR
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
@@ -260,6 +282,7 @@ func _build_flat_cliff(center: Vector3, neighbor_center: Vector3, edge_index: in
 
 func _build_flat_edge(center: Vector3, neighbor_center: Vector3, edge_index: int,
 		color: Color, neighbor_color: Color) -> void:
+	_edge_count += 1
 	var solid = HexMetrics.SOLID_FACTOR
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
@@ -287,10 +310,11 @@ func _build_flat_edge(center: Vector3, neighbor_center: Vector3, edge_index: int
 ## Build corner geometry where three hexes meet
 func _build_corner(cell: HexCell, center: Vector3, color: Color, dir: int,
 		neighbor1: HexCell, neighbor2: HexCell) -> void:
+	_corner_count += 1
 	var solid = HexMetrics.SOLID_FACTOR
 	var edge_index = _get_edge_index_for_direction(dir)
 
-	# The shared corner position P (at full radius)
+	# The shared corner position P (at full radius) - where all three cells meet
 	var corner_idx = (edge_index + 1) % 6
 	var corner_offset = corners[corner_idx]
 	var P = Vector3(center.x + corner_offset.x, 0, center.z + corner_offset.z)
@@ -300,16 +324,20 @@ func _build_corner(cell: HexCell, center: Vector3, color: Color, dir: int,
 	var n2_center = neighbor2.get_world_position()
 
 	# Calculate solid corner vertices for each cell
+	# Each vertex is solid% of the way from cell center toward the shared corner P
 	var v1 = Vector3(
 		center.x + corner_offset.x * solid,
 		center.y,
 		center.z + corner_offset.z * solid
 	)
+
+	# For neighbors, calculate direction from their center to P, then scale by solid
 	var v2 = Vector3(
 		n1_center.x + (P.x - n1_center.x) * solid,
 		n1_center.y,
 		n1_center.z + (P.z - n1_center.z) * solid
 	)
+
 	var v3 = Vector3(
 		n2_center.x + (P.x - n2_center.x) * solid,
 		n2_center.y,
@@ -556,7 +584,7 @@ func _triangulate_boundary_triangle(
 	_add_triangle_with_colors(v2, c2, left, left_color, boundary, boundary_color)
 
 
-## Add triangle with per-vertex colors (auto-corrects winding for Godot)
+## Add triangle with per-vertex colors (auto-corrects winding for upward normal)
 func _add_triangle_with_colors(
 		v1: Vector3, c1: Color,
 		v2: Vector3, c2: Color,
@@ -572,8 +600,11 @@ func _add_triangle_with_colors(
 		(c1.b + c2.b + c3.b) / 3.0
 	)
 
-	# Just add the triangle as-is - we'll disable culling in the material
-	_add_triangle(v1, v2, v3, avg_color)
+	# Ensure upward-facing normal by reversing winding if needed
+	if normal.y < 0:
+		_add_triangle(v1, v3, v2, avg_color)
+	else:
+		_add_triangle(v1, v2, v3, avg_color)
 
 
 ## Add quad with per-vertex colors

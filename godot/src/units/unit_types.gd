@@ -110,3 +110,13 @@ static func get_land_types() -> Array[Type]:
 
 static func get_naval_types() -> Array[Type]:
 	return [Type.GALLEY, Type.WARSHIP]
+
+
+static func is_naval(unit_type: Type) -> bool:
+	var domain = get_domain(unit_type)
+	return domain == Domain.NAVAL
+
+
+static func is_amphibious(unit_type: Type) -> bool:
+	var domain = get_domain(unit_type)
+	return domain == Domain.AMPHIBIOUS

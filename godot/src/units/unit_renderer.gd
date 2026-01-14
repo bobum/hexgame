@@ -147,8 +147,14 @@ func _create_type_multimesh(unit_type: UnitTypes.Type, units: Array, mesh: Mesh,
 		var cell = grid.get_cell(unit.q, unit.r)
 		var world_pos = unit.get_world_position()
 		var elevation = cell.elevation if cell else 0
-		# Position unit slightly above terrain
-		world_pos.y = elevation * HexMetrics.ELEVATION_STEP + 0.25
+
+		# Naval units float on water surface, land units on terrain
+		# Amphibious units use water surface when in water, terrain when on land
+		var is_on_water = cell != null and cell.elevation < HexMetrics.WATER_LEVEL
+		if UnitTypes.is_naval(unit.type) or (UnitTypes.is_amphibious(unit.type) and is_on_water):
+			world_pos.y = 0.1  # Water surface + slight offset
+		else:
+			world_pos.y = elevation * HexMetrics.ELEVATION_STEP + 0.25
 
 		# Create transform
 		var transform = Transform3D()

@@ -14,118 +14,23 @@ script = ExtResource("1_ui")
 
 [node name="Panel" type="PanelContainer" parent="."]
 layout_mode = 1
-anchors_preset = 1
 anchor_left = 1.0
+anchor_top = 0.0
 anchor_right = 1.0
-offset_left = -250.0
+anchor_bottom = 1.0
+offset_left = -260.0
 offset_top = 10.0
 offset_right = -10.0
-offset_bottom = 500.0
+offset_bottom = -10.0
+grow_horizontal = 0
 
-[node name="VBox" type="VBoxContainer" parent="Panel"]
-layout_mode = 2
-
-[node name="TitleLabel" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-text = "HexGame Controls"
-horizontal_alignment = 1
-
-[node name="HSeparator" type="HSeparator" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="MapSection" type="VBoxContainer" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="MapLabel" type="Label" parent="Panel/VBox/MapSection"]
-layout_mode = 2
-text = "Map Generation"
-theme_override_font_sizes/font_size = 14
-
-[node name="GridContainer" type="GridContainer" parent="Panel/VBox/MapSection"]
-layout_mode = 2
-columns = 2
-
-[node name="WidthLabel" type="Label" parent="Panel/VBox/MapSection/GridContainer"]
-layout_mode = 2
-text = "Width:"
-
-[node name="WidthSpin" type="SpinBox" parent="Panel/VBox/MapSection/GridContainer"]
-layout_mode = 2
-min_value = 10.0
-max_value = 80.0
-value = 32.0
-
-[node name="HeightLabel" type="Label" parent="Panel/VBox/MapSection/GridContainer"]
-layout_mode = 2
-text = "Height:"
-
-[node name="HeightSpin" type="SpinBox" parent="Panel/VBox/MapSection/GridContainer"]
-layout_mode = 2
-min_value = 10.0
-max_value = 60.0
-value = 32.0
-
-[node name="SeedLabel" type="Label" parent="Panel/VBox/MapSection/GridContainer"]
-layout_mode = 2
-text = "Seed:"
-
-[node name="SeedSpin" type="SpinBox" parent="Panel/VBox/MapSection/GridContainer"]
-layout_mode = 2
-min_value = 1.0
-max_value = 99999.0
-value = 12345.0
-
-[node name="ButtonsHBox" type="HBoxContainer" parent="Panel/VBox/MapSection"]
-layout_mode = 2
-
-[node name="RegenerateBtn" type="Button" parent="Panel/VBox/MapSection/ButtonsHBox"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Regenerate"
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
-[node name="RandomSeedBtn" type="Button" parent="Panel/VBox/MapSection/ButtonsHBox"]
+[node name="VBox" type="VBoxContainer" parent="Panel/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Random"
-
-[node name="HSeparator2" type="HSeparator" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="InfoSection" type="VBoxContainer" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="InfoLabel" type="Label" parent="Panel/VBox/InfoSection"]
-layout_mode = 2
-text = "Info"
-theme_override_font_sizes/font_size = 14
-
-[node name="FPSLabel" type="Label" parent="Panel/VBox/InfoSection"]
-layout_mode = 2
-text = "FPS: 60"
-
-[node name="CellCountLabel" type="Label" parent="Panel/VBox/InfoSection"]
-layout_mode = 2
-text = "Cells: 1024"
-
-[node name="HoveredLabel" type="Label" parent="Panel/VBox/InfoSection"]
-layout_mode = 2
-text = "Hovered: None"
-
-[node name="HSeparator3" type="HSeparator" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="ControlsSection" type="VBoxContainer" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="ControlsTitleLabel" type="Label" parent="Panel/VBox/ControlsSection"]
-layout_mode = 2
-text = "Controls"
-theme_override_font_sizes/font_size = 14
-
-[node name="ControlsLabel" type="Label" parent="Panel/VBox/ControlsSection"]
-layout_mode = 2
-text = "Loading..."
-theme_override_font_sizes/font_size = 11
-
-[connection signal="pressed" from="Panel/VBox/MapSection/ButtonsHBox/RegenerateBtn" to="." method="_on_regenerate_pressed"]
-[connection signal="pressed" from="Panel/VBox/MapSection/ButtonsHBox/RandomSeedBtn" to="." method="_on_random_seed_pressed"]
+size_flags_vertical = 3
