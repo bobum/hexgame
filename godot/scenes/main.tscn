@@ -11,10 +11,11 @@ ambient_light_color = Color(0.8, 0.85, 0.9, 1)
 ambient_light_energy = 0.3
 tonemap_mode = 2
 fog_enabled = true
-fog_mode = 0
+fog_mode = 1
 fog_light_color = Color(0.6, 0.75, 0.85, 1)
 fog_light_energy = 1.0
-fog_density = 0.022
+fog_depth_begin = 20.0
+fog_depth_end = 50.0
 fog_sky_affect = 0.5
 
 [node name="Main" type="Node3D"]
