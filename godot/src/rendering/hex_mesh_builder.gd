@@ -600,8 +600,9 @@ func _add_triangle_with_colors(
 		(c1.b + c2.b + c3.b) / 3.0
 	)
 
-	# Ensure upward-facing normal by reversing winding if needed
-	if normal.y < 0:
+	# Godot needs opposite winding from Three.js
+	# Reverse when normal points UP (opposite of Three.js logic)
+	if normal.y > 0:
 		_add_triangle(v1, v3, v2, avg_color)
 	else:
 		_add_triangle(v1, v2, v3, avg_color)
@@ -625,9 +626,21 @@ func _add_quad_with_colors(
 
 
 func _add_triangle(v1: Vector3, v2: Vector3, v3: Vector3, color: Color) -> void:
-	vertices.append(v1)
-	vertices.append(v2)
-	vertices.append(v3)
+	# Calculate normal to determine correct winding for Godot
+	var edge1 = v2 - v1
+	var edge2 = v3 - v1
+	var normal = edge1.cross(edge2)
+
+	# Godot needs opposite winding from Three.js for cull_back to work correctly
+	# Reverse when normal points UP (y > 0)
+	if normal.y > 0:
+		vertices.append(v1)
+		vertices.append(v3)
+		vertices.append(v2)
+	else:
+		vertices.append(v1)
+		vertices.append(v2)
+		vertices.append(v3)
 
 	colors.append(color)
 	colors.append(color)

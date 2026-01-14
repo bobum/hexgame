@@ -63,9 +63,10 @@ func _process(_delta: float) -> void:
 
 
 func _build_ui() -> void:
-	# Title
+	# Title with instance ID for debugging
+	var instance_id = "%04X" % (randi() % 0xFFFF)
 	var title = Label.new()
-	title.text = "HexGame Controls"
+	title.text = "HexGame [%s]" % instance_id
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 16)
 	main_vbox.add_child(title)

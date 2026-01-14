@@ -321,15 +321,41 @@ func _get_cell_at_screen_pos(screen_pos: Vector2) -> HexCell:
 	var ray_origin = camera.project_ray_origin(screen_pos)
 	var ray_dir = camera.project_ray_normal(screen_pos)
 
-	# Intersect with ground plane (y = 0)
-	if abs(ray_dir.y) > 0.001:
+	if abs(ray_dir.y) < 0.001:
+		return null
+
+	# Raycast against multiple elevation levels to find the actual terrain surface
+	# Check from highest to lowest elevation to find the first valid intersection
+	var best_cell: HexCell = null
+	var best_distance: float = INF
+
+	for elev in range(HexMetrics.MAX_ELEVATION, HexMetrics.MIN_ELEVATION - 1, -1):
+		var plane_y = elev * HexMetrics.ELEVATION_STEP
+		var t = (plane_y - ray_origin.y) / ray_dir.y
+
+		if t <= 0:
+			continue  # Behind camera
+
+		var hit_point = ray_origin + ray_dir * t
+		var coords = HexCoordinates.from_world_position(hit_point)
+		var cell = grid.get_cell(coords.q, coords.r)
+
+		if cell and cell.elevation == elev:
+			# Found a cell at this elevation
+			if t < best_distance:
+				best_distance = t
+				best_cell = cell
+				break  # First valid hit from high to low is closest
+
+	# Fallback to water level if no elevated cell found
+	if best_cell == null:
 		var t = -ray_origin.y / ray_dir.y
 		if t > 0:
 			var hit_point = ray_origin + ray_dir * t
 			var coords = HexCoordinates.from_world_position(hit_point)
-			return grid.get_cell(coords.q, coords.r)
+			best_cell = grid.get_cell(coords.q, coords.r)
 
-	return null
+	return best_cell
 
 
 func clear_selection() -> void:

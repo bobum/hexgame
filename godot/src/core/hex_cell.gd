@@ -16,7 +16,7 @@ var river_directions: Array[int] = []  # Which edges have rivers
 
 # Feature data
 var has_road: bool = false
-var feature_type: int = 0  # Trees, rocks, etc.
+var features: Array = []  # Trees, rocks, etc. (Feature objects)
 
 
 ## Get world position of this cell's center

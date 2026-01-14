@@ -37,13 +37,24 @@ var smoothing: float = 10.0
 
 func _ready() -> void:
 	target_position = target
+	far = 200.0
 	_update_camera_position()
+	_update_near_plane()
 
 
 func _process(delta: float) -> void:
 	_handle_keyboard_input(delta)
 	_apply_smoothing(delta)
 	_update_camera_position()
+	_update_near_plane()
+
+
+func _update_near_plane() -> void:
+	# Dynamic near plane: closer when zoomed in, farther when zoomed out
+	# This balances depth precision vs not clipping close terrain
+	# At min_zoom (5), near = 0.5; at max_zoom (80), near = 4.0
+	var t = (distance - min_zoom) / (max_zoom - min_zoom)
+	near = lerp(0.5, 4.0, t)
 
 
 func _unhandled_input(event: InputEvent) -> void:
