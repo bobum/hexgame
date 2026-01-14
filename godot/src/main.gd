@@ -7,7 +7,8 @@ extends Node3D
 
 var grid: HexGrid
 var map_generator: MapGenerator
-var mesh_instance: MeshInstance3D
+var chunked_terrain: ChunkedTerrainRenderer
+var feature_renderer: FeatureRenderer
 var water_instance: MeshInstance3D
 var water_material: ShaderMaterial
 var river_renderer: EdgeRiverRenderer
@@ -81,6 +82,9 @@ func _initialize_game() -> void:
 	# Build and display terrain mesh
 	_build_terrain()
 
+	# Build features (trees, rocks)
+	_build_features()
+
 	# Setup hover system
 	_setup_hover()
 
@@ -89,24 +93,10 @@ func _initialize_game() -> void:
 
 
 func _build_terrain() -> void:
-	# Create mesh builder and generate geometry
-	var builder = HexMeshBuilder.new()
-	var mesh = builder.build_grid_mesh(grid)
-
-	# Create mesh instance
-	mesh_instance = MeshInstance3D.new()
-	mesh_instance.mesh = mesh
-
-	# Create material with vertex colors
-	var material = StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Render both sides
-	mesh_instance.material_override = material
-
-	# Add to scene
-	hex_grid_node.add_child(mesh_instance)
-	print("Terrain mesh added to scene")
+	# Create chunked terrain renderer
+	chunked_terrain = ChunkedTerrainRenderer.new()
+	hex_grid_node.add_child(chunked_terrain)
+	chunked_terrain.build(grid)
 
 	# Build water
 	_build_water()
@@ -275,6 +265,17 @@ func _setup_units() -> void:
 	_update_unit_counts()
 
 
+func _build_features() -> void:
+	# Remove old features
+	if feature_renderer:
+		feature_renderer.queue_free()
+		feature_renderer = null
+
+	feature_renderer = FeatureRenderer.new()
+	hex_grid_node.add_child(feature_renderer)
+	feature_renderer.build(grid)
+
+
 func _build_water() -> void:
 	var water_mesh = WaterRenderer.build_water_mesh(grid)
 	if water_mesh == null:
@@ -317,6 +318,10 @@ func _process(delta: float) -> void:
 	if river_renderer:
 		river_renderer.update(delta)
 
+	# Update terrain visibility and LOD based on camera
+	if chunked_terrain and camera:
+		chunked_terrain.update(camera)
+
 
 func _center_camera() -> void:
 	# Calculate map center
@@ -344,10 +349,11 @@ func _input(event: InputEvent) -> void:
 
 
 func _regenerate_map() -> void:
-	# Remove old meshes
-	if mesh_instance:
-		mesh_instance.queue_free()
-		mesh_instance = null
+	# Remove old terrain
+	if chunked_terrain:
+		chunked_terrain.dispose()
+		chunked_terrain.queue_free()
+		chunked_terrain = null
 	if water_instance:
 		water_instance.queue_free()
 		water_instance = null
@@ -355,6 +361,9 @@ func _regenerate_map() -> void:
 	if river_renderer:
 		river_renderer.queue_free()
 		river_renderer = null
+	if feature_renderer:
+		feature_renderer.queue_free()
+		feature_renderer = null
 
 	# Clear units
 	if unit_manager:
@@ -363,6 +372,7 @@ func _regenerate_map() -> void:
 	# Regenerate
 	map_generator.generate(grid, current_seed)
 	_build_terrain()
+	_build_features()
 
 	# Update hover with new grid
 	if hex_hover:
@@ -402,10 +412,11 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	map_height = height
 	current_seed = seed_val
 
-	# Remove old meshes
-	if mesh_instance:
-		mesh_instance.queue_free()
-		mesh_instance = null
+	# Remove old terrain
+	if chunked_terrain:
+		chunked_terrain.dispose()
+		chunked_terrain.queue_free()
+		chunked_terrain = null
 	if water_instance:
 		water_instance.queue_free()
 		water_instance = null
@@ -413,6 +424,9 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	if river_renderer:
 		river_renderer.queue_free()
 		river_renderer = null
+	if feature_renderer:
+		feature_renderer.queue_free()
+		feature_renderer = null
 
 	# Clear units
 	if unit_manager:
@@ -425,6 +439,7 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	# Generate and build
 	map_generator.generate(grid, current_seed)
 	_build_terrain()
+	_build_features()
 
 	# Update hover with new grid
 	if hex_hover:

@@ -37,6 +37,9 @@ var smoothing: float = 10.0
 
 func _ready() -> void:
 	target_position = target
+	# Increase near plane to reduce z-fighting at medium distances
+	near = 0.5
+	far = 500.0
 	_update_camera_position()
 
 

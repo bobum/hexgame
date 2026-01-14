@@ -3,6 +3,8 @@ extends RefCounted
 ## Procedural map generation using noise
 ## Matches web/src/generation/MapGenerator.ts
 
+const FeatureClass = preload("res://src/core/feature.gd")
+
 var noise: FastNoiseLite
 var grid: HexGrid
 var river_generator: RiverGenerator
@@ -65,6 +67,9 @@ func generate(hex_grid: HexGrid, seed_val: int = 0) -> void:
 
 	# Generate rivers
 	_generate_rivers(seed_val)
+
+	# Generate features (trees, rocks)
+	_generate_features(seed_val)
 
 
 func _generate_elevation() -> void:
@@ -137,3 +142,90 @@ func _generate_rivers(seed_val: int) -> void:
 		river_count += cell.river_directions.size()
 	if river_count > 0:
 		print("Generated %d river segments" % river_count)
+
+
+func _generate_features(seed_val: int) -> void:
+	var rng = RandomNumberGenerator.new()
+	rng.seed = seed_val + 2000
+
+	var tree_count = 0
+	var rock_count = 0
+
+	for cell in grid.get_all_cells():
+		# Skip water cells
+		if cell.is_underwater():
+			continue
+
+		# Skip cells with rivers
+		if cell.has_river:
+			continue
+
+		# Feature density based on terrain type
+		var tree_chance = 0.0
+		var rock_chance = 0.0
+
+		match cell.terrain_type:
+			TerrainType.Type.FOREST:
+				tree_chance = 0.7
+				rock_chance = 0.1
+			TerrainType.Type.JUNGLE:
+				tree_chance = 0.85
+				rock_chance = 0.05
+			TerrainType.Type.PLAINS:
+				tree_chance = 0.15
+				rock_chance = 0.1
+			TerrainType.Type.SAVANNA:
+				tree_chance = 0.1
+				rock_chance = 0.15
+			TerrainType.Type.HILLS:
+				tree_chance = 0.2
+				rock_chance = 0.3
+			TerrainType.Type.MOUNTAINS:
+				tree_chance = 0.05
+				rock_chance = 0.4
+			TerrainType.Type.DESERT:
+				rock_chance = 0.2
+			TerrainType.Type.SNOW:
+				rock_chance = 0.15
+
+		# Generate features
+		var center = cell.get_world_position()
+
+		# Try to place trees
+		if tree_chance > 0 and rng.randf() < tree_chance:
+			var num_trees = rng.randi_range(1, 3)
+			for _i in range(num_trees):
+				var offset = Vector3(
+					rng.randf_range(-0.3, 0.3),
+					0,
+					rng.randf_range(-0.3, 0.3)
+				)
+				var feature = FeatureClass.new(
+					FeatureClass.Type.TREE,
+					center + offset,
+					rng.randf() * TAU,
+					rng.randf_range(0.8, 1.2)
+				)
+				cell.features.append(feature)
+				tree_count += 1
+
+		# Try to place rocks
+		if rock_chance > 0 and rng.randf() < rock_chance:
+			var num_rocks = rng.randi_range(1, 2)
+			for _i in range(num_rocks):
+				var offset = Vector3(
+					rng.randf_range(-0.35, 0.35),
+					0,
+					rng.randf_range(-0.35, 0.35)
+				)
+				var feature = FeatureClass.new(
+					FeatureClass.Type.ROCK,
+					center + offset,
+					rng.randf() * TAU,
+					rng.randf_range(0.6, 1.4)
+				)
+				cell.features.append(feature)
+				rock_count += 1
+
+	if tree_count > 0 or rock_count > 0:
+		print("Generated %d trees, %d rocks" % [tree_count, rock_count])
