@@ -45,6 +45,16 @@ func get_neighbor(cell: HexCell, direction: int) -> HexCell:
 	return get_cell(cell.q + offset.x, cell.r + offset.y)
 
 
+## Get all valid neighbors of a cell
+func get_neighbors(cell: HexCell) -> Array[HexCell]:
+	var neighbors: Array[HexCell] = []
+	for dir in range(6):
+		var neighbor = get_neighbor(cell, dir)
+		if neighbor != null:
+			neighbors.append(neighbor)
+	return neighbors
+
+
 ## Check if coordinates are within bounds
 func is_valid(q: int, r: int) -> bool:
 	return q >= 0 and q < width and r >= 0 and r < height

@@ -13,13 +13,14 @@ enum Direction {
 }
 
 # Axial coordinate offsets for each direction (q, r)
+# Must match web/src/core/HexDirection.ts DirectionOffsets
 const OFFSETS: Array[Vector2i] = [
-	Vector2i(1, -1),   # NE
-	Vector2i(1, 0),    # E
-	Vector2i(0, 1),    # SE
-	Vector2i(-1, 1),   # SW
-	Vector2i(-1, 0),   # W
-	Vector2i(0, -1)    # NW
+	Vector2i(1, 0),    # NE: q+1, r+0
+	Vector2i(1, -1),   # E:  q+1, r-1
+	Vector2i(0, -1),   # SE: q+0, r-1
+	Vector2i(-1, 0),   # SW: q-1, r+0
+	Vector2i(-1, 1),   # W:  q-1, r+1
+	Vector2i(0, 1)     # NW: q+0, r+1
 ]
 
 
