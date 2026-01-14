@@ -12,6 +12,9 @@ const MAX_RENDER_DISTANCE: float = 50.0  # Should match fog density for smooth f
 const LOD_HIGH_TO_MEDIUM: float = 25.0
 const LOD_MEDIUM_TO_LOW: float = 45.0
 
+# Base Y level for skirts - below minimum terrain elevation
+const SKIRT_BASE_Y: float = HexMetrics.MIN_ELEVATION * HexMetrics.ELEVATION_STEP - 1.0
+
 # Material for all terrain meshes
 var terrain_material: ShaderMaterial
 var terrain_shader: Shader
@@ -122,7 +125,7 @@ func _build_chunk_meshes(chunk: TerrainChunk, grid: HexGrid) -> void:
 	add_child(chunk.mesh_low)
 
 
-## Build flat hex mesh (medium LOD)
+## Build flat hex mesh (medium LOD) with per-hex skirts
 func _build_flat_hex_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -131,7 +134,9 @@ func _build_flat_hex_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	for cell in cells:
 		var center = cell.get_world_position()
 		var color = cell.get_color()
+		var skirt_color = color.darkened(0.4)  # Darker for skirt sides
 
+		# Build hex top as 6 triangles from center
 		for i in range(6):
 			var c1 = corners[i]
 			var c2 = corners[(i + 1) % 6]
@@ -140,11 +145,32 @@ func _build_flat_hex_mesh(cells: Array[HexCell]) -> ArrayMesh:
 			st.add_vertex(Vector3(center.x + c1.x, center.y, center.z + c1.z))
 			st.add_vertex(Vector3(center.x + c2.x, center.y, center.z + c2.z))
 
+		# Build hex skirt - 6 quads around perimeter
+		for i in range(6):
+			var c1 = corners[i]
+			var c2 = corners[(i + 1) % 6]
+
+			var top_left = Vector3(center.x + c1.x, center.y, center.z + c1.z)
+			var top_right = Vector3(center.x + c2.x, center.y, center.z + c2.z)
+			var bottom_left = Vector3(center.x + c1.x, SKIRT_BASE_Y, center.z + c1.z)
+			var bottom_right = Vector3(center.x + c2.x, SKIRT_BASE_Y, center.z + c2.z)
+
+			# Two triangles for the quad (facing outward)
+			st.set_color(skirt_color)
+			st.add_vertex(top_left)
+			st.add_vertex(bottom_left)
+			st.add_vertex(bottom_right)
+
+			st.set_color(skirt_color)
+			st.add_vertex(top_left)
+			st.add_vertex(bottom_right)
+			st.add_vertex(top_right)
+
 	st.generate_normals()
 	return st.commit()
 
 
-## Build simple quad mesh (low LOD) - one quad per cell
+## Build simple quad mesh (low LOD) - one quad per cell with box skirt
 func _build_simple_quad_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -152,9 +178,10 @@ func _build_simple_quad_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	for cell in cells:
 		var center = cell.get_world_position()
 		var color = cell.get_color()
+		var skirt_color = color.darkened(0.4)  # Darker for skirt sides
 		var size = HexMetrics.OUTER_RADIUS * 0.9
 
-		# Simple quad
+		# Simple quad top
 		var v1 = Vector3(center.x - size, center.y, center.z - size)
 		var v2 = Vector3(center.x + size, center.y, center.z - size)
 		var v3 = Vector3(center.x + size, center.y, center.z + size)
@@ -169,6 +196,27 @@ func _build_simple_quad_mesh(cells: Array[HexCell]) -> ArrayMesh:
 		st.add_vertex(v1)
 		st.add_vertex(v3)
 		st.add_vertex(v4)
+
+		# Box skirt - 4 walls around the quad
+		var quad_corners = [v1, v2, v3, v4]
+		for i in range(4):
+			var c1 = quad_corners[i]
+			var c2 = quad_corners[(i + 1) % 4]
+
+			var top_left = c1
+			var top_right = c2
+			var bottom_left = Vector3(c1.x, SKIRT_BASE_Y, c1.z)
+			var bottom_right = Vector3(c2.x, SKIRT_BASE_Y, c2.z)
+
+			st.set_color(skirt_color)
+			st.add_vertex(top_left)
+			st.add_vertex(bottom_left)
+			st.add_vertex(bottom_right)
+
+			st.set_color(skirt_color)
+			st.add_vertex(top_left)
+			st.add_vertex(bottom_right)
+			st.add_vertex(top_right)
 
 	st.generate_normals()
 	return st.commit()
