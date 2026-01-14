@@ -101,22 +101,41 @@ func _update_hover() -> void:
 
 
 func _raycast_to_hex(origin: Vector3, direction: Vector3) -> HexCell:
-	# Use physics raycast if available, otherwise intersect with plane
-	var space_state = get_world_3d().direct_space_state
-	if space_state:
-		var query = PhysicsRayQueryParameters3D.create(origin, origin + direction * 1000)
-		var result = space_state.intersect_ray(query)
-		if result:
-			return _get_cell_at_position(result.position)
+	# Raycast against multiple elevation levels to find the actual terrain surface
+	# Check from highest to lowest elevation to find the first valid intersection
+	if abs(direction.y) < 0.001:
+		return null
 
-	# Fallback: intersect with y=0 plane
-	if abs(direction.y) > 0.001:
+	var best_cell: HexCell = null
+	var best_distance: float = INF
+
+	# Check elevations from high to low (max elevation to min)
+	for elev in range(HexMetrics.MAX_ELEVATION, HexMetrics.MIN_ELEVATION - 1, -1):
+		var plane_y = elev * HexMetrics.ELEVATION_STEP
+		var t = (plane_y - origin.y) / direction.y
+
+		if t <= 0:
+			continue  # Behind camera
+
+		var hit_point = origin + direction * t
+		var cell = _get_cell_at_position(hit_point)
+
+		if cell and cell.elevation == elev:
+			# Found a cell at this elevation - check if it's closer than previous
+			if t < best_distance:
+				best_distance = t
+				best_cell = cell
+				# Since we're going high to low, first valid hit is closest
+				break
+
+	# If no elevated cell found, fall back to water level
+	if best_cell == null:
 		var t = -origin.y / direction.y
 		if t > 0:
 			var hit_point = origin + direction * t
-			return _get_cell_at_position(hit_point)
+			best_cell = _get_cell_at_position(hit_point)
 
-	return null
+	return best_cell
 
 
 func _get_cell_at_position(world_pos: Vector3) -> HexCell:
