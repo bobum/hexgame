@@ -97,23 +97,34 @@ func build() -> void:
 
 	var units = unit_manager.get_all_units()
 
-	# Sort units by type
-	var by_type: Dictionary = {}
-	for unit_type in [UnitTypes.Type.INFANTRY, UnitTypes.Type.CAVALRY, UnitTypes.Type.ARCHER,
-					  UnitTypes.Type.GALLEY, UnitTypes.Type.WARSHIP, UnitTypes.Type.MARINE]:
-		by_type[unit_type] = []
-		unit_id_maps[unit_type] = []
+	# Group units by chunk, then by type within chunk
+	var chunks_by_type: Dictionary = {}  # chunk_key -> { unit_type -> [units] }
 
 	for unit in units:
-		by_type[unit.type].append(unit)
+		var world_pos = unit.get_world_position()
+		var cx = int(floor(world_pos.x / CHUNK_SIZE))
+		var cz = int(floor(world_pos.z / CHUNK_SIZE))
+		var chunk_key = "%d,%d" % [cx, cz]
 
-	# Create multimeshes for each type
-	_create_type_multimesh(UnitTypes.Type.INFANTRY, by_type[UnitTypes.Type.INFANTRY], _infantry_mesh, PLAYER_COLORS_LAND)
-	_create_type_multimesh(UnitTypes.Type.CAVALRY, by_type[UnitTypes.Type.CAVALRY], _cavalry_mesh, PLAYER_COLORS_LAND)
-	_create_type_multimesh(UnitTypes.Type.ARCHER, by_type[UnitTypes.Type.ARCHER], _archer_mesh, PLAYER_COLORS_LAND)
-	_create_type_multimesh(UnitTypes.Type.GALLEY, by_type[UnitTypes.Type.GALLEY], _galley_mesh, PLAYER_COLORS_NAVAL)
-	_create_type_multimesh(UnitTypes.Type.WARSHIP, by_type[UnitTypes.Type.WARSHIP], _warship_mesh, PLAYER_COLORS_NAVAL)
-	_create_type_multimesh(UnitTypes.Type.MARINE, by_type[UnitTypes.Type.MARINE], _marine_mesh, PLAYER_COLORS_AMPHIBIOUS)
+		if not chunks_by_type.has(chunk_key):
+			chunks_by_type[chunk_key] = {}
+			for unit_type in [UnitTypes.Type.INFANTRY, UnitTypes.Type.CAVALRY, UnitTypes.Type.ARCHER,
+							  UnitTypes.Type.GALLEY, UnitTypes.Type.WARSHIP, UnitTypes.Type.MARINE]:
+				chunks_by_type[chunk_key][unit_type] = []
+
+		chunks_by_type[chunk_key][unit.type].append(unit)
+
+	# Build MultiMesh for each chunk and type
+	for chunk_key in chunks_by_type:
+		unit_chunks[chunk_key] = {}
+		var chunk_types = chunks_by_type[chunk_key]
+
+		_create_chunk_type_multimesh(chunk_key, UnitTypes.Type.INFANTRY, chunk_types[UnitTypes.Type.INFANTRY], _infantry_mesh, PLAYER_COLORS_LAND)
+		_create_chunk_type_multimesh(chunk_key, UnitTypes.Type.CAVALRY, chunk_types[UnitTypes.Type.CAVALRY], _cavalry_mesh, PLAYER_COLORS_LAND)
+		_create_chunk_type_multimesh(chunk_key, UnitTypes.Type.ARCHER, chunk_types[UnitTypes.Type.ARCHER], _archer_mesh, PLAYER_COLORS_LAND)
+		_create_chunk_type_multimesh(chunk_key, UnitTypes.Type.GALLEY, chunk_types[UnitTypes.Type.GALLEY], _galley_mesh, PLAYER_COLORS_NAVAL)
+		_create_chunk_type_multimesh(chunk_key, UnitTypes.Type.WARSHIP, chunk_types[UnitTypes.Type.WARSHIP], _warship_mesh, PLAYER_COLORS_NAVAL)
+		_create_chunk_type_multimesh(chunk_key, UnitTypes.Type.MARINE, chunk_types[UnitTypes.Type.MARINE], _marine_mesh, PLAYER_COLORS_AMPHIBIOUS)
 
 	needs_rebuild = false
 
@@ -124,6 +135,55 @@ func _clear_meshes() -> void:
 			mm.queue_free()
 	multimeshes.clear()
 	unit_id_maps.clear()
+
+	# Clear chunked meshes
+	for chunk_key in unit_chunks:
+		var chunk_meshes = unit_chunks[chunk_key]
+		for mm in chunk_meshes.values():
+			if mm:
+				mm.queue_free()
+	unit_chunks.clear()
+
+
+func _create_chunk_type_multimesh(chunk_key: String, unit_type: UnitTypes.Type, units: Array, mesh: Mesh, colors: Array[Color]) -> void:
+	if units.is_empty():
+		return
+
+	var multimesh = MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.mesh = mesh
+	multimesh.instance_count = units.size()
+
+	for i in range(units.size()):
+		var unit: Unit = units[i]
+		var cell = grid.get_cell(unit.q, unit.r)
+		var world_pos = unit.get_world_position()
+		var elevation = cell.elevation if cell else 0
+
+		var is_on_water = cell != null and cell.elevation < HexMetrics.WATER_LEVEL
+		if UnitTypes.is_naval(unit.type) or (UnitTypes.is_amphibious(unit.type) and is_on_water):
+			world_pos.y = 0.1
+		else:
+			world_pos.y = elevation * HexMetrics.ELEVATION_STEP + 0.25
+
+		var transform = Transform3D()
+		transform.origin = world_pos
+		multimesh.set_instance_transform(i, transform)
+
+		var color = colors[unit.player_id % colors.size()]
+		multimesh.set_instance_color(i, color)
+
+	var instance = MultiMeshInstance3D.new()
+	instance.multimesh = multimesh
+
+	var material = StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	instance.material_override = material
+
+	add_child(instance)
+	unit_chunks[chunk_key][unit_type] = instance
 
 
 func _create_type_multimesh(unit_type: UnitTypes.Type, units: Array, mesh: Mesh, colors: Array[Color]) -> void:
@@ -272,9 +332,48 @@ func _update_type_colors(unit_type: UnitTypes.Type, colors: Array[Color]) -> voi
 		mm.set_instance_color(i, color)
 
 
+const CHUNK_SIZE: float = 16.0
+const MAX_RENDER_DISTANCE: float = 50.0
+
+# Chunk storage for units
+var unit_chunks: Dictionary = {}  # chunk_key -> Dictionary of unit_type -> MultiMeshInstance3D
+
 func update() -> void:
 	if needs_rebuild:
 		build()
+
+
+func update_visibility(camera: Camera3D) -> void:
+	if not camera:
+		return
+
+	var camera_pos = camera.global_position
+	var forward = -camera.global_transform.basis.z
+	var view_center: Vector3
+
+	if forward.y < -0.01:
+		var t = -camera_pos.y / forward.y
+		view_center = camera_pos + forward * t
+	else:
+		view_center = Vector3(camera_pos.x, 0, camera_pos.z)
+
+	var max_dist_sq = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE
+
+	for chunk_key in unit_chunks:
+		var parts = chunk_key.split(",")
+		var cx = int(parts[0])
+		var cz = int(parts[1])
+		var center_x = (cx + 0.5) * CHUNK_SIZE
+		var center_z = (cz + 0.5) * CHUNK_SIZE
+
+		var dx = center_x - view_center.x
+		var dz = center_z - view_center.z
+		var visible = (dx * dx + dz * dz) <= max_dist_sq
+
+		var chunk_meshes = unit_chunks[chunk_key]
+		for mm in chunk_meshes.values():
+			if mm:
+				mm.visible = visible
 
 
 func mark_dirty() -> void:
