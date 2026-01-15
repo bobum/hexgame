@@ -14,8 +14,8 @@ fog_enabled = true
 fog_mode = 1
 fog_light_color = Color(0.529, 0.808, 0.922, 1)
 fog_light_energy = 0.5
-fog_depth_begin = 20.0
-fog_depth_end = 60.0
+fog_depth_begin = 15.0
+fog_depth_end = 50.0
 fog_sky_affect = 0.3
 
 [node name="Main" type="Node3D"]
