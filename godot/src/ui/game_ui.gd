@@ -55,6 +55,11 @@ var fog_near_slider: HSlider
 var fog_far_slider: HSlider
 var fog_density_slider: HSlider
 
+# Advanced shader controls
+var triplanar_slider: HSlider
+var fresnel_slider: HSlider
+var specular_slider: HSlider
+
 var main_node: Node3D
 
 
@@ -241,8 +246,17 @@ func _create_shader_folder() -> void:
 	# Wall darkening (0.0 - 0.8) - matches shader default
 	shader_wall_dark_slider = _add_slider(content, "WallDark", 0.0, 0.8, 0.55, 0.01, _on_shader_wall_dark_changed)
 
+	# Triplanar sharpness (1.0 - 10.0) - controls wall texture blend
+	triplanar_slider = _add_slider(content, "Triplanar", 1.0, 10.0, 4.0, 0.5, _on_triplanar_changed)
+
 	# Roughness (0.0 - 1.0)
 	shader_roughness_slider = _add_slider(content, "Roughness", 0.0, 1.0, 0.9, 0.01, _on_shader_roughness_changed)
+
+	# Specular strength (0.0 - 1.0)
+	specular_slider = _add_slider(content, "Specular", 0.0, 1.0, 0.3, 0.01, _on_specular_changed)
+
+	# Fresnel strength (0.0 - 0.5)
+	fresnel_slider = _add_slider(content, "Fresnel", 0.0, 0.5, 0.15, 0.01, _on_fresnel_changed)
 
 	# Ambient energy (0.0 - 1.0)
 	ambient_energy_slider = _add_slider(content, "Ambient", 0.0, 1.0, 0.25, 0.01, _on_ambient_energy_changed)
@@ -270,6 +284,9 @@ func _emit_shader_defaults() -> void:
 	shader_param_changed.emit("top_noise_scale", 3.0)
 	shader_param_changed.emit("wall_darkening", 0.55)
 	shader_param_changed.emit("roughness_value", 0.9)
+	shader_param_changed.emit("triplanar_sharpness", 4.0)
+	shader_param_changed.emit("fresnel_strength", 0.15)
+	shader_param_changed.emit("specular_strength", 0.3)
 
 
 func _create_units_folder() -> void:
@@ -514,6 +531,21 @@ func _on_shader_wall_dark_changed(value: float) -> void:
 func _on_shader_roughness_changed(value: float) -> void:
 	_update_slider_label(shader_roughness_slider, value)
 	shader_param_changed.emit("roughness_value", value)
+
+
+func _on_triplanar_changed(value: float) -> void:
+	_update_slider_label(triplanar_slider, value)
+	shader_param_changed.emit("triplanar_sharpness", value)
+
+
+func _on_specular_changed(value: float) -> void:
+	_update_slider_label(specular_slider, value)
+	shader_param_changed.emit("specular_strength", value)
+
+
+func _on_fresnel_changed(value: float) -> void:
+	_update_slider_label(fresnel_slider, value)
+	shader_param_changed.emit("fresnel_strength", value)
 
 
 func _on_ambient_energy_changed(value: float) -> void:
