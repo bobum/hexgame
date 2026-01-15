@@ -13,6 +13,7 @@ signal clear_units_requested
 signal noise_param_changed(param: String, value: float)
 signal shader_param_changed(param: String, value: float)
 signal lighting_param_changed(param: String, value: float)
+signal fog_param_changed(param: String, value: float)
 
 @onready var panel: PanelContainer = $Panel
 @onready var scroll: ScrollContainer = $Panel/ScrollContainer
@@ -50,6 +51,9 @@ var shader_wall_dark_slider: HSlider
 var shader_roughness_slider: HSlider
 var ambient_energy_slider: HSlider
 var light_energy_slider: HSlider
+var fog_near_slider: HSlider
+var fog_far_slider: HSlider
+var fog_density_slider: HSlider
 
 var main_node: Node3D
 
@@ -88,6 +92,7 @@ func _build_ui() -> void:
 	_create_terrain_folder()
 	_create_rivers_folder()
 	_create_shader_folder()
+	_create_fog_folder()
 	_create_units_folder()
 	_create_turn_folder()
 	_create_info_folder()
@@ -244,6 +249,19 @@ func _create_shader_folder() -> void:
 
 	# Light energy (0.0 - 2.0)
 	light_energy_slider = _add_slider(content, "Light", 0.0, 2.0, 1.0, 0.05, _on_light_energy_changed)
+
+
+func _create_fog_folder() -> void:
+	var content = _create_folder("Fog", true)
+
+	# Fog near distance (5 - 40)
+	fog_near_slider = _add_slider(content, "Near", 5.0, 40.0, 15.0, 1.0, _on_fog_near_changed)
+
+	# Fog far distance (30 - 120)
+	fog_far_slider = _add_slider(content, "Far", 30.0, 120.0, 50.0, 1.0, _on_fog_far_changed)
+
+	# Fog density/energy (0.0 - 1.0)
+	fog_density_slider = _add_slider(content, "Density", 0.0, 1.0, 0.5, 0.05, _on_fog_density_changed)
 
 
 func _emit_shader_defaults() -> void:
@@ -506,6 +524,21 @@ func _on_ambient_energy_changed(value: float) -> void:
 func _on_light_energy_changed(value: float) -> void:
 	_update_slider_label(light_energy_slider, value)
 	lighting_param_changed.emit("light_energy", value)
+
+
+func _on_fog_near_changed(value: float) -> void:
+	_update_slider_label(fog_near_slider, value, true)
+	fog_param_changed.emit("fog_near", value)
+
+
+func _on_fog_far_changed(value: float) -> void:
+	_update_slider_label(fog_far_slider, value, true)
+	fog_param_changed.emit("fog_far", value)
+
+
+func _on_fog_density_changed(value: float) -> void:
+	_update_slider_label(fog_density_slider, value)
+	fog_param_changed.emit("fog_density", value)
 
 
 func _update_slider_label(slider: HSlider, value: float, is_int: bool = false) -> void:

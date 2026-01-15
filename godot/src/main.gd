@@ -67,6 +67,7 @@ func _setup_ui() -> void:
 	game_ui.noise_param_changed.connect(_on_noise_param_changed)
 	game_ui.shader_param_changed.connect(_on_shader_param_changed)
 	game_ui.lighting_param_changed.connect(_on_lighting_param_changed)
+	game_ui.fog_param_changed.connect(_on_fog_param_changed)
 
 
 func _setup_screenshot_capture() -> void:
@@ -252,6 +253,17 @@ func _on_lighting_param_changed(param: String, value: float) -> void:
 		"light_energy":
 			if directional_light:
 				directional_light.light_energy = value
+
+
+func _on_fog_param_changed(param: String, value: float) -> void:
+	if world_env and world_env.environment:
+		match param:
+			"fog_near":
+				world_env.environment.fog_depth_begin = value
+			"fog_far":
+				world_env.environment.fog_depth_end = value
+			"fog_density":
+				world_env.environment.fog_light_energy = value
 
 
 func _on_end_turn() -> void:
