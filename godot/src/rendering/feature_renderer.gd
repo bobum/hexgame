@@ -1,14 +1,30 @@
 class_name FeatureRenderer
 extends Node3D
-## Renders instanced features (trees, rocks) using MultiMesh for performance
+## Renders instanced features (trees, rocks) using chunked MultiMesh for distance culling
+## Features are grouped by chunk to match terrain chunking for consistent visibility
 
 const FeatureClass = preload("res://src/core/feature.gd")
 
-var tree_multimesh: MultiMeshInstance3D
-var rock_multimesh: MultiMeshInstance3D
+const CHUNK_SIZE: float = 16.0
+const MAX_RENDER_DISTANCE: float = 50.0  # Match terrain culling distance
 
 var tree_material: StandardMaterial3D
 var rock_material: StandardMaterial3D
+
+# Chunk storage: key -> FeatureChunk
+var chunks: Dictionary = {}
+
+# Shared meshes
+var tree_mesh: ArrayMesh
+var rock_mesh: ArrayMesh
+
+
+class FeatureChunk:
+	var tree_multimesh: MultiMeshInstance3D
+	var rock_multimesh: MultiMeshInstance3D
+	var chunk_x: int = 0
+	var chunk_z: int = 0
+	var center: Vector3 = Vector3.ZERO
 
 
 func _init() -> void:
@@ -23,50 +39,89 @@ func _init() -> void:
 	rock_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
 	rock_material.cull_mode = BaseMaterial3D.CULL_BACK
 
+	# Create shared meshes
+	tree_mesh = _create_tree_mesh()
+	rock_mesh = _create_rock_mesh()
+
+
+func _get_chunk_key(cx: int, cz: int) -> String:
+	return "%d,%d" % [cx, cz]
+
+
+func _get_feature_chunk_coords(pos: Vector3) -> Vector2i:
+	var cx = int(floor(pos.x / CHUNK_SIZE))
+	var cz = int(floor(pos.z / CHUNK_SIZE))
+	return Vector2i(cx, cz)
+
+
+func _get_chunk_center(cx: int, cz: int) -> Vector3:
+	return Vector3((cx + 0.5) * CHUNK_SIZE, 0, (cz + 0.5) * CHUNK_SIZE)
+
 
 ## Build feature meshes from grid
 func build(grid: HexGrid) -> void:
 	dispose()
 
-	# Collect all features
-	var trees: Array = []
-	var rocks: Array = []
+	# Group features by chunk
+	var chunk_trees: Dictionary = {}  # key -> Array of features
+	var chunk_rocks: Dictionary = {}
 
 	for cell in grid.get_all_cells():
 		for feature in cell.features:
+			var chunk_coords = _get_feature_chunk_coords(feature.position)
+			var key = _get_chunk_key(chunk_coords.x, chunk_coords.y)
+
+			# Ensure chunk exists
+			if not chunks.has(key):
+				var new_chunk = FeatureChunk.new()
+				new_chunk.chunk_x = chunk_coords.x
+				new_chunk.chunk_z = chunk_coords.y
+				new_chunk.center = _get_chunk_center(chunk_coords.x, chunk_coords.y)
+				chunks[key] = new_chunk
+
 			if feature.type == FeatureClass.Type.TREE:
-				trees.append(feature)
+				if not chunk_trees.has(key):
+					chunk_trees[key] = []
+				chunk_trees[key].append(feature)
 			elif feature.type == FeatureClass.Type.ROCK:
-				rocks.append(feature)
+				if not chunk_rocks.has(key):
+					chunk_rocks[key] = []
+				chunk_rocks[key].append(feature)
 
-	# Build tree instances
-	if trees.size() > 0:
-		_build_trees(trees)
+	# Build MultiMesh for each chunk
+	var total_trees = 0
+	var total_rocks = 0
 
-	# Build rock instances
-	if rocks.size() > 0:
-		_build_rocks(rocks)
+	for key in chunks:
+		var chunk: FeatureChunk = chunks[key]
+		var trees = chunk_trees.get(key, [])
+		var rocks = chunk_rocks.get(key, [])
 
-	print("Built features: %d trees, %d rocks" % [trees.size(), rocks.size()])
+		if trees.size() > 0:
+			chunk.tree_multimesh = _build_multimesh(trees, tree_mesh, tree_material, "Trees_%s" % key)
+			add_child(chunk.tree_multimesh)
+			total_trees += trees.size()
+
+		if rocks.size() > 0:
+			chunk.rock_multimesh = _build_multimesh(rocks, rock_mesh, rock_material, "Rocks_%s" % key)
+			add_child(chunk.rock_multimesh)
+			total_rocks += rocks.size()
+
+	print("Built features: %d trees, %d rocks" % [total_trees, total_rocks])
 
 
-func _build_trees(trees: Array) -> void:
-	# Create tree mesh (cone + trunk)
-	var tree_mesh = _create_tree_mesh()
-
-	# Create MultiMesh
+func _build_multimesh(features: Array, mesh: ArrayMesh, material: StandardMaterial3D, name: String) -> MultiMeshInstance3D:
 	var multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_colors = true
-	multimesh.mesh = tree_mesh
-	multimesh.instance_count = trees.size()
+	multimesh.mesh = mesh
+	multimesh.instance_count = features.size()
 
-	# Set transforms and colors
 	var rng = RandomNumberGenerator.new()
-	rng.seed = 12345  # Deterministic for consistent colors
+	rng.seed = hash(name)  # Deterministic per chunk
 
-	for i in range(trees.size()):
-		var feature = trees[i]
+	for i in range(features.size()):
+		var feature = features[i]
 		var transform = Transform3D()
 		transform = transform.rotated(Vector3.UP, feature.rotation)
 		transform = transform.scaled(Vector3.ONE * feature.scale)
@@ -74,58 +129,51 @@ func _build_trees(trees: Array) -> void:
 		multimesh.set_instance_transform(i, transform)
 
 		# Vary color slightly
-		var color = Color(0.133, 0.545, 0.133)
+		var base_color = material.albedo_color
 		var variation = rng.randf_range(-0.1, 0.1)
-		color = color.lightened(variation)
-		multimesh.set_instance_color(i, color)
+		multimesh.set_instance_color(i, base_color.lightened(variation))
 
-	# Create instance
-	tree_multimesh = MultiMeshInstance3D.new()
-	tree_multimesh.multimesh = multimesh
-	tree_multimesh.material_override = tree_material
-	tree_multimesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	tree_multimesh.name = "Trees"
+	var instance = MultiMeshInstance3D.new()
+	instance.multimesh = multimesh
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	instance.name = name
 
-	add_child(tree_multimesh)
+	return instance
 
 
-func _build_rocks(rocks: Array) -> void:
-	# Create rock mesh (deformed icosahedron)
-	var rock_mesh = _create_rock_mesh()
+## Update visibility based on camera - hide chunks beyond render distance
+func update(camera: Camera3D) -> void:
+	if not camera:
+		return
 
-	# Create MultiMesh
-	var multimesh = MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_colors = true
-	multimesh.mesh = rock_mesh
-	multimesh.instance_count = rocks.size()
+	var camera_pos = camera.global_position
+	var forward = -camera.global_transform.basis.z
+	var view_center: Vector3
 
-	# Set transforms and colors
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 54321  # Deterministic for consistent colors
+	# Calculate where camera is looking (same as chunked terrain)
+	if forward.y < -0.01:
+		var t = -camera_pos.y / forward.y
+		view_center = camera_pos + forward * t
+	else:
+		view_center = Vector3(camera_pos.x, 0, camera_pos.z)
 
-	for i in range(rocks.size()):
-		var feature = rocks[i]
-		var transform = Transform3D()
-		transform = transform.rotated(Vector3.UP, feature.rotation)
-		transform = transform.scaled(Vector3.ONE * feature.scale)
-		transform.origin = feature.position
-		multimesh.set_instance_transform(i, transform)
+	var max_dist_sq = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE
 
-		# Vary color slightly
-		var color = Color(0.412, 0.412, 0.412)
-		var variation = rng.randf_range(-0.15, 0.15)
-		color = color.lightened(variation)
-		multimesh.set_instance_color(i, color)
+	for key in chunks:
+		var chunk: FeatureChunk = chunks[key]
 
-	# Create instance
-	rock_multimesh = MultiMeshInstance3D.new()
-	rock_multimesh.multimesh = multimesh
-	rock_multimesh.material_override = rock_material
-	rock_multimesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	rock_multimesh.name = "Rocks"
+		# Distance from view center to chunk
+		var dx = chunk.center.x - view_center.x
+		var dz = chunk.center.z - view_center.z
+		var dist_sq = dx * dx + dz * dz
 
-	add_child(rock_multimesh)
+		var visible = dist_sq <= max_dist_sq
+
+		if chunk.tree_multimesh:
+			chunk.tree_multimesh.visible = visible
+		if chunk.rock_multimesh:
+			chunk.rock_multimesh.visible = visible
 
 
 ## Create simple tree mesh (cone for foliage + cylinder trunk)
@@ -236,21 +284,12 @@ func _create_rock_mesh() -> ArrayMesh:
 	return st.commit()
 
 
-## Update visibility based on camera distance
-func update_visibility(camera_distance: float) -> void:
-	var show_features = camera_distance < 75.0
-
-	if tree_multimesh:
-		tree_multimesh.visible = show_features
-	if rock_multimesh:
-		rock_multimesh.visible = show_features
-
-
 ## Clean up resources
 func dispose() -> void:
-	if tree_multimesh:
-		tree_multimesh.queue_free()
-		tree_multimesh = null
-	if rock_multimesh:
-		rock_multimesh.queue_free()
-		rock_multimesh = null
+	for key in chunks:
+		var chunk: FeatureChunk = chunks[key]
+		if chunk.tree_multimesh:
+			chunk.tree_multimesh.queue_free()
+		if chunk.rock_multimesh:
+			chunk.rock_multimesh.queue_free()
+	chunks.clear()

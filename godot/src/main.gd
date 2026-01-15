@@ -2,6 +2,9 @@ extends Node3D
 ## Main entry point for HexGame
 ## Manages game initialization and main loop
 
+const ChunkedWaterRendererClass = preload("res://src/rendering/chunked_water_renderer.gd")
+const ChunkedRiverRendererClass = preload("res://src/rendering/chunked_river_renderer.gd")
+
 @onready var hex_grid_node: Node3D = $HexGrid
 @onready var camera: MapCamera = $MapCamera
 
@@ -9,9 +12,8 @@ var grid: HexGrid
 var map_generator: MapGenerator
 var chunked_terrain: ChunkedTerrainRenderer
 var feature_renderer: FeatureRenderer
-var water_instance: MeshInstance3D
-var water_material: ShaderMaterial
-var river_renderer: EdgeRiverRenderer
+var chunked_water: Node3D  # ChunkedWaterRenderer
+var chunked_rivers: Node3D  # ChunkedRiverRenderer
 var hex_hover: HexHover
 var current_seed: int = 0
 var game_ui: GameUI
@@ -191,8 +193,8 @@ func _update_unit_counts() -> void:
 func _on_noise_param_changed(param: String, value: float) -> void:
 	# Handle flow_speed separately as it doesn't require map regeneration
 	if param == "flow_speed":
-		if river_renderer and river_renderer.material:
-			river_renderer.material.set_shader_parameter("flow_speed", value)
+		if chunked_rivers and chunked_rivers.material:
+			chunked_rivers.material.set_shader_parameter("flow_speed", value)
 		return
 
 	if map_generator:
@@ -277,50 +279,57 @@ func _build_features() -> void:
 
 
 func _build_water() -> void:
-	var water_mesh = WaterRenderer.build_water_mesh(grid)
-	if water_mesh == null:
-		return
+	# Remove old water
+	if chunked_water:
+		chunked_water.dispose()
+		chunked_water.queue_free()
+		chunked_water = null
 
-	water_instance = MeshInstance3D.new()
-	water_instance.mesh = water_mesh
-
-	# Create animated water material
-	water_material = WaterRenderer.create_water_material()
-	water_instance.material_override = water_material
-
-	hex_grid_node.add_child(water_instance)
+	chunked_water = ChunkedWaterRendererClass.new()
+	hex_grid_node.add_child(chunked_water)
+	chunked_water.build(grid)
 	print("Water mesh added to scene")
 
 
 func _build_rivers() -> void:
 	# Remove existing river renderer
-	if river_renderer:
-		river_renderer.queue_free()
-		river_renderer = null
+	if chunked_rivers:
+		chunked_rivers.dispose()
+		chunked_rivers.queue_free()
+		chunked_rivers = null
 
-	river_renderer = EdgeRiverRenderer.new()
-	hex_grid_node.add_child(river_renderer)
-	river_renderer.setup(grid)
-	river_renderer.build()
+	chunked_rivers = ChunkedRiverRendererClass.new()
+	hex_grid_node.add_child(chunked_rivers)
+	chunked_rivers.setup(grid)
+	chunked_rivers.build()
 
 
 func _process(delta: float) -> void:
-	# Update water animation
-	if water_material:
-		var current_time = water_material.get_shader_parameter("time")
-		water_material.set_shader_parameter("time", current_time + delta)
+	# Update water animation and visibility
+	if chunked_water:
+		chunked_water.update_animation(delta)
+		if camera:
+			chunked_water.update(camera)
 
 	# Update unit renderer
 	if unit_renderer:
 		unit_renderer.update()
+		if camera:
+			unit_renderer.update_visibility(camera)
 
-	# Update river animation
-	if river_renderer:
-		river_renderer.update(delta)
+	# Update river animation and visibility
+	if chunked_rivers:
+		chunked_rivers.update_animation(delta)
+		if camera:
+			chunked_rivers.update(camera)
 
 	# Update terrain visibility and LOD based on camera
 	if chunked_terrain and camera:
 		chunked_terrain.update(camera)
+
+	# Update feature visibility based on camera distance
+	if feature_renderer and camera:
+		feature_renderer.update(camera)
 
 
 func _center_camera() -> void:
@@ -354,14 +363,16 @@ func _regenerate_map() -> void:
 		chunked_terrain.dispose()
 		chunked_terrain.queue_free()
 		chunked_terrain = null
-	if water_instance:
-		water_instance.queue_free()
-		water_instance = null
-		water_material = null
-	if river_renderer:
-		river_renderer.queue_free()
-		river_renderer = null
+	if chunked_water:
+		chunked_water.dispose()
+		chunked_water.queue_free()
+		chunked_water = null
+	if chunked_rivers:
+		chunked_rivers.dispose()
+		chunked_rivers.queue_free()
+		chunked_rivers = null
 	if feature_renderer:
+		feature_renderer.dispose()
 		feature_renderer.queue_free()
 		feature_renderer = null
 
@@ -417,14 +428,16 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 		chunked_terrain.dispose()
 		chunked_terrain.queue_free()
 		chunked_terrain = null
-	if water_instance:
-		water_instance.queue_free()
-		water_instance = null
-		water_material = null
-	if river_renderer:
-		river_renderer.queue_free()
-		river_renderer = null
+	if chunked_water:
+		chunked_water.dispose()
+		chunked_water.queue_free()
+		chunked_water = null
+	if chunked_rivers:
+		chunked_rivers.dispose()
+		chunked_rivers.queue_free()
+		chunked_rivers = null
 	if feature_renderer:
+		feature_renderer.dispose()
 		feature_renderer.queue_free()
 		feature_renderer = null
 
