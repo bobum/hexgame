@@ -7,5 +7,5 @@
 ## Running the Game
 
 ```bash
-cd C:/projects/hexgame/godot && C:/tools/godot/Godot_v4.3-stable_win64.exe --path .
+cmd.exe /c "start "" \"C:\tools\godot\Godot_v4.3-stable_win64.exe\" --path \"C:\projects\hexgame\godot\""
 ```
