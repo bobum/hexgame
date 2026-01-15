@@ -59,6 +59,7 @@ var fog_density_slider: HSlider
 var triplanar_slider: HSlider
 var fresnel_slider: HSlider
 var specular_slider: HSlider
+var blend_strength_slider: HSlider
 
 var main_node: Node3D
 
@@ -257,6 +258,9 @@ func _create_shader_folder() -> void:
 
 	# Fresnel strength (0.0 - 0.5)
 	fresnel_slider = _add_slider(content, "Fresnel", 0.0, 0.5, 0.15, 0.01, _on_fresnel_changed)
+
+	# Blend strength (0.0 - 1.0) - terrain color blending at hex corners
+	blend_strength_slider = _add_slider(content, "Blend", 0.0, 1.0, 1.0, 0.05, _on_blend_strength_changed)
 
 	# Ambient energy (0.0 - 1.0)
 	ambient_energy_slider = _add_slider(content, "Ambient", 0.0, 1.0, 0.25, 0.01, _on_ambient_energy_changed)
@@ -546,6 +550,11 @@ func _on_specular_changed(value: float) -> void:
 func _on_fresnel_changed(value: float) -> void:
 	_update_slider_label(fresnel_slider, value)
 	shader_param_changed.emit("fresnel_strength", value)
+
+
+func _on_blend_strength_changed(value: float) -> void:
+	_update_slider_label(blend_strength_slider, value)
+	shader_param_changed.emit("blend_strength", value)
 
 
 func _on_ambient_energy_changed(value: float) -> void:

@@ -13,6 +13,10 @@ uniform float triplanar_sharpness : hint_range(1.0, 10.0) = 4.0;
 uniform float fresnel_strength : hint_range(0.0, 0.5) = 0.15;
 uniform float specular_strength : hint_range(0.0, 1.0) = 0.3;
 
+// Splat blending is done in mesh builder (pre-blended into vertex colors)
+// This uniform is kept for potential future shader-based blending
+uniform float blend_strength : hint_range(0.0, 1.0) = 1.0;
+
 varying vec3 world_position;
 varying vec3 world_normal;
 
@@ -82,8 +86,10 @@ void vertex() {
 
 void fragment() {
 	vec3 normal = normalize(world_normal);
-	vec3 color = COLOR.rgb;
 	vec3 view_dir = normalize(VIEW);
+
+	// Use pre-blended vertex colors (splat blending done in mesh builder)
+	vec3 color = COLOR.rgb;
 
 	// Boost saturation for more vibrant colors
 	if (saturation_boost > 0.001) {
