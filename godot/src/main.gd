@@ -4,9 +4,13 @@ extends Node3D
 
 const ChunkedWaterRendererClass = preload("res://src/rendering/chunked_water_renderer.gd")
 const ChunkedRiverRendererClass = preload("res://src/rendering/chunked_river_renderer.gd")
+const ScreenshotCaptureClass = preload("res://src/debug/screenshot_capture.gd")
+const PerformanceMonitorClass = preload("res://src/debug/performance_monitor.gd")
 
 @onready var hex_grid_node: Node3D = $HexGrid
 @onready var camera: MapCamera = $MapCamera
+@onready var directional_light: DirectionalLight3D = $DirectionalLight3D
+@onready var world_env: WorldEnvironment = $WorldEnvironment
 
 var grid: HexGrid
 var map_generator: MapGenerator
@@ -25,6 +29,8 @@ var selection_manager: SelectionManager
 var pathfinder: Pathfinder
 var path_renderer: PathRenderer
 var turn_manager: TurnManager
+var screenshot_capture: Node  # ScreenshotCapture
+var performance_monitor: Control  # PerformanceMonitor
 
 # Map settings
 var map_width: int = 32
@@ -39,6 +45,8 @@ func _ready() -> void:
 	current_seed = randi()
 	_setup_ui()
 	_initialize_game()
+	_setup_screenshot_capture()
+	_setup_performance_monitor()
 
 
 func _setup_ui() -> void:
@@ -57,6 +65,20 @@ func _setup_ui() -> void:
 	game_ui.spawn_ai_requested.connect(_on_spawn_ai)
 	game_ui.clear_units_requested.connect(_on_clear_units)
 	game_ui.noise_param_changed.connect(_on_noise_param_changed)
+	game_ui.shader_param_changed.connect(_on_shader_param_changed)
+	game_ui.lighting_param_changed.connect(_on_lighting_param_changed)
+
+
+func _setup_screenshot_capture() -> void:
+	screenshot_capture = ScreenshotCaptureClass.new()
+	add_child(screenshot_capture)
+	screenshot_capture.setup(camera)
+	print("Screenshot capture ready - Auto-capture enabled")
+
+
+func _setup_performance_monitor() -> void:
+	performance_monitor = PerformanceMonitorClass.new()
+	add_child(performance_monitor)
 
 
 func _on_ui_regenerate(width: int, height: int, seed_val: int) -> void:
@@ -217,6 +239,21 @@ func _on_noise_param_changed(param: String, value: float) -> void:
 		_regenerate_map()
 
 
+func _on_shader_param_changed(param: String, value: float) -> void:
+	if chunked_terrain and chunked_terrain.terrain_material:
+		chunked_terrain.terrain_material.set_shader_parameter(param, value)
+
+
+func _on_lighting_param_changed(param: String, value: float) -> void:
+	match param:
+		"ambient_energy":
+			if world_env and world_env.environment:
+				world_env.environment.ambient_light_energy = value
+		"light_energy":
+			if directional_light:
+				directional_light.light_energy = value
+
+
 func _on_end_turn() -> void:
 	if turn_manager:
 		turn_manager.end_turn()
@@ -355,6 +392,9 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_G:
 			print("Regenerating map with same seed...")
 			_regenerate_map()
+		elif event.keycode == KEY_P:
+			if performance_monitor:
+				performance_monitor.toggle_graph()
 
 
 func _regenerate_map() -> void:

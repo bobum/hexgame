@@ -11,6 +11,8 @@ signal spawn_naval_requested(count: int)
 signal spawn_ai_requested(land: int, naval: int)
 signal clear_units_requested
 signal noise_param_changed(param: String, value: float)
+signal shader_param_changed(param: String, value: float)
+signal lighting_param_changed(param: String, value: float)
 
 @onready var panel: PanelContainer = $Panel
 @onready var scroll: ScrollContainer = $Panel/ScrollContainer
@@ -41,11 +43,21 @@ var mountain_level_slider: HSlider
 var river_slider: HSlider
 var flow_speed_slider: HSlider
 
+# Shader controls
+var shader_noise_slider: HSlider
+var shader_noise_scale_slider: HSlider
+var shader_wall_dark_slider: HSlider
+var shader_roughness_slider: HSlider
+var ambient_energy_slider: HSlider
+var light_energy_slider: HSlider
+
 var main_node: Node3D
 
 
 func _ready() -> void:
 	_build_ui()
+	# Emit shader defaults after a short delay to ensure terrain is built
+	call_deferred("_emit_shader_defaults")
 
 
 func _process(_delta: float) -> void:
@@ -75,6 +87,7 @@ func _build_ui() -> void:
 	_create_map_folder()
 	_create_terrain_folder()
 	_create_rivers_folder()
+	_create_shader_folder()
 	_create_units_folder()
 	_create_turn_folder()
 	_create_info_folder()
@@ -209,6 +222,36 @@ func _create_rivers_folder() -> void:
 
 	# Flow Speed (0.5 - 3.0)
 	flow_speed_slider = _add_slider(content, "Flow Speed", 0.5, 3.0, 1.5, 0.1, _on_flow_speed_changed)
+
+
+func _create_shader_folder() -> void:
+	var content = _create_folder("Shader", true)
+
+	# Shader noise strength (0.0 - 0.5) - matches shader default
+	shader_noise_slider = _add_slider(content, "Noise", 0.0, 0.5, 0.35, 0.01, _on_shader_noise_changed)
+
+	# Shader noise scale (0.5 - 10.0) - matches shader default
+	shader_noise_scale_slider = _add_slider(content, "NoiseScale", 0.5, 10.0, 3.0, 0.1, _on_shader_noise_scale_changed)
+
+	# Wall darkening (0.0 - 0.8) - matches shader default
+	shader_wall_dark_slider = _add_slider(content, "WallDark", 0.0, 0.8, 0.55, 0.01, _on_shader_wall_dark_changed)
+
+	# Roughness (0.0 - 1.0)
+	shader_roughness_slider = _add_slider(content, "Roughness", 0.0, 1.0, 0.9, 0.01, _on_shader_roughness_changed)
+
+	# Ambient energy (0.0 - 1.0)
+	ambient_energy_slider = _add_slider(content, "Ambient", 0.0, 1.0, 0.25, 0.01, _on_ambient_energy_changed)
+
+	# Light energy (0.0 - 2.0)
+	light_energy_slider = _add_slider(content, "Light", 0.0, 2.0, 1.0, 0.05, _on_light_energy_changed)
+
+
+func _emit_shader_defaults() -> void:
+	# Emit shader parameter signals with default values so shader gets initialized
+	shader_param_changed.emit("top_noise_strength", 0.35)
+	shader_param_changed.emit("top_noise_scale", 3.0)
+	shader_param_changed.emit("wall_darkening", 0.55)
+	shader_param_changed.emit("roughness_value", 0.9)
 
 
 func _create_units_folder() -> void:
@@ -433,6 +476,36 @@ func _on_river_changed(value: float) -> void:
 func _on_flow_speed_changed(value: float) -> void:
 	_update_slider_label(flow_speed_slider, value)
 	noise_param_changed.emit("flow_speed", value)
+
+
+func _on_shader_noise_changed(value: float) -> void:
+	_update_slider_label(shader_noise_slider, value)
+	shader_param_changed.emit("top_noise_strength", value)
+
+
+func _on_shader_noise_scale_changed(value: float) -> void:
+	_update_slider_label(shader_noise_scale_slider, value)
+	shader_param_changed.emit("top_noise_scale", value)
+
+
+func _on_shader_wall_dark_changed(value: float) -> void:
+	_update_slider_label(shader_wall_dark_slider, value)
+	shader_param_changed.emit("wall_darkening", value)
+
+
+func _on_shader_roughness_changed(value: float) -> void:
+	_update_slider_label(shader_roughness_slider, value)
+	shader_param_changed.emit("roughness_value", value)
+
+
+func _on_ambient_energy_changed(value: float) -> void:
+	_update_slider_label(ambient_energy_slider, value)
+	lighting_param_changed.emit("ambient_energy", value)
+
+
+func _on_light_energy_changed(value: float) -> void:
+	_update_slider_label(light_energy_slider, value)
+	lighting_param_changed.emit("light_energy", value)
 
 
 func _update_slider_label(slider: HSlider, value: float, is_int: bool = false) -> void:
