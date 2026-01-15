@@ -5,7 +5,7 @@ extends RefCounted
 ## Matches web/src/pathfinding/PriorityQueue.ts
 
 var buckets: Dictionary = {}  # int -> Array
-var min_priority: float = INF
+var min_bucket: int = 999999999  # Use int to match bucket keys (NOT float)
 var _size: int = 0
 var precision: int = 10  # Multiplier for priorities to handle decimals
 
@@ -16,15 +16,15 @@ func _init(p_precision: int = 10) -> void:
 
 ## Add an item with the given priority (lower = higher priority)
 func enqueue(item: Variant, priority: float) -> void:
-	var bucket_key = int(floor(priority * precision))
+	var bucket_key: int = int(floor(priority * precision))
 
 	if not buckets.has(bucket_key):
 		buckets[bucket_key] = []
 
 	buckets[bucket_key].append(item)
 
-	if bucket_key < min_priority:
-		min_priority = bucket_key
+	if bucket_key < min_bucket:
+		min_bucket = bucket_key
 
 	_size += 1
 
@@ -35,14 +35,14 @@ func dequeue() -> Variant:
 		return null
 
 	# Find the minimum bucket with items
-	while min_priority < INF:
-		if buckets.has(min_priority) and buckets[min_priority].size() > 0:
+	while min_bucket < 999999999:
+		if buckets.has(min_bucket) and buckets[min_bucket].size() > 0:
 			_size -= 1
-			return buckets[min_priority].pop_front()
+			return buckets[min_bucket].pop_front()
 
 		# Bucket is empty, clean it up and find next
-		buckets.erase(min_priority)
-		min_priority = _find_min_priority()
+		buckets.erase(min_bucket)
+		min_bucket = _find_min_bucket()
 
 	return null
 
@@ -52,8 +52,8 @@ func peek() -> Variant:
 	if _size == 0:
 		return null
 
-	if buckets.has(min_priority) and buckets[min_priority].size() > 0:
-		return buckets[min_priority][0]
+	if buckets.has(min_bucket) and buckets[min_bucket].size() > 0:
+		return buckets[min_bucket][0]
 
 	return null
 
@@ -66,7 +66,7 @@ func is_empty() -> bool:
 ## Clear all items from the queue
 func clear() -> void:
 	buckets.clear()
-	min_priority = INF
+	min_bucket = 999999999
 	_size = 0
 
 
@@ -76,8 +76,8 @@ func get_size() -> int:
 
 
 ## Find the minimum priority bucket key
-func _find_min_priority() -> float:
-	var min_val = INF
+func _find_min_bucket() -> int:
+	var min_val: int = 999999999
 	for key in buckets.keys():
 		if key < min_val:
 			min_val = key

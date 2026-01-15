@@ -44,10 +44,11 @@ func _create_reachable_mesh() -> void:
 	reachable_meshes.multimesh = multimesh
 
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.0, 1.0, 0.0, 0.3)
+	material.albedo_color = Color(0.0, 1.0, 0.0, 0.5)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.no_depth_test = true  # Render on top of terrain
 	material.vertex_color_use_as_albedo = true
 	reachable_meshes.material_override = material
 
@@ -136,16 +137,22 @@ func show_reachable_cells(reachable_cells: Dictionary) -> void:
 			break
 
 		var cost: float = reachable_cells[cell]
-		var render_elevation = max(cell.elevation, 0)
-		var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(render_elevation)
+		var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(0)
+
+		# For water cells, render on water surface; for land, render on terrain
+		var y_offset: float
+		if cell.elevation < 0:
+			y_offset = 0.1  # Just above water surface
+		else:
+			y_offset = cell.elevation * HexMetrics.ELEVATION_STEP + 0.15
 
 		var transform = Transform3D()
-		transform.origin = Vector3(world_pos.x, world_pos.y + 0.05, world_pos.z)
+		transform.origin = Vector3(world_pos.x, y_offset, world_pos.z)
 		mm.set_instance_transform(index, transform)
 
 		# Color based on movement cost (green = cheap, yellow = expensive)
 		var t = min(cost / 4.0, 1.0)
-		var color = Color.from_hsv(0.33 - t * 0.33, 0.8, 0.5, 0.4)
+		var color = Color.from_hsv(0.33 - t * 0.33, 0.8, 0.7, 0.5)
 		mm.set_instance_color(index, color)
 
 		index += 1
@@ -173,9 +180,13 @@ func show_path(path: Array) -> void:
 	# Create path points
 	var points: PackedVector3Array = []
 	for cell in path:
-		var render_elevation = max(cell.elevation, 0)
-		var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(render_elevation)
-		points.append(Vector3(world_pos.x, world_pos.y + 0.2, world_pos.z))
+		var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(0)
+		var y_pos: float
+		if cell.elevation < 0:
+			y_pos = 0.15  # Above water surface
+		else:
+			y_pos = cell.elevation * HexMetrics.ELEVATION_STEP + 0.2
+		points.append(Vector3(world_pos.x, y_pos, world_pos.z))
 
 	# Create line mesh using ImmediateMesh
 	var im = ImmediateMesh.new()
@@ -207,9 +218,13 @@ func show_destination_marker(cell: HexCell) -> void:
 	if destination_marker == null:
 		return
 
-	var render_elevation = max(cell.elevation, 0)
-	var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(render_elevation)
-	destination_marker.position = Vector3(world_pos.x, world_pos.y + 0.1, world_pos.z)
+	var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(0)
+	var y_pos: float
+	if cell.elevation < 0:
+		y_pos = 0.12  # Above water surface
+	else:
+		y_pos = cell.elevation * HexMetrics.ELEVATION_STEP + 0.15
+	destination_marker.position = Vector3(world_pos.x, y_pos, world_pos.z)
 	destination_marker.visible = true
 
 

@@ -120,8 +120,10 @@ func get_reachable_cells(start: HexCell, movement_points: float, options: Dictio
 
 	while not frontier.is_empty():
 		var current: HexCell = frontier.dequeue()
+		if current == null:
+			break
 		var current_key = _cell_key(current)
-		var current_cost = cost_so_far[current_key]
+		var current_cost = cost_so_far.get(current_key, 0.0)
 
 		for neighbor in grid.get_neighbors(current):
 			# Skip if there's a unit (unless ignoring)
