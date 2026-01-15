@@ -148,24 +148,17 @@ func update(camera: Camera3D) -> void:
 		return
 
 	var camera_pos = camera.global_position
-	var forward = -camera.global_transform.basis.z
-	var view_center: Vector3
-
-	# Calculate where camera is looking (same as chunked terrain)
-	if forward.y < -0.01:
-		var t = -camera_pos.y / forward.y
-		view_center = camera_pos + forward * t
-	else:
-		view_center = Vector3(camera_pos.x, 0, camera_pos.z)
+	# Use camera XZ position for distance (matches terrain renderer)
+	var camera_xz = Vector3(camera_pos.x, 0, camera_pos.z)
 
 	var max_dist_sq = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE
 
 	for key in chunks:
 		var chunk: FeatureChunk = chunks[key]
 
-		# Distance from view center to chunk
-		var dx = chunk.center.x - view_center.x
-		var dz = chunk.center.z - view_center.z
+		# Distance from camera to chunk
+		var dx = chunk.center.x - camera_xz.x
+		var dz = chunk.center.z - camera_xz.z
 		var dist_sq = dx * dx + dz * dz
 
 		var visible = dist_sq <= max_dist_sq

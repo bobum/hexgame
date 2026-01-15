@@ -56,6 +56,8 @@ var main_node: Node3D
 
 func _ready() -> void:
 	_build_ui()
+	# Emit shader defaults after a short delay to ensure terrain is built
+	call_deferred("_emit_shader_defaults")
 
 
 func _process(_delta: float) -> void:
@@ -225,14 +227,14 @@ func _create_rivers_folder() -> void:
 func _create_shader_folder() -> void:
 	var content = _create_folder("Shader", true)
 
-	# Shader noise strength (0.0 - 0.5)
-	shader_noise_slider = _add_slider(content, "Noise", 0.0, 0.5, 0.0, 0.01, _on_shader_noise_changed)
+	# Shader noise strength (0.0 - 0.5) - matches shader default
+	shader_noise_slider = _add_slider(content, "Noise", 0.0, 0.5, 0.35, 0.01, _on_shader_noise_changed)
 
-	# Shader noise scale (0.5 - 10.0)
-	shader_noise_scale_slider = _add_slider(content, "NoiseScale", 0.5, 10.0, 2.0, 0.1, _on_shader_noise_scale_changed)
+	# Shader noise scale (0.5 - 10.0) - matches shader default
+	shader_noise_scale_slider = _add_slider(content, "NoiseScale", 0.5, 10.0, 3.0, 0.1, _on_shader_noise_scale_changed)
 
-	# Wall darkening (0.0 - 0.8)
-	shader_wall_dark_slider = _add_slider(content, "WallDark", 0.0, 0.8, 0.0, 0.01, _on_shader_wall_dark_changed)
+	# Wall darkening (0.0 - 0.8) - matches shader default
+	shader_wall_dark_slider = _add_slider(content, "WallDark", 0.0, 0.8, 0.55, 0.01, _on_shader_wall_dark_changed)
 
 	# Roughness (0.0 - 1.0)
 	shader_roughness_slider = _add_slider(content, "Roughness", 0.0, 1.0, 0.9, 0.01, _on_shader_roughness_changed)
@@ -242,6 +244,14 @@ func _create_shader_folder() -> void:
 
 	# Light energy (0.0 - 2.0)
 	light_energy_slider = _add_slider(content, "Light", 0.0, 2.0, 1.0, 0.05, _on_light_energy_changed)
+
+
+func _emit_shader_defaults() -> void:
+	# Emit shader parameter signals with default values so shader gets initialized
+	shader_param_changed.emit("top_noise_strength", 0.35)
+	shader_param_changed.emit("top_noise_scale", 3.0)
+	shader_param_changed.emit("wall_darkening", 0.55)
+	shader_param_changed.emit("roughness_value", 0.9)
 
 
 func _create_units_folder() -> void:
@@ -470,12 +480,12 @@ func _on_flow_speed_changed(value: float) -> void:
 
 func _on_shader_noise_changed(value: float) -> void:
 	_update_slider_label(shader_noise_slider, value)
-	shader_param_changed.emit("noise_strength", value)
+	shader_param_changed.emit("top_noise_strength", value)
 
 
 func _on_shader_noise_scale_changed(value: float) -> void:
 	_update_slider_label(shader_noise_scale_slider, value)
-	shader_param_changed.emit("noise_scale", value)
+	shader_param_changed.emit("top_noise_scale", value)
 
 
 func _on_shader_wall_dark_changed(value: float) -> void:

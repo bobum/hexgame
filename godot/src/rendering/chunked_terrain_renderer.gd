@@ -6,11 +6,14 @@ extends Node3D
 const CHUNK_SIZE: float = 16.0
 
 # Distance culling - chunks beyond this are hidden (works with fog)
-const MAX_RENDER_DISTANCE: float = 50.0  # Should match fog density for smooth fadeout
+const MAX_RENDER_DISTANCE: float = 60.0  # Beyond fog end
 
-# LOD distance thresholds (from Three.js LODDistances)
-const LOD_HIGH_TO_MEDIUM: float = 25.0
-const LOD_MEDIUM_TO_LOW: float = 45.0
+# LOD distance thresholds (matching Three.js LODDistances)
+const LOD_HIGH_TO_MEDIUM: float = 30.0
+const LOD_MEDIUM_TO_LOW: float = 60.0
+
+# Reference zoom distance for LOD scaling (default camera distance)
+const REFERENCE_ZOOM: float = 30.0
 
 # Base Y level for skirts - below minimum terrain elevation
 const SKIRT_BASE_Y: float = HexMetrics.MIN_ELEVATION * HexMetrics.ELEVATION_STEP - 1.0
@@ -30,6 +33,7 @@ class TerrainChunk:
 	var mesh_high: MeshInstance3D    # Full detail
 	var mesh_medium: MeshInstance3D  # Simplified
 	var mesh_low: MeshInstance3D     # Very simple
+	var mesh_skirt: MeshInstance3D   # Always-visible boundary skirt
 	var cells: Array[HexCell] = []
 	var chunk_x: int = 0
 	var chunk_z: int = 0
@@ -124,28 +128,124 @@ func _build_chunk_meshes(chunk: TerrainChunk, grid: HexGrid) -> void:
 	chunk.mesh_low.visible = false
 	add_child(chunk.mesh_low)
 
+	# SKIRT disabled for now - was causing visual issues
+	# TODO: Implement proper edge-only skirts that don't block terrain view
+
+
+## Build chunk boundary skirt - walls around the outer edges of chunk
+func _build_chunk_boundary_skirt(cells: Array[HexCell], chunk_x: int, chunk_z: int) -> ArrayMesh:
+	if cells.is_empty():
+		return null
+
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	# Find the bounding box of this chunk's cells
+	var min_x = INF
+	var max_x = -INF
+	var min_z = INF
+	var max_z = -INF
+	var avg_y: float = 0.0
+
+	for cell in cells:
+		var pos = cell.get_world_position()
+		min_x = min(min_x, pos.x - HexMetrics.OUTER_RADIUS)
+		max_x = max(max_x, pos.x + HexMetrics.OUTER_RADIUS)
+		min_z = min(min_z, pos.z - HexMetrics.OUTER_RADIUS)
+		max_z = max(max_z, pos.z + HexMetrics.OUTER_RADIUS)
+		avg_y += pos.y
+
+	avg_y /= cells.size()
+
+	# Use a neutral color for the skirt (blends with fog)
+	var skirt_color = Color(0.4, 0.45, 0.5)  # Gray-blue to match fog
+	var down_normal = Vector3(0, -1, 0)
+
+	# Build 4 walls around the chunk boundary
+	var top_y = avg_y
+	var bottom_y = SKIRT_BASE_Y
+
+	# Wall vertices (going clockwise when viewed from above)
+	var corners = [
+		Vector3(min_x, top_y, min_z),  # 0: front-left
+		Vector3(max_x, top_y, min_z),  # 1: front-right
+		Vector3(max_x, top_y, max_z),  # 2: back-right
+		Vector3(min_x, top_y, max_z),  # 3: back-left
+	]
+
+	# Build 4 walls
+	for i in range(4):
+		var c1 = corners[i]
+		var c2 = corners[(i + 1) % 4]
+
+		var top_left = c1
+		var top_right = c2
+		var bottom_left = Vector3(c1.x, bottom_y, c1.z)
+		var bottom_right = Vector3(c2.x, bottom_y, c2.z)
+
+		# Calculate outward-facing normal for this wall
+		var edge = top_right - top_left
+		var down = Vector3(0, -1, 0)
+		var wall_normal = edge.cross(down).normalized()
+
+		# Two triangles for the quad
+		st.set_normal(wall_normal)
+		st.set_color(skirt_color)
+		st.add_vertex(top_left)
+		st.set_normal(wall_normal)
+		st.set_color(skirt_color)
+		st.add_vertex(bottom_left)
+		st.set_normal(wall_normal)
+		st.set_color(skirt_color)
+		st.add_vertex(bottom_right)
+
+		st.set_normal(wall_normal)
+		st.set_color(skirt_color)
+		st.add_vertex(top_left)
+		st.set_normal(wall_normal)
+		st.set_color(skirt_color)
+		st.add_vertex(bottom_right)
+		st.set_normal(wall_normal)
+		st.set_color(skirt_color)
+		st.add_vertex(top_right)
+
+	return st.commit()
+
 
 ## Build flat hex mesh (medium LOD) with per-hex skirts
 func _build_flat_hex_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var corners = HexMetrics.get_corners()
+	var up_normal = Vector3(0, 1, 0)
 
 	for cell in cells:
 		var center = cell.get_world_position()
-		var color = cell.get_color()
-		var skirt_color = color.darkened(0.4)  # Darker for skirt sides
+		var base_color = cell.get_color()
+		# Boost saturation slightly to compensate for lack of terrace detail
+		var h = base_color.h
+		var s = min(base_color.s * 1.15, 1.0)  # 15% saturation boost
+		var v = base_color.v
+		var color = Color.from_hsv(h, s, v)
+		# Use same color for tops and skirts - shader wall_darkening handles shading
+		var skirt_color = color
 
-		# Build hex top as 6 triangles from center
+		# Build hex top as 6 triangles from center - use flat up normal
 		for i in range(6):
 			var c1 = corners[i]
 			var c2 = corners[(i + 1) % 6]
+
+			st.set_normal(up_normal)
 			st.set_color(color)
 			st.add_vertex(center)
+			st.set_normal(up_normal)
+			st.set_color(color)
 			st.add_vertex(Vector3(center.x + c1.x, center.y, center.z + c1.z))
+			st.set_normal(up_normal)
+			st.set_color(color)
 			st.add_vertex(Vector3(center.x + c2.x, center.y, center.z + c2.z))
 
-		# Build hex skirt - 6 quads around perimeter
+		# Build hex skirt - 6 quads around perimeter with outward normals
 		for i in range(6):
 			var c1 = corners[i]
 			var c2 = corners[(i + 1) % 6]
@@ -155,18 +255,31 @@ func _build_flat_hex_mesh(cells: Array[HexCell]) -> ArrayMesh:
 			var bottom_left = Vector3(center.x + c1.x, SKIRT_BASE_Y, center.z + c1.z)
 			var bottom_right = Vector3(center.x + c2.x, SKIRT_BASE_Y, center.z + c2.z)
 
+			# Calculate outward-facing normal for this edge
+			var edge = top_right - top_left
+			var outward = Vector3(edge.z, 0, -edge.x).normalized()
+
 			# Two triangles for the quad (facing outward)
+			st.set_normal(outward)
 			st.set_color(skirt_color)
 			st.add_vertex(top_left)
+			st.set_normal(outward)
+			st.set_color(skirt_color)
 			st.add_vertex(bottom_left)
+			st.set_normal(outward)
+			st.set_color(skirt_color)
 			st.add_vertex(bottom_right)
 
+			st.set_normal(outward)
 			st.set_color(skirt_color)
 			st.add_vertex(top_left)
+			st.set_normal(outward)
+			st.set_color(skirt_color)
 			st.add_vertex(bottom_right)
+			st.set_normal(outward)
+			st.set_color(skirt_color)
 			st.add_vertex(top_right)
 
-	st.generate_normals()
 	return st.commit()
 
 
@@ -174,51 +287,85 @@ func _build_flat_hex_mesh(cells: Array[HexCell]) -> ArrayMesh:
 func _build_simple_quad_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var up_normal = Vector3(0, 1, 0)
 
 	for cell in cells:
 		var center = cell.get_world_position()
-		var color = cell.get_color()
-		var skirt_color = color.darkened(0.4)  # Darker for skirt sides
-		var size = HexMetrics.OUTER_RADIUS * 0.9
+		var base_color = cell.get_color()
+		# Boost saturation slightly to compensate for lack of terrace detail
+		var h = base_color.h
+		var s = min(base_color.s * 1.15, 1.0)  # 15% saturation boost
+		var v = base_color.v
+		var color = Color.from_hsv(h, s, v)
+		# Use same color for tops and skirts - shader wall_darkening handles shading
+		var skirt_color = color
+		var size = HexMetrics.OUTER_RADIUS * 0.85  # Match Three.js
 
-		# Simple quad top
+		# Simple quad top with flat up normal
 		var v1 = Vector3(center.x - size, center.y, center.z - size)
 		var v2 = Vector3(center.x + size, center.y, center.z - size)
 		var v3 = Vector3(center.x + size, center.y, center.z + size)
 		var v4 = Vector3(center.x - size, center.y, center.z + size)
 
+		st.set_normal(up_normal)
 		st.set_color(color)
 		st.add_vertex(v1)
+		st.set_normal(up_normal)
+		st.set_color(color)
 		st.add_vertex(v2)
+		st.set_normal(up_normal)
+		st.set_color(color)
 		st.add_vertex(v3)
 
+		st.set_normal(up_normal)
 		st.set_color(color)
 		st.add_vertex(v1)
+		st.set_normal(up_normal)
+		st.set_color(color)
 		st.add_vertex(v3)
+		st.set_normal(up_normal)
+		st.set_color(color)
 		st.add_vertex(v4)
 
-		# Box skirt - 4 walls around the quad
+		# Box skirt - 4 walls around the quad with outward normals
 		var quad_corners = [v1, v2, v3, v4]
+		# Outward normals for each wall (in order: -Z, +X, +Z, -X)
+		var wall_normals = [
+			Vector3(0, 0, -1),
+			Vector3(1, 0, 0),
+			Vector3(0, 0, 1),
+			Vector3(-1, 0, 0)
+		]
 		for i in range(4):
 			var c1 = quad_corners[i]
 			var c2 = quad_corners[(i + 1) % 4]
+			var wall_normal = wall_normals[i]
 
 			var top_left = c1
 			var top_right = c2
 			var bottom_left = Vector3(c1.x, SKIRT_BASE_Y, c1.z)
 			var bottom_right = Vector3(c2.x, SKIRT_BASE_Y, c2.z)
 
+			st.set_normal(wall_normal)
 			st.set_color(skirt_color)
 			st.add_vertex(top_left)
+			st.set_normal(wall_normal)
+			st.set_color(skirt_color)
 			st.add_vertex(bottom_left)
+			st.set_normal(wall_normal)
+			st.set_color(skirt_color)
 			st.add_vertex(bottom_right)
 
+			st.set_normal(wall_normal)
 			st.set_color(skirt_color)
 			st.add_vertex(top_left)
+			st.set_normal(wall_normal)
+			st.set_color(skirt_color)
 			st.add_vertex(bottom_right)
+			st.set_normal(wall_normal)
+			st.set_color(skirt_color)
 			st.add_vertex(top_right)
 
-	st.generate_normals()
 	return st.commit()
 
 
@@ -226,20 +373,12 @@ func _build_simple_quad_mesh(cells: Array[HexCell]) -> ArrayMesh:
 func update(camera: Camera3D) -> void:
 	var camera_pos = camera.global_position
 
-	# Calculate where camera is actually looking - project screen center to ground
-	# This properly handles camera rotation unlike using orbital target
-	var forward = -camera.global_transform.basis.z
-	var view_center: Vector3
+	# Use camera XZ position for distance calculations
+	# This ensures foreground terrain (close to camera) always gets HIGH LOD
+	var camera_xz = Vector3(camera_pos.x, 0, camera_pos.z)
 
-	if forward.y < -0.01:  # Camera looking down at ground
-		# Ray from camera along forward direction, find Y=0 intersection
-		var t = -camera_pos.y / forward.y
-		view_center = camera_pos + forward * t
-	else:
-		# Camera looking up or horizontal - use camera XZ position
-		view_center = Vector3(camera_pos.x, 0, camera_pos.z)
-
-	# Use simple distance-based culling without zoom scaling
+	# No zoom scaling - use fixed LOD distances based on camera position
+	# This prevents issues where foreground gets culled/LOD'd incorrectly
 	var effective_max_dist = MAX_RENDER_DISTANCE
 	var max_dist_sq = effective_max_dist * effective_max_dist
 
@@ -251,9 +390,9 @@ func update(camera: Camera3D) -> void:
 		if not chunk.mesh_high:
 			continue
 
-		# Horizontal distance from view center to chunk
-		var dx = chunk.center.x - view_center.x
-		var dz = chunk.center.z - view_center.z
+		# Horizontal distance from camera to chunk
+		var dx = chunk.center.x - camera_xz.x
+		var dz = chunk.center.z - camera_xz.z
 		var dist_sq = dx * dx + dz * dz
 
 		if dist_sq > max_dist_sq:
@@ -269,9 +408,9 @@ func update(camera: Camera3D) -> void:
 
 		# Debug: print first chunk distance occasionally
 		if key == chunks.keys()[0] and Engine.get_frames_drawn() % 120 == 0:
-			print("Chunk dist: %.1f, max: %.1f, view_center: %s" % [dist, effective_max_dist, view_center])
+			print("Chunk dist: %.1f, max: %.1f, cam: (%.1f, %.1f)" % [dist, effective_max_dist, camera_xz.x, camera_xz.z])
 
-		# LOD selection based on distance
+		# LOD selection based on distance from camera
 		if dist < LOD_HIGH_TO_MEDIUM:
 			chunk.mesh_high.visible = true
 			chunk.mesh_medium.visible = false
@@ -299,5 +438,7 @@ func dispose() -> void:
 			chunk.mesh_medium.queue_free()
 		if chunk.mesh_low:
 			chunk.mesh_low.queue_free()
+		if chunk.mesh_skirt:
+			chunk.mesh_skirt.queue_free()
 	chunks.clear()
 	total_chunk_count = 0

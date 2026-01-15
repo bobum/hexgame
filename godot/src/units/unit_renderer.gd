@@ -348,14 +348,8 @@ func update_visibility(camera: Camera3D) -> void:
 		return
 
 	var camera_pos = camera.global_position
-	var forward = -camera.global_transform.basis.z
-	var view_center: Vector3
-
-	if forward.y < -0.01:
-		var t = -camera_pos.y / forward.y
-		view_center = camera_pos + forward * t
-	else:
-		view_center = Vector3(camera_pos.x, 0, camera_pos.z)
+	# Use camera XZ position for distance (matches terrain renderer)
+	var camera_xz = Vector3(camera_pos.x, 0, camera_pos.z)
 
 	var max_dist_sq = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE
 
@@ -366,8 +360,8 @@ func update_visibility(camera: Camera3D) -> void:
 		var center_x = (cx + 0.5) * CHUNK_SIZE
 		var center_z = (cz + 0.5) * CHUNK_SIZE
 
-		var dx = center_x - view_center.x
-		var dz = center_z - view_center.z
+		var dx = center_x - camera_xz.x
+		var dz = center_z - camera_xz.z
 		var visible = (dx * dx + dz * dz) <= max_dist_sq
 
 		var chunk_meshes = unit_chunks[chunk_key]

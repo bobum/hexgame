@@ -7,8 +7,8 @@ extends Node
 const SCREENSHOT_PATH = "C:/projects/hexgame/godot/debug_screenshot.png"
 
 # Fixed camera settings for consistent screenshots
-const DEBUG_CAMERA_DISTANCE: float = 35.0
-const DEBUG_CAMERA_PITCH: float = 55.0
+const DEBUG_CAMERA_DISTANCE: float = 40.0  # See LOD transitions before fog
+const DEBUG_CAMERA_PITCH: float = 50.0
 const DEBUG_CAMERA_YAW: float = 0.0
 
 # Auto-capture settings
