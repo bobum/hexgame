@@ -7,6 +7,8 @@ const ChunkedRiverRendererClass = preload("res://src/rendering/chunked_river_ren
 
 @onready var hex_grid_node: Node3D = $HexGrid
 @onready var camera: MapCamera = $MapCamera
+@onready var directional_light: DirectionalLight3D = $DirectionalLight3D
+@onready var world_env: WorldEnvironment = $WorldEnvironment
 
 var grid: HexGrid
 var map_generator: MapGenerator
@@ -57,6 +59,8 @@ func _setup_ui() -> void:
 	game_ui.spawn_ai_requested.connect(_on_spawn_ai)
 	game_ui.clear_units_requested.connect(_on_clear_units)
 	game_ui.noise_param_changed.connect(_on_noise_param_changed)
+	game_ui.shader_param_changed.connect(_on_shader_param_changed)
+	game_ui.lighting_param_changed.connect(_on_lighting_param_changed)
 
 
 func _on_ui_regenerate(width: int, height: int, seed_val: int) -> void:
@@ -215,6 +219,21 @@ func _on_noise_param_changed(param: String, value: float) -> void:
 				map_generator.river_percentage = value
 		# Regenerate with current settings
 		_regenerate_map()
+
+
+func _on_shader_param_changed(param: String, value: float) -> void:
+	if chunked_terrain and chunked_terrain.terrain_material:
+		chunked_terrain.terrain_material.set_shader_parameter(param, value)
+
+
+func _on_lighting_param_changed(param: String, value: float) -> void:
+	match param:
+		"ambient_energy":
+			if world_env and world_env.environment:
+				world_env.environment.ambient_light_energy = value
+		"light_energy":
+			if directional_light:
+				directional_light.light_energy = value
 
 
 func _on_end_turn() -> void:

@@ -174,7 +174,7 @@ func _build_top_face(center: Vector3, color: Color) -> void:
 
 
 func _build_cliff(center: Vector3, edge_index: int, height: float, color: Color) -> void:
-	var wall_color = color.darkened(0.35)
+	var wall_color = color.darkened(0.45)
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
 
