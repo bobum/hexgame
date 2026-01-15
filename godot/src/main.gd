@@ -4,6 +4,7 @@ extends Node3D
 
 const ChunkedWaterRendererClass = preload("res://src/rendering/chunked_water_renderer.gd")
 const ChunkedRiverRendererClass = preload("res://src/rendering/chunked_river_renderer.gd")
+const ScreenshotCaptureClass = preload("res://src/debug/screenshot_capture.gd")
 
 @onready var hex_grid_node: Node3D = $HexGrid
 @onready var camera: MapCamera = $MapCamera
@@ -27,6 +28,7 @@ var selection_manager: SelectionManager
 var pathfinder: Pathfinder
 var path_renderer: PathRenderer
 var turn_manager: TurnManager
+var screenshot_capture: Node  # ScreenshotCapture
 
 # Map settings
 var map_width: int = 32
@@ -41,6 +43,7 @@ func _ready() -> void:
 	current_seed = randi()
 	_setup_ui()
 	_initialize_game()
+	_setup_screenshot_capture()
 
 
 func _setup_ui() -> void:
@@ -61,6 +64,13 @@ func _setup_ui() -> void:
 	game_ui.noise_param_changed.connect(_on_noise_param_changed)
 	game_ui.shader_param_changed.connect(_on_shader_param_changed)
 	game_ui.lighting_param_changed.connect(_on_lighting_param_changed)
+
+
+func _setup_screenshot_capture() -> void:
+	screenshot_capture = ScreenshotCaptureClass.new()
+	add_child(screenshot_capture)
+	screenshot_capture.setup(camera)
+	print("Screenshot capture ready - Auto-capture enabled")
 
 
 func _on_ui_regenerate(width: int, height: int, seed_val: int) -> void:

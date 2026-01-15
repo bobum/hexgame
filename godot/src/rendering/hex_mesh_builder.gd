@@ -44,7 +44,8 @@ func build_grid_mesh(grid: HexGrid) -> ArrayMesh:
 ## Build geometry for a single cell (Catlike Coding pattern)
 func build_cell(cell: HexCell, grid: HexGrid) -> void:
 	var center = cell.get_world_position()
-	var base_color = _vary_color(cell.get_color(), 0.08)
+	# Use flat colors - no variation for crisp look
+	var base_color = cell.get_color()
 
 	# Gather all 6 neighbors and their colors
 	var neighbors: Array[HexCell] = []
@@ -56,7 +57,8 @@ func build_cell(cell: HexCell, grid: HexGrid) -> void:
 		var neighbor = grid.get_neighbor(cell, dir)
 		neighbors[dir] = neighbor
 		if neighbor:
-			neighbor_colors[dir] = _vary_color(neighbor.get_color(), 0.08)
+			# Use flat neighbor colors - no variation
+			neighbor_colors[dir] = neighbor.get_color()
 		else:
 			neighbor_colors[dir] = base_color
 
@@ -653,20 +655,35 @@ func _add_triangle(v1: Vector3, v2: Vector3, v3: Vector3, color: Color) -> void:
 
 
 func _create_mesh() -> ArrayMesh:
-	# Use SurfaceTool to build the mesh properly
+	# Use SurfaceTool to build the mesh with FLAT normals for crisp edges
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 
-	# Add each triangle
+	# Add each triangle with explicit flat normals
 	var num_triangles = vertices.size() / 3
 	for i in range(num_triangles):
 		var idx = i * 3
-		st.set_color(colors[idx])
-		st.add_vertex(vertices[idx])
-		st.set_color(colors[idx + 1])
-		st.add_vertex(vertices[idx + 1])
-		st.set_color(colors[idx + 2])
-		st.add_vertex(vertices[idx + 2])
+		var v0 = vertices[idx]
+		var v1 = vertices[idx + 1]
+		var v2 = vertices[idx + 2]
 
-	st.generate_normals()
+		# Calculate flat face normal
+		var edge1 = v1 - v0
+		var edge2 = v2 - v0
+		var normal = edge1.cross(edge2).normalized()
+
+		# Add all 3 vertices with the SAME flat normal
+		st.set_normal(normal)
+		st.set_color(colors[idx])
+		st.add_vertex(v0)
+
+		st.set_normal(normal)
+		st.set_color(colors[idx + 1])
+		st.add_vertex(v1)
+
+		st.set_normal(normal)
+		st.set_color(colors[idx + 2])
+		st.add_vertex(v2)
+
+	# Don't call generate_normals() - we set them manually for flat shading
 	return st.commit()

@@ -22,7 +22,7 @@ enum Type {
 const COLORS: Dictionary = {
 	Type.OCEAN: Color(0.102, 0.298, 0.431),      # 0x1a4c6e - Deep blue
 	Type.COAST: Color(0.176, 0.545, 0.788),      # 0x2d8bc9 - Light blue
-	Type.PLAINS: Color(0.486, 0.702, 0.259),     # 0x7cb342 - Grass green
+	Type.PLAINS: Color(0.52, 0.75, 0.28),         # Brighter grass green
 	Type.FOREST: Color(0.180, 0.490, 0.196),     # 0x2e7d32 - Dark green
 	Type.HILLS: Color(0.553, 0.431, 0.388),      # 0x8d6e63 - Brown
 	Type.MOUNTAINS: Color(0.459, 0.459, 0.459),  # 0x757575 - Gray
