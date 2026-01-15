@@ -151,6 +151,10 @@ func _generate_features(seed_val: int) -> void:
 	var tree_count = 0
 	var rock_count = 0
 
+	# Clear existing features before generating new ones
+	for cell in grid.get_all_cells():
+		cell.features.clear()
+
 	for cell in grid.get_all_cells():
 		# Skip water cells
 		if cell.is_underwater():
@@ -192,13 +196,14 @@ func _generate_features(seed_val: int) -> void:
 		var center = cell.get_world_position()
 
 		# Try to place trees
+		# Keep offset small to stay on flat center of hex (avoid terrace slopes)
 		if tree_chance > 0 and rng.randf() < tree_chance:
 			var num_trees = rng.randi_range(1, 3)
 			for _i in range(num_trees):
 				var offset = Vector3(
-					rng.randf_range(-0.3, 0.3),
+					rng.randf_range(-0.2, 0.2),
 					0,
-					rng.randf_range(-0.3, 0.3)
+					rng.randf_range(-0.2, 0.2)
 				)
 				var feature = FeatureClass.new(
 					FeatureClass.Type.TREE,
@@ -210,13 +215,14 @@ func _generate_features(seed_val: int) -> void:
 				tree_count += 1
 
 		# Try to place rocks
+		# Keep offset small to stay on flat center of hex (avoid terrace slopes)
 		if rock_chance > 0 and rng.randf() < rock_chance:
 			var num_rocks = rng.randi_range(1, 2)
 			for _i in range(num_rocks):
 				var offset = Vector3(
-					rng.randf_range(-0.35, 0.35),
+					rng.randf_range(-0.2, 0.2),
 					0,
-					rng.randf_range(-0.35, 0.35)
+					rng.randf_range(-0.2, 0.2)
 				)
 				var feature = FeatureClass.new(
 					FeatureClass.Type.ROCK,
