@@ -297,6 +297,7 @@ func _update_turn_display() -> void:
 func _setup_units() -> void:
 	# Create unit manager
 	unit_manager = UnitManager.new(grid)
+	unit_manager.prewarm_pool(50)  # Pre-create units for faster spawning
 
 	# Create unit renderer
 	unit_renderer = UnitRenderer.new()

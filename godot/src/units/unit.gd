@@ -68,3 +68,29 @@ func can_traverse_land() -> bool:
 
 func can_traverse_water() -> bool:
 	return UnitTypes.can_traverse_water(type)
+
+
+## Reset unit state for reuse from object pool.
+func reset_for_pool() -> void:
+	id = 0
+	type = UnitTypes.Type.INFANTRY
+	q = 0
+	r = 0
+	health = 100
+	max_health = 100
+	movement = 2
+	max_movement = 2
+	attack = 10
+	defense = 8
+	player_id = 0
+	has_moved = false
+
+
+## Initialize unit with new values (used when acquiring from pool).
+func init_with(unit_type: UnitTypes.Type, unit_q: int, unit_r: int, unit_player_id: int) -> void:
+	type = unit_type
+	q = unit_q
+	r = unit_r
+	player_id = unit_player_id
+	has_moved = false
+	_apply_stats()

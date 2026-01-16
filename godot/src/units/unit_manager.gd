@@ -11,6 +11,9 @@ var grid: HexGrid
 var _hex_positions: Dictionary = {}  # "q,r" -> Unit (for hex coordinate lookups)
 var _spatial_hash: SpatialHash  # For world coordinate queries (radius, rect)
 
+# Object pooling for units (reduces GC pressure)
+var _unit_pool: ObjectPool
+
 signal unit_created(unit: Unit)
 signal unit_removed(unit_id: int)
 signal unit_moved(unit: Unit, from_q: int, from_r: int)
@@ -20,6 +23,12 @@ func _init(p_grid: HexGrid) -> void:
 	grid = p_grid
 	# Cell size of 2.0 works well for hex grids (slightly larger than hex radius)
 	_spatial_hash = SpatialHash.new(2.0)
+	# Create unit pool with factory and reset functions
+	_unit_pool = ObjectPool.new(
+		func(): return Unit.new(),
+		func(u: Unit): u.reset_for_pool(),
+		500  # Max pool size
+	)
 
 
 ## Create a new unit at the specified hex.
@@ -40,13 +49,11 @@ func create_unit(type: UnitTypes.Type, q: int, r: int, player_id: int) -> Unit:
 	if get_unit_at(q, r) != null:
 		return null
 
-	# Create unit
-	var unit = Unit.new(type)
+	# Acquire unit from pool and initialize
+	var unit = _unit_pool.acquire() as Unit
 	unit.id = next_id
 	next_id += 1
-	unit.q = q
-	unit.r = r
-	unit.player_id = player_id
+	unit.init_with(type, q, r, player_id)
 
 	# Add to tracking
 	units[unit.id] = unit
@@ -75,6 +82,10 @@ func remove_unit(unit_id: int) -> bool:
 	_spatial_hash.remove(unit)
 
 	units.erase(unit_id)
+
+	# Release unit back to pool for reuse
+	_unit_pool.release(unit)
+
 	unit_removed.emit(unit_id)
 	return true
 
@@ -189,6 +200,9 @@ func get_unit_counts() -> Dictionary:
 
 ## Clear all units.
 func clear() -> void:
+	# Release all units back to pool
+	for unit in units.values():
+		_unit_pool.release(unit)
 	units.clear()
 	_hex_positions.clear()
 	_spatial_hash.clear()
@@ -216,6 +230,16 @@ func get_units_in_rect(min_x: float, min_z: float, max_x: float, max_z: float) -
 ## Get spatial hash statistics for debugging.
 func get_spatial_stats() -> Dictionary:
 	return _spatial_hash.get_stats()
+
+
+## Get object pool statistics for debugging.
+func get_pool_stats() -> Dictionary:
+	return _unit_pool.get_stats()
+
+
+## Prewarm unit pool with objects.
+func prewarm_pool(count: int) -> void:
+	_unit_pool.prewarm(count)
 
 
 ## Spawn random land units for testing.
