@@ -194,19 +194,28 @@ func _build_full_hex(center: Vector3, color: Color, neighbor_colors: Array[Color
 			var neighbor_color2 = neighbor_colors[prev_dir]
 			var neighbor_color_right = neighbor_colors[next_dir]
 
+			# Check winding - need to match _add_triangle's behavior for upward faces
+			var edge1 = v2 - v1
+			var edge2 = v3 - v1
+			var normal = edge1.cross(edge2)
+
 			# Center vertex - 100% main color
 			_set_splat_solid(color)
 			_add_vertex_with_splat(v1, color)
 
-			# Corner v3 - blend with edge neighbor and right neighbor
-			_set_splat_blended(color, neighbor_color1, neighbor_color_right)
-			_add_vertex_with_splat(v3, color)
+			if normal.y > 0:
+				# Reverse winding for upward-facing triangles (Godot convention)
+				_set_splat_blended(color, neighbor_color1, neighbor_color2)
+				_add_vertex_with_splat(v2, color)
+				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
+				_add_vertex_with_splat(v3, color)
+			else:
+				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
+				_add_vertex_with_splat(v3, color)
+				_set_splat_blended(color, neighbor_color1, neighbor_color2)
+				_add_vertex_with_splat(v2, color)
 
-			# Corner v2 - blend with edge neighbor and prev neighbor
-			_set_splat_blended(color, neighbor_color1, neighbor_color2)
-			_add_vertex_with_splat(v2, color)
-
-			# Add triangle indices
+			# Add triangle indices (not used by _create_mesh but kept for consistency)
 			indices.append(vertex_index - 3)
 			indices.append(vertex_index - 2)
 			indices.append(vertex_index - 1)
@@ -238,19 +247,28 @@ func _build_top_face(center: Vector3, color: Color, neighbor_colors: Array[Color
 			var neighbor_color2 = neighbor_colors[prev_dir]
 			var neighbor_color_right = neighbor_colors[next_dir]
 
+			# Check winding - need to match _add_triangle's behavior for upward faces
+			var edge1 = v2 - v1
+			var edge2 = v3 - v1
+			var normal = edge1.cross(edge2)
+
 			# Center vertex - 100% main color
 			_set_splat_solid(color)
 			_add_vertex_with_splat(v1, color)
 
-			# Corner v3 - blend with edge neighbor and right neighbor
-			_set_splat_blended(color, neighbor_color1, neighbor_color_right)
-			_add_vertex_with_splat(v3, color)
+			if normal.y > 0:
+				# Reverse winding for upward-facing triangles (Godot convention)
+				_set_splat_blended(color, neighbor_color1, neighbor_color2)
+				_add_vertex_with_splat(v2, color)
+				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
+				_add_vertex_with_splat(v3, color)
+			else:
+				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
+				_add_vertex_with_splat(v3, color)
+				_set_splat_blended(color, neighbor_color1, neighbor_color2)
+				_add_vertex_with_splat(v2, color)
 
-			# Corner v2 - blend with edge neighbor and prev neighbor
-			_set_splat_blended(color, neighbor_color1, neighbor_color2)
-			_add_vertex_with_splat(v2, color)
-
-			# Add triangle indices
+			# Add triangle indices (not used by _create_mesh but kept for consistency)
 			indices.append(vertex_index - 3)
 			indices.append(vertex_index - 2)
 			indices.append(vertex_index - 1)

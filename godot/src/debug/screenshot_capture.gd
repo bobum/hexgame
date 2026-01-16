@@ -7,7 +7,7 @@ extends Node
 const SCREENSHOT_PATH = "C:/projects/hexgame/godot/debug_screenshot.png"
 
 # Fixed camera settings for consistent screenshots
-const DEBUG_CAMERA_DISTANCE: float = 25.0  # Close enough for HIGH LOD with splat blending
+const DEBUG_CAMERA_DISTANCE: float = 15.0  # Close view to verify terraces and splat
 const DEBUG_CAMERA_PITCH: float = 50.0
 const DEBUG_CAMERA_YAW: float = 0.0
 
