@@ -194,31 +194,13 @@ func _build_full_hex(center: Vector3, color: Color, neighbor_colors: Array[Color
 			var neighbor_color2 = neighbor_colors[prev_dir]
 			var neighbor_color_right = neighbor_colors[next_dir]
 
-			# Check winding - need to match _add_triangle's behavior for upward faces
-			var edge1 = v2 - v1
-			var edge2 = v3 - v1
-			var normal = edge1.cross(edge2)
+			# Pre-blend colors for corner vertices
+			var center_color = color  # 100% main color
+			var corner2_color = _blend_colors(color, neighbor_color1, neighbor_color2)
+			var corner3_color = _blend_colors(color, neighbor_color1, neighbor_color_right)
 
-			# Center vertex - 100% main color
-			_set_splat_solid(color)
-			_add_vertex_with_splat(v1, color)
-
-			if normal.y > 0:
-				# Reverse winding for upward-facing triangles (Godot convention)
-				_set_splat_blended(color, neighbor_color1, neighbor_color2)
-				_add_vertex_with_splat(v2, color)
-				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
-				_add_vertex_with_splat(v3, color)
-			else:
-				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
-				_add_vertex_with_splat(v3, color)
-				_set_splat_blended(color, neighbor_color1, neighbor_color2)
-				_add_vertex_with_splat(v2, color)
-
-			# Add triangle indices (not used by _create_mesh but kept for consistency)
-			indices.append(vertex_index - 3)
-			indices.append(vertex_index - 2)
-			indices.append(vertex_index - 1)
+			# Use existing triangle function for proper winding
+			_add_triangle_with_colors(v1, center_color, v2, corner2_color, v3, corner3_color)
 		else:
 			# CW winding for upward-facing in Godot
 			_set_splat_solid(color)
@@ -247,31 +229,13 @@ func _build_top_face(center: Vector3, color: Color, neighbor_colors: Array[Color
 			var neighbor_color2 = neighbor_colors[prev_dir]
 			var neighbor_color_right = neighbor_colors[next_dir]
 
-			# Check winding - need to match _add_triangle's behavior for upward faces
-			var edge1 = v2 - v1
-			var edge2 = v3 - v1
-			var normal = edge1.cross(edge2)
+			# Pre-blend colors for corner vertices
+			var center_color = color  # 100% main color
+			var corner2_color = _blend_colors(color, neighbor_color1, neighbor_color2)
+			var corner3_color = _blend_colors(color, neighbor_color1, neighbor_color_right)
 
-			# Center vertex - 100% main color
-			_set_splat_solid(color)
-			_add_vertex_with_splat(v1, color)
-
-			if normal.y > 0:
-				# Reverse winding for upward-facing triangles (Godot convention)
-				_set_splat_blended(color, neighbor_color1, neighbor_color2)
-				_add_vertex_with_splat(v2, color)
-				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
-				_add_vertex_with_splat(v3, color)
-			else:
-				_set_splat_blended(color, neighbor_color1, neighbor_color_right)
-				_add_vertex_with_splat(v3, color)
-				_set_splat_blended(color, neighbor_color1, neighbor_color2)
-				_add_vertex_with_splat(v2, color)
-
-			# Add triangle indices (not used by _create_mesh but kept for consistency)
-			indices.append(vertex_index - 3)
-			indices.append(vertex_index - 2)
-			indices.append(vertex_index - 1)
+			# Use existing triangle function for proper winding
+			_add_triangle_with_colors(v1, center_color, v2, corner2_color, v3, corner3_color)
 		else:
 			# No splatting - use solid colors
 			_set_splat_solid(color)
@@ -280,25 +244,11 @@ func _build_top_face(center: Vector3, color: Color, neighbor_colors: Array[Color
 
 ## Add a single vertex with pre-blended splat colors (for top face splatting)
 ## Instead of passing splat data to shader, we blend colors here in the mesh builder
-func _add_vertex_with_splat(v: Vector3, _base_color: Color) -> void:
+func _add_vertex_with_splat(v: Vector3, base_color: Color) -> void:
 	vertices.append(v)
 
-	# Pre-blend the splat colors using weights
-	var w = current_splat_weights
-	var blended = Color(
-		current_splat_color1.r * w.x + current_splat_color2.r * w.y + current_splat_color3.r * w.z,
-		current_splat_color1.g * w.x + current_splat_color2.g * w.y + current_splat_color3.g * w.z,
-		current_splat_color1.b * w.x + current_splat_color2.b * w.y + current_splat_color3.b * w.z
-	)
-
-	colors.append(blended)
-
-	# Still store splat data for future use (e.g., if custom attributes get fixed)
-	var weight_color = Color(w.x, w.y, w.z, 1.0)
-	splat_color1.append(current_splat_color1)
-	splat_color2.append(current_splat_color2)
-	splat_color3.append(current_splat_color3)
-	splat_weights.append(weight_color)
+	# TEMPORARILY use solid base color to debug geometry
+	colors.append(base_color)
 	vertex_index += 1
 
 
@@ -728,18 +678,27 @@ func _add_triangle_with_colors(
 	var edge2 = v3 - v1
 	var normal = edge1.cross(edge2)
 
-	var avg_color = Color(
-		(c1.r + c2.r + c3.r) / 3.0,
-		(c1.g + c2.g + c3.g) / 3.0,
-		(c1.b + c2.b + c3.b) / 3.0
-	)
-
 	# Godot needs opposite winding from Three.js
 	# Reverse when normal points UP (opposite of Three.js logic)
 	if normal.y > 0:
-		_add_triangle(v1, v3, v2, avg_color)
+		vertices.append(v1)
+		vertices.append(v3)
+		vertices.append(v2)
+		colors.append(c1)
+		colors.append(c3)
+		colors.append(c2)
 	else:
-		_add_triangle(v1, v2, v3, avg_color)
+		vertices.append(v1)
+		vertices.append(v2)
+		vertices.append(v3)
+		colors.append(c1)
+		colors.append(c2)
+		colors.append(c3)
+
+	indices.append(vertex_index)
+	indices.append(vertex_index + 1)
+	indices.append(vertex_index + 2)
+	vertex_index += 3
 
 
 ## Add quad with per-vertex colors
@@ -807,7 +766,19 @@ func _set_splat_blended(main_color: Color, neighbor1_color: Color, neighbor2_col
 	current_splat_color1 = main_color
 	current_splat_color2 = neighbor1_color
 	current_splat_color3 = neighbor2_color
-	current_splat_weights = Vector3(0.34, 0.33, 0.33)
+	# More conservative blend - main color dominates with subtle neighbor influence
+	current_splat_weights = Vector3(0.7, 0.15, 0.15)
+
+
+## Blend three colors with fixed weights for corner vertices
+func _blend_colors(main_color: Color, neighbor1: Color, neighbor2: Color) -> Color:
+	# 70% main, 15% each neighbor for subtle but visible blending
+	var w = Vector3(0.7, 0.15, 0.15)
+	return Color(
+		main_color.r * w.x + neighbor1.r * w.y + neighbor2.r * w.z,
+		main_color.g * w.x + neighbor1.g * w.y + neighbor2.g * w.z,
+		main_color.b * w.x + neighbor1.b * w.y + neighbor2.b * w.z
+	)
 
 
 func _create_mesh() -> ArrayMesh:

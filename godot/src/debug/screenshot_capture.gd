@@ -6,10 +6,10 @@ extends Node
 # Screenshot output path - save to project root for easy access
 const SCREENSHOT_PATH = "C:/projects/hexgame/godot/debug_screenshot.png"
 
-# Fixed camera settings for consistent screenshots
-const DEBUG_CAMERA_DISTANCE: float = 15.0  # Close view to verify terraces and splat
-const DEBUG_CAMERA_PITCH: float = 50.0
-const DEBUG_CAMERA_YAW: float = 0.0
+# Fixed camera settings for consistent screenshots - match target images
+const DEBUG_CAMERA_DISTANCE: float = 30.0
+const DEBUG_CAMERA_PITCH: float = 45.0
+const DEBUG_CAMERA_YAW: float = 30.0
 
 # Auto-capture settings
 const AUTO_CAPTURE_DELAY: float = 2.0  # Set to -1 to disable auto-capture
