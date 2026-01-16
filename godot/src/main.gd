@@ -18,6 +18,7 @@ var chunked_terrain: ChunkedTerrainRenderer
 var feature_renderer: FeatureRenderer
 var chunked_water: Node3D  # ChunkedWaterRenderer
 var chunked_rivers: Node3D  # ChunkedRiverRenderer
+var ground_plane: MeshInstance3D  # Prevents seeing through terrain at distance
 var hex_hover: HexHover
 var current_seed: int = 0
 var game_ui: GameUI
@@ -133,6 +134,9 @@ func _build_terrain() -> void:
 	chunked_terrain = ChunkedTerrainRenderer.new()
 	hex_grid_node.add_child(chunked_terrain)
 	chunked_terrain.build(grid)
+
+	# Build ground plane (prevents seeing through terrain at distance)
+	_build_ground_plane()
 
 	# Build water
 	_build_water()
@@ -338,9 +342,11 @@ func _setup_units() -> void:
 
 
 func _build_features() -> void:
-	# Remove old features
+	# Remove old features - use remove_child + free for immediate cleanup
 	if feature_renderer:
-		feature_renderer.queue_free()
+		feature_renderer.dispose()
+		hex_grid_node.remove_child(feature_renderer)
+		feature_renderer.free()
 		feature_renderer = null
 
 	feature_renderer = FeatureRenderer.new()
@@ -372,6 +378,45 @@ func _build_rivers() -> void:
 	hex_grid_node.add_child(chunked_rivers)
 	chunked_rivers.setup(grid)
 	chunked_rivers.build()
+
+
+func _build_ground_plane() -> void:
+	# Remove existing ground plane
+	if ground_plane:
+		ground_plane.queue_free()
+		ground_plane = null
+
+	# Calculate map bounds in world coordinates
+	var min_coords = HexCoordinates.new(0, 0).to_world_position(0)
+	var max_coords = HexCoordinates.new(map_width - 1, map_height - 1).to_world_position(0)
+
+	# Add padding around the map
+	var padding = 20.0
+	var size_x = max_coords.x - min_coords.x + padding * 2
+	var size_z = max_coords.z - min_coords.z + padding * 2
+	var center_x = (min_coords.x + max_coords.x) / 2.0
+	var center_z = (min_coords.z + max_coords.z) / 2.0
+
+	# Position below minimum terrain elevation
+	var plane_y = HexMetrics.MIN_ELEVATION * HexMetrics.ELEVATION_STEP - 0.5
+
+	# Create mesh
+	ground_plane = MeshInstance3D.new()
+	var plane_mesh = PlaneMesh.new()
+	plane_mesh.size = Vector2(size_x, size_z)
+	ground_plane.mesh = plane_mesh
+
+	# Create dark ocean material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color(0.102, 0.298, 0.431)  # 0x1a4c6e - matches Three.js
+	material.metallic = 0.0
+	material.roughness = 1.0
+	ground_plane.material_override = material
+
+	# Position the plane
+	ground_plane.position = Vector3(center_x, plane_y, center_z)
+
+	hex_grid_node.add_child(ground_plane)
 
 
 func _process(delta: float) -> void:
@@ -457,6 +502,9 @@ func _regenerate_map() -> void:
 		feature_renderer.dispose()
 		feature_renderer.queue_free()
 		feature_renderer = null
+	if ground_plane:
+		ground_plane.queue_free()
+		ground_plane = null
 
 	# Clear units
 	if unit_manager:
@@ -588,6 +636,9 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 		feature_renderer.dispose()
 		feature_renderer.queue_free()
 		feature_renderer = null
+	if ground_plane:
+		ground_plane.queue_free()
+		ground_plane = null
 
 	# Clear units
 	if unit_manager:
