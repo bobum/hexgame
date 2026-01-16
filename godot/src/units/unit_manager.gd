@@ -23,12 +23,27 @@ func _init(p_grid: HexGrid) -> void:
 	grid = p_grid
 	# Cell size of 2.0 works well for hex grids (slightly larger than hex radius)
 	_spatial_hash = SpatialHash.new(2.0)
-	# Create unit pool with factory and reset functions
+	# Initialize unit pool (will be set up after _init completes)
+	_unit_pool = null
+
+
+## Set up object pooling (call after construction)
+func setup_pool() -> void:
 	_unit_pool = ObjectPool.new(
-		func(): return Unit.new(),
-		func(u: Unit): u.reset_for_pool(),
+		Callable(self, "_create_unit_for_pool"),
+		Callable(self, "_reset_unit_for_pool"),
 		500  # Max pool size
 	)
+
+
+## Factory function for unit pool.
+func _create_unit_for_pool() -> Unit:
+	return Unit.new()
+
+
+## Reset function for unit pool.
+func _reset_unit_for_pool(unit: Unit) -> void:
+	unit.reset_for_pool()
 
 
 ## Create a new unit at the specified hex.
@@ -49,8 +64,12 @@ func create_unit(type: UnitTypes.Type, q: int, r: int, player_id: int) -> Unit:
 	if get_unit_at(q, r) != null:
 		return null
 
-	# Acquire unit from pool and initialize
-	var unit = _unit_pool.acquire() as Unit
+	# Acquire unit from pool (or create directly if pool not set up)
+	var unit: Unit
+	if _unit_pool:
+		unit = _unit_pool.acquire() as Unit
+	else:
+		unit = Unit.new()
 	unit.id = next_id
 	next_id += 1
 	unit.init_with(type, q, r, player_id)
@@ -83,8 +102,9 @@ func remove_unit(unit_id: int) -> bool:
 
 	units.erase(unit_id)
 
-	# Release unit back to pool for reuse
-	_unit_pool.release(unit)
+	# Release unit back to pool for reuse (if pool is set up)
+	if _unit_pool:
+		_unit_pool.release(unit)
 
 	unit_removed.emit(unit_id)
 	return true
@@ -200,9 +220,10 @@ func get_unit_counts() -> Dictionary:
 
 ## Clear all units.
 func clear() -> void:
-	# Release all units back to pool
-	for unit in units.values():
-		_unit_pool.release(unit)
+	# Release all units back to pool (if pool is set up)
+	if _unit_pool:
+		for unit in units.values():
+			_unit_pool.release(unit)
 	units.clear()
 	_hex_positions.clear()
 	_spatial_hash.clear()
@@ -234,12 +255,15 @@ func get_spatial_stats() -> Dictionary:
 
 ## Get object pool statistics for debugging.
 func get_pool_stats() -> Dictionary:
-	return _unit_pool.get_stats()
+	if _unit_pool:
+		return _unit_pool.get_stats()
+	return {"available": 0, "active": 0, "created": 0, "reused": 0, "peak": 0, "reuse_rate": 0.0}
 
 
 ## Prewarm unit pool with objects.
 func prewarm_pool(count: int) -> void:
-	_unit_pool.prewarm(count)
+	if _unit_pool:
+		_unit_pool.prewarm(count)
 
 
 ## Spawn random land units for testing.

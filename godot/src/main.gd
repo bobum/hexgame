@@ -222,6 +222,9 @@ func _update_unit_counts() -> void:
 	if game_ui and unit_manager:
 		var counts = unit_manager.get_unit_counts()
 		game_ui.set_unit_counts(counts["land"], counts["naval"])
+		# Update pool stats
+		var pool_stats = unit_manager.get_pool_stats()
+		game_ui.set_pool_stats(pool_stats["active"], pool_stats["created"], pool_stats["reuse_rate"])
 
 
 func _on_noise_param_changed(param: String, value: float) -> void:
@@ -297,6 +300,7 @@ func _update_turn_display() -> void:
 func _setup_units() -> void:
 	# Create unit manager
 	unit_manager = UnitManager.new(grid)
+	unit_manager.setup_pool()  # Initialize object pooling
 	unit_manager.prewarm_pool(50)  # Pre-create units for faster spawning
 
 	# Create unit renderer
@@ -528,6 +532,7 @@ func _finish_map_build_with_new_units() -> void:
 
 	# Setup new unit manager with new grid
 	unit_manager = UnitManager.new(grid)
+	unit_manager.setup_pool()
 	var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
 	print("Spawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
 	if unit_renderer:
