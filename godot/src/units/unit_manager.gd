@@ -7,6 +7,10 @@ var units: Dictionary = {}  # id -> Unit
 var next_id: int = 1
 var grid: HexGrid
 
+# Spatial indexing for O(1) lookups
+var _hex_positions: Dictionary = {}  # "q,r" -> Unit (for hex coordinate lookups)
+var _spatial_hash: SpatialHash  # For world coordinate queries (radius, rect)
+
 signal unit_created(unit: Unit)
 signal unit_removed(unit_id: int)
 signal unit_moved(unit: Unit, from_q: int, from_r: int)
@@ -14,6 +18,8 @@ signal unit_moved(unit: Unit, from_q: int, from_r: int)
 
 func _init(p_grid: HexGrid) -> void:
 	grid = p_grid
+	# Cell size of 2.0 works well for hex grids (slightly larger than hex radius)
+	_spatial_hash = SpatialHash.new(2.0)
 
 
 ## Create a new unit at the specified hex.
@@ -44,6 +50,13 @@ func create_unit(type: UnitTypes.Type, q: int, r: int, player_id: int) -> Unit:
 
 	# Add to tracking
 	units[unit.id] = unit
+
+	# Add to spatial indexes
+	var hex_key = "%d,%d" % [q, r]
+	_hex_positions[hex_key] = unit
+	var world_pos = HexCoordinates.new(q, r).to_world_position(cell.elevation)
+	_spatial_hash.insert(unit, world_pos.x, world_pos.z)
+
 	unit_created.emit(unit)
 
 	return unit
@@ -53,6 +66,13 @@ func create_unit(type: UnitTypes.Type, q: int, r: int, player_id: int) -> Unit:
 func remove_unit(unit_id: int) -> bool:
 	if not units.has(unit_id):
 		return false
+
+	var unit = units[unit_id] as Unit
+
+	# Remove from spatial indexes
+	var hex_key = "%d,%d" % [unit.q, unit.r]
+	_hex_positions.erase(hex_key)
+	_spatial_hash.remove(unit)
 
 	units.erase(unit_id)
 	unit_removed.emit(unit_id)
@@ -91,9 +111,19 @@ func move_unit(unit_id: int, to_q: int, to_r: int, movement_cost: int = -1) -> b
 	var from_q = unit.q
 	var from_r = unit.r
 
+	# Update spatial indexes (remove old, add new)
+	var old_hex_key = "%d,%d" % [from_q, from_r]
+	var new_hex_key = "%d,%d" % [to_q, to_r]
+	_hex_positions.erase(old_hex_key)
+	_hex_positions[new_hex_key] = unit
+
 	# Update position
 	unit.q = to_q
 	unit.r = to_r
+
+	# Update spatial hash with new world position
+	var world_pos = HexCoordinates.new(to_q, to_r).to_world_position(cell.elevation)
+	_spatial_hash.update(unit, world_pos.x, world_pos.z)
 
 	unit_moved.emit(unit, from_q, from_r)
 	return true
@@ -112,12 +142,10 @@ func reset_player_movement(player_id: int) -> void:
 			unit.reset_movement()
 
 
-## Get unit at a specific hex.
+## Get unit at a specific hex (O(1) lookup via spatial index).
 func get_unit_at(q: int, r: int) -> Unit:
-	for unit in units.values():
-		if unit.q == q and unit.r == r:
-			return unit
-	return null
+	var hex_key = "%d,%d" % [q, r]
+	return _hex_positions.get(hex_key)
 
 
 ## Get unit by ID.
@@ -162,7 +190,32 @@ func get_unit_counts() -> Dictionary:
 ## Clear all units.
 func clear() -> void:
 	units.clear()
+	_hex_positions.clear()
+	_spatial_hash.clear()
 	next_id = 1
+
+
+## Get units within a world-coordinate radius (for range attacks, area effects).
+func get_units_in_radius(world_x: float, world_z: float, radius: float) -> Array[Unit]:
+	var results: Array[Unit] = []
+	for item in _spatial_hash.query_radius(world_x, world_z, radius):
+		if item is Unit:
+			results.append(item)
+	return results
+
+
+## Get units within a world-coordinate rectangle (for selection box).
+func get_units_in_rect(min_x: float, min_z: float, max_x: float, max_z: float) -> Array[Unit]:
+	var results: Array[Unit] = []
+	for item in _spatial_hash.query_rect(min_x, min_z, max_x, max_z):
+		if item is Unit:
+			results.append(item)
+	return results
+
+
+## Get spatial hash statistics for debugging.
+func get_spatial_stats() -> Dictionary:
+	return _spatial_hash.get_stats()
 
 
 ## Spawn random land units for testing.
