@@ -8,8 +8,23 @@ var colors: PackedColorArray
 var indices: PackedInt32Array
 var vertex_index: int = 0
 
+# Splat blending data (3 colors + weights per vertex)
+var splat_color1: PackedColorArray  # Main terrain color (R weight)
+var splat_color2: PackedColorArray  # First neighbor color (G weight)
+var splat_color3: PackedColorArray  # Second neighbor color (B weight)
+var splat_weights: PackedColorArray  # RGB weights for blending (stored as Color for RGBA)
+
+# Current splat state (set before adding vertices)
+var current_splat_color1: Color = Color.WHITE
+var current_splat_color2: Color = Color.WHITE
+var current_splat_color3: Color = Color.WHITE
+var current_splat_weights: Vector3 = Vector3(1, 0, 0)
+
 # Pre-calculated corner offsets
 var corners: Array[Vector3]
+
+# Mapping from edge index to neighbor direction
+const EDGE_TO_DIRECTION: Array[int] = [5, 4, 3, 2, 1, 0]
 
 
 func _init() -> void:
@@ -21,7 +36,16 @@ func reset() -> void:
 	vertices = PackedVector3Array()
 	colors = PackedColorArray()
 	indices = PackedInt32Array()
+	splat_color1 = PackedColorArray()
+	splat_color2 = PackedColorArray()
+	splat_color3 = PackedColorArray()
+	splat_weights = PackedColorArray()
 	vertex_index = 0
+	# Reset splat state
+	current_splat_color1 = Color.WHITE
+	current_splat_color2 = Color.WHITE
+	current_splat_color3 = Color.WHITE
+	current_splat_weights = Vector3(1, 0, 0)
 
 
 var _corner_count: int = 0
@@ -38,6 +62,7 @@ func build_grid_mesh(grid: HexGrid) -> ArrayMesh:
 
 	print("Built mesh: %d vertices, %d triangles" % [vertices.size(), vertices.size() / 3])
 	print("Built %d edges, %d corners" % [_edge_count, _corner_count])
+	print("Splat data: colors1=%d, colors2=%d, weights=%d" % [splat_color1.size(), splat_color2.size(), splat_weights.size()])
 	return _create_mesh()
 
 
@@ -67,7 +92,7 @@ func build_cell(cell: HexCell, grid: HexGrid) -> void:
 
 	if use_full_hexes:
 		# Simple mode: full hex tops with walls for elevation changes
-		_build_full_hex(center, base_color)
+		_build_full_hex(center, base_color, neighbor_colors)
 
 		# Build walls for elevation drops
 		for dir in range(6):
@@ -84,7 +109,7 @@ func build_cell(cell: HexCell, grid: HexGrid) -> void:
 				_build_cliff(center, edge_index, wall_height, base_color)
 	else:
 		# Catlike Coding mode: solid center with edge/corner connections
-		_build_top_face(center, base_color)
+		_build_top_face(center, base_color, neighbor_colors)
 
 		# Build edges for each direction
 		for dir in range(6):
@@ -148,7 +173,9 @@ func _get_neighbor_corner_index(dir: int, is_prev_neighbor: bool = false) -> int
 
 
 ## Build full hexagon at full radius (no solid/blend regions)
-func _build_full_hex(center: Vector3, color: Color) -> void:
+func _build_full_hex(center: Vector3, color: Color, neighbor_colors: Array[Color] = []) -> void:
+	var has_neighbors = neighbor_colors.size() == 6
+
 	for i in range(6):
 		var c1 = corners[i]
 		var c2 = corners[(i + 1) % 6]
@@ -157,12 +184,32 @@ func _build_full_hex(center: Vector3, color: Color) -> void:
 		var v2 = Vector3(center.x + c1.x, center.y, center.z + c1.z)
 		var v3 = Vector3(center.x + c2.x, center.y, center.z + c2.z)
 
-		# CW winding for upward-facing in Godot
-		_add_triangle(v1, v2, v3, color)
+		if has_neighbors:
+			# Splat blending: get neighbor directions for this edge
+			var edge_dir = EDGE_TO_DIRECTION[i]
+			var prev_dir = (edge_dir + 1) % 6
+			var next_dir = (edge_dir + 5) % 6
+
+			var neighbor_color1 = neighbor_colors[edge_dir]
+			var neighbor_color2 = neighbor_colors[prev_dir]
+			var neighbor_color_right = neighbor_colors[next_dir]
+
+			# Pre-blend colors for corner vertices
+			var center_color = color  # 100% main color
+			var corner2_color = _blend_colors(color, neighbor_color1, neighbor_color2)
+			var corner3_color = _blend_colors(color, neighbor_color1, neighbor_color_right)
+
+			# Use existing triangle function for proper winding
+			_add_triangle_with_colors(v1, center_color, v2, corner2_color, v3, corner3_color)
+		else:
+			# CW winding for upward-facing in Godot
+			_set_splat_solid(color)
+			_add_triangle(v1, v2, v3, color)
 
 
-func _build_top_face(center: Vector3, color: Color) -> void:
+func _build_top_face(center: Vector3, color: Color, neighbor_colors: Array[Color] = []) -> void:
 	var solid = HexMetrics.SOLID_FACTOR
+	var has_neighbors = neighbor_colors.size() == 6
 
 	for i in range(6):
 		var c1 = corners[i]
@@ -172,11 +219,42 @@ func _build_top_face(center: Vector3, color: Color) -> void:
 		var v2 = Vector3(center.x + c1.x * solid, center.y, center.z + c1.z * solid)
 		var v3 = Vector3(center.x + c2.x * solid, center.y, center.z + c2.z * solid)
 
-		_add_triangle_with_colors(v1, color, v2, color, v3, color)
+		if has_neighbors:
+			# Splat blending: get neighbor directions for this edge
+			var edge_dir = EDGE_TO_DIRECTION[i]
+			var prev_dir = (edge_dir + 1) % 6
+			var next_dir = (edge_dir + 5) % 6
+
+			var neighbor_color1 = neighbor_colors[edge_dir]
+			var neighbor_color2 = neighbor_colors[prev_dir]
+			var neighbor_color_right = neighbor_colors[next_dir]
+
+			# Pre-blend colors for corner vertices
+			var center_color = color  # 100% main color
+			var corner2_color = _blend_colors(color, neighbor_color1, neighbor_color2)
+			var corner3_color = _blend_colors(color, neighbor_color1, neighbor_color_right)
+
+			# Use existing triangle function for proper winding
+			_add_triangle_with_colors(v1, center_color, v2, corner2_color, v3, corner3_color)
+		else:
+			# No splatting - use solid colors
+			_set_splat_solid(color)
+			_add_triangle_with_colors(v1, color, v2, color, v3, color)
+
+
+## Add a single vertex with pre-blended splat colors (for top face splatting)
+## Instead of passing splat data to shader, we blend colors here in the mesh builder
+func _add_vertex_with_splat(v: Vector3, base_color: Color) -> void:
+	vertices.append(v)
+
+	# TEMPORARILY use solid base color to debug geometry
+	colors.append(base_color)
+	vertex_index += 1
 
 
 func _build_cliff(center: Vector3, edge_index: int, height: float, color: Color) -> void:
 	var wall_color = color.darkened(0.45)
+	_set_splat_solid(wall_color)  # Walls don't blend
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
 
@@ -192,6 +270,7 @@ func _build_cliff(center: Vector3, edge_index: int, height: float, color: Color)
 func _build_terraced_slope(center: Vector3, neighbor_center: Vector3, edge_index: int,
 		begin_color: Color, end_color: Color) -> void:
 	_edge_count += 1
+	_set_splat_solid(begin_color)  # Terraces don't blend
 	var solid = HexMetrics.SOLID_FACTOR
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
@@ -260,6 +339,7 @@ func _build_terraced_slope(center: Vector3, neighbor_center: Vector3, edge_index
 func _build_flat_cliff(center: Vector3, neighbor_center: Vector3, edge_index: int,
 		color: Color, neighbor_color: Color) -> void:
 	_edge_count += 1
+	_set_splat_solid(color)  # Cliffs don't blend
 	var solid = HexMetrics.SOLID_FACTOR
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
@@ -285,6 +365,7 @@ func _build_flat_cliff(center: Vector3, neighbor_center: Vector3, edge_index: in
 func _build_flat_edge(center: Vector3, neighbor_center: Vector3, edge_index: int,
 		color: Color, neighbor_color: Color) -> void:
 	_edge_count += 1
+	_set_splat_solid(color)  # Flat edges don't blend
 	var solid = HexMetrics.SOLID_FACTOR
 	var c1 = corners[edge_index]
 	var c2 = corners[(edge_index + 1) % 6]
@@ -313,6 +394,7 @@ func _build_flat_edge(center: Vector3, neighbor_center: Vector3, edge_index: int
 func _build_corner(cell: HexCell, center: Vector3, color: Color, dir: int,
 		neighbor1: HexCell, neighbor2: HexCell) -> void:
 	_corner_count += 1
+	_set_splat_solid(color)  # Corner geometry doesn't blend
 	var solid = HexMetrics.SOLID_FACTOR
 	var edge_index = _get_edge_index_for_direction(dir)
 
@@ -596,18 +678,27 @@ func _add_triangle_with_colors(
 	var edge2 = v3 - v1
 	var normal = edge1.cross(edge2)
 
-	var avg_color = Color(
-		(c1.r + c2.r + c3.r) / 3.0,
-		(c1.g + c2.g + c3.g) / 3.0,
-		(c1.b + c2.b + c3.b) / 3.0
-	)
-
 	# Godot needs opposite winding from Three.js
 	# Reverse when normal points UP (opposite of Three.js logic)
 	if normal.y > 0:
-		_add_triangle(v1, v3, v2, avg_color)
+		vertices.append(v1)
+		vertices.append(v3)
+		vertices.append(v2)
+		colors.append(c1)
+		colors.append(c3)
+		colors.append(c2)
 	else:
-		_add_triangle(v1, v2, v3, avg_color)
+		vertices.append(v1)
+		vertices.append(v2)
+		vertices.append(v3)
+		colors.append(c1)
+		colors.append(c2)
+		colors.append(c3)
+
+	indices.append(vertex_index)
+	indices.append(vertex_index + 1)
+	indices.append(vertex_index + 2)
+	vertex_index += 3
 
 
 ## Add quad with per-vertex colors
@@ -648,14 +739,51 @@ func _add_triangle(v1: Vector3, v2: Vector3, v3: Vector3, color: Color) -> void:
 	colors.append(color)
 	colors.append(color)
 
+	# Add splat data for each vertex
+	var weight_color = Color(current_splat_weights.x, current_splat_weights.y, current_splat_weights.z, 1.0)
+	for _i in range(3):
+		splat_color1.append(current_splat_color1)
+		splat_color2.append(current_splat_color2)
+		splat_color3.append(current_splat_color3)
+		splat_weights.append(weight_color)
+
 	indices.append(vertex_index)
 	indices.append(vertex_index + 1)
 	indices.append(vertex_index + 2)
 	vertex_index += 3
 
 
+## Set splat state for next vertices (no blending - 100% main color)
+func _set_splat_solid(color: Color) -> void:
+	current_splat_color1 = color
+	current_splat_color2 = color
+	current_splat_color3 = color
+	current_splat_weights = Vector3(1, 0, 0)
+
+
+## Set splat state for blended corner vertex
+func _set_splat_blended(main_color: Color, neighbor1_color: Color, neighbor2_color: Color) -> void:
+	current_splat_color1 = main_color
+	current_splat_color2 = neighbor1_color
+	current_splat_color3 = neighbor2_color
+	# More conservative blend - main color dominates with subtle neighbor influence
+	current_splat_weights = Vector3(0.7, 0.15, 0.15)
+
+
+## Blend three colors with fixed weights for corner vertices
+func _blend_colors(main_color: Color, neighbor1: Color, neighbor2: Color) -> Color:
+	# 70% main, 15% each neighbor for subtle but visible blending
+	var w = Vector3(0.7, 0.15, 0.15)
+	return Color(
+		main_color.r * w.x + neighbor1.r * w.y + neighbor2.r * w.z,
+		main_color.g * w.x + neighbor1.g * w.y + neighbor2.g * w.z,
+		main_color.b * w.x + neighbor1.b * w.y + neighbor2.b * w.z
+	)
+
+
 func _create_mesh() -> ArrayMesh:
 	# Use SurfaceTool to build the mesh with FLAT normals for crisp edges
+	# Splat blending is pre-computed in vertex colors, so no custom attributes needed
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 
