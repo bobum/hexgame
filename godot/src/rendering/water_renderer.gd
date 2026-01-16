@@ -3,7 +3,7 @@ extends RefCounted
 ## Renders water surface for underwater cells
 ## Matches web/src/rendering/WaterRenderer.ts
 
-const WATER_LEVEL: float = -0.05  # Slightly below terrain to avoid z-fighting
+const WATER_SURFACE_OFFSET: float = 0.12  # Above terrain to cover hex tops cleanly
 const DEEP_COLOR: Color = Color(0.102, 0.298, 0.431)  # 0x1a4c6e
 const SHALLOW_COLOR: Color = Color(0.176, 0.545, 0.788)  # 0x2d8bc9
 
@@ -15,16 +15,19 @@ static func build_water_mesh(grid: HexGrid) -> ArrayMesh:
 
 	var corners = HexMetrics.get_corners()
 	var water_cell_count = 0
+	# Water renders at sea level Y position
+	var water_y = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP + WATER_SURFACE_OFFSET
 
 	for cell in grid.get_all_cells():
-		if cell.elevation < 0:
+		if cell.elevation < HexMetrics.LAND_MIN_ELEVATION:  # Underwater (0-4)
 			water_cell_count += 1
 			var center = cell.get_world_position()
 			# Place water at fixed Y level (sea level)
-			center.y = WATER_LEVEL
+			center.y = water_y
 
-			# Color based on depth
-			var depth_factor = clampf(float(-cell.elevation) / 3.0, 0.0, 1.0)
+			# Color based on depth (distance below sea level)
+			var depth = HexMetrics.SEA_LEVEL - cell.elevation
+			var depth_factor = clampf(float(depth) / 3.0, 0.0, 1.0)
 			var color = SHALLOW_COLOR.lerp(DEEP_COLOR, depth_factor)
 
 			# Build hexagonal water surface

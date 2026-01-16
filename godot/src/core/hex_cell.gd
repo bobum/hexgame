@@ -20,14 +20,15 @@ var features: Array = []  # Trees, rocks, etc. (Feature objects)
 
 
 ## Get world position of this cell's center
+## All cells render at their actual elevation
 func get_world_position() -> Vector3:
 	var coords = HexCoordinates.new(q, r)
 	return coords.to_world_position(elevation)
 
 
-## Check if this cell is underwater
+## Check if this cell is underwater (water is elevation 0-4, land is 5+)
 func is_underwater() -> bool:
-	return elevation < HexMetrics.WATER_LEVEL
+	return elevation < HexMetrics.LAND_MIN_ELEVATION
 
 
 ## Check if terrain is water type
