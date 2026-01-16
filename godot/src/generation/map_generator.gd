@@ -2,12 +2,23 @@ class_name MapGenerator
 extends RefCounted
 ## Procedural map generation using noise
 ## Matches web/src/generation/MapGenerator.ts
+## Supports both sync and async (threaded) generation
 
 const FeatureClass = preload("res://src/core/feature.gd")
+
+# Signals for async generation progress
+signal generation_started()
+signal generation_progress(phase: String, percent: float)
+signal generation_completed(success: bool, worker_time_ms: float, feature_time_ms: float)
 
 var noise: FastNoiseLite
 var grid: HexGrid
 var river_generator: RiverGenerator
+
+# Threading support
+var _thread: Thread
+var _is_generating: bool = false
+var _pending_seed: int = 0
 
 # Generation parameters
 var sea_level: float = 0.35
@@ -229,3 +240,190 @@ func _generate_features(seed_val: int) -> void:
 
 	if tree_count > 0 or rock_count > 0:
 		print("Generated %d trees, %d rocks" % [tree_count, rock_count])
+
+
+# =============================================================================
+# ASYNC GENERATION METHODS
+# =============================================================================
+
+## Start async generation in background thread
+## Call is_generation_complete() in _process() to check when done
+## Then call finish_async_generation() to apply results
+func generate_async(hex_grid: HexGrid, seed_val: int = 0) -> void:
+	if _is_generating:
+		push_error("MapGenerator: Generation already in progress")
+		return
+
+	grid = hex_grid
+	_pending_seed = seed_val if seed_val != 0 else randi()
+	_is_generating = true
+
+	generation_started.emit()
+	generation_progress.emit("terrain", 0.0)
+
+	# Prepare input data for thread (no objects, just primitives)
+	var input = {
+		"width": grid.width,
+		"height": grid.height,
+		"seed": _pending_seed,
+		"noise_scale": noise_scale,
+		"octaves": octaves,
+		"persistence": persistence,
+		"lacunarity": lacunarity,
+		"sea_level": sea_level,
+	}
+
+	# Start background thread
+	_thread = Thread.new()
+	_thread.start(_thread_generate_terrain.bind(input))
+
+
+## Thread worker function - generates terrain data only (no grid access)
+## Returns Dictionary with cells array and timing info
+func _thread_generate_terrain(input: Dictionary) -> Dictionary:
+	var start_time = Time.get_ticks_msec()
+
+	# Create noise generators in thread (thread-safe)
+	var elev_noise = FastNoiseLite.new()
+	elev_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	elev_noise.seed = input["seed"]
+	elev_noise.frequency = input["noise_scale"]
+	elev_noise.fractal_octaves = input["octaves"]
+	elev_noise.fractal_gain = input["persistence"]
+	elev_noise.fractal_lacunarity = input["lacunarity"]
+
+	var moist_noise = FastNoiseLite.new()
+	moist_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	moist_noise.seed = input["seed"] + 1000
+	moist_noise.frequency = 0.03
+
+	var cells: Array[Dictionary] = []
+	var width = input["width"]
+	var height = input["height"]
+	var sea_lvl = input["sea_level"]
+
+	# Generate all cells
+	for r in range(height):
+		for q in range(width):
+			# Calculate world position (same as HexCoordinates.to_world_position)
+			var x = (q + r * 0.5) * (HexMetrics.INNER_RADIUS * 2.0)
+			var z = r * (HexMetrics.OUTER_RADIUS * 1.5)
+
+			# Elevation from noise
+			var noise_val = (elev_noise.get_noise_2d(x, z) + 1.0) / 2.0
+			var elevation: int
+			if noise_val < sea_lvl:
+				elevation = HexMetrics.MIN_ELEVATION
+			else:
+				var normalized = (noise_val - sea_lvl) / (1.0 - sea_lvl)
+				elevation = int(normalized * HexMetrics.MAX_ELEVATION)
+
+			# Moisture from noise
+			var moisture = (moist_noise.get_noise_2d(x, z) + 1.0) / 2.0
+
+			# Determine terrain type (static function for thread safety)
+			var terrain_type = _get_biome_for_thread(elevation, moisture)
+
+			cells.append({
+				"q": q,
+				"r": r,
+				"elevation": elevation,
+				"moisture": moisture,
+				"terrain_type": terrain_type
+			})
+
+	return {
+		"cells": cells,
+		"worker_time": Time.get_ticks_msec() - start_time
+	}
+
+
+## Static biome function for thread (avoids instance access)
+static func _get_biome_for_thread(elevation: int, moisture: float) -> int:
+	# Water
+	if elevation < HexMetrics.WATER_LEVEL:
+		if elevation < HexMetrics.WATER_LEVEL - 1:
+			return TerrainType.Type.OCEAN
+		return TerrainType.Type.COAST
+
+	# High elevation
+	if elevation >= 6:
+		return TerrainType.Type.SNOW
+	if elevation >= 4:
+		return TerrainType.Type.MOUNTAINS
+
+	# Land biomes based on moisture
+	if moisture < 0.2:
+		return TerrainType.Type.DESERT
+	elif moisture < 0.4:
+		if elevation >= 2:
+			return TerrainType.Type.HILLS
+		return TerrainType.Type.SAVANNA
+	elif moisture < 0.6:
+		return TerrainType.Type.PLAINS
+	elif moisture < 0.8:
+		return TerrainType.Type.FOREST
+	else:
+		return TerrainType.Type.JUNGLE
+
+
+## Check if async generation thread has completed
+func is_generation_complete() -> bool:
+	return _thread != null and not _thread.is_alive()
+
+
+## Check if generation is in progress
+func is_generating() -> bool:
+	return _is_generating
+
+
+## Finish async generation - MUST be called from main thread
+## Applies thread results to grid, then runs rivers/features on main thread
+func finish_async_generation() -> Dictionary:
+	if not _thread:
+		return {"worker_time": 0, "feature_time": 0}
+
+	# Wait for thread and get results
+	var result = _thread.wait_to_finish()
+	_thread = null
+
+	generation_progress.emit("applying", 0.3)
+
+	# Apply terrain data to grid (main thread, safe to access grid)
+	for cell_data in result["cells"]:
+		var cell = grid.get_cell(cell_data["q"], cell_data["r"])
+		if cell:
+			cell.elevation = cell_data["elevation"]
+			cell.moisture = cell_data["moisture"]
+			cell.terrain_type = cell_data["terrain_type"]
+
+	generation_progress.emit("rivers", 0.5)
+
+	# Generate rivers on main thread (requires grid traversal)
+	var feature_start = Time.get_ticks_msec()
+	_generate_rivers(_pending_seed)
+
+	generation_progress.emit("features", 0.75)
+
+	# Generate features on main thread
+	_generate_features(_pending_seed)
+
+	var feature_time = Time.get_ticks_msec() - feature_start
+
+	_is_generating = false
+	generation_progress.emit("complete", 1.0)
+	generation_completed.emit(true, result["worker_time"], feature_time)
+
+	return {
+		"worker_time": result["worker_time"],
+		"feature_time": feature_time
+	}
+
+
+## Cancel ongoing generation (cleanup)
+func cancel_generation() -> void:
+	if _thread and _thread.is_alive():
+		# Can't actually cancel thread, but we can wait and discard results
+		_thread.wait_to_finish()
+	_thread = null
+	_is_generating = false

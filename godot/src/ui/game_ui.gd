@@ -14,6 +14,7 @@ signal noise_param_changed(param: String, value: float)
 signal shader_param_changed(param: String, value: float)
 signal lighting_param_changed(param: String, value: float)
 signal fog_param_changed(param: String, value: float)
+signal async_toggle_changed(enabled: bool)
 
 @onready var panel: PanelContainer = $Panel
 @onready var scroll: ScrollContainer = $Panel/ScrollContainer
@@ -33,6 +34,10 @@ var draw_calls_label: Label
 var triangles_label: Label
 var turn_label: Label
 var unit_count_label: Label
+var generation_status_label: Label
+
+# Checkboxes
+var async_checkbox: CheckBox
 
 # Sliders
 var noise_scale_slider: HSlider
@@ -184,6 +189,20 @@ func _create_map_folder() -> void:
 	seed_spin.value = randi() % 100000
 	seed_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_child(seed_spin)
+
+	# Async checkbox
+	async_checkbox = CheckBox.new()
+	async_checkbox.text = "Async Generation"
+	async_checkbox.button_pressed = true  # Default enabled
+	async_checkbox.toggled.connect(_on_async_toggled)
+	content.add_child(async_checkbox)
+
+	# Generation status label (hidden by default)
+	generation_status_label = Label.new()
+	generation_status_label.text = ""
+	generation_status_label.visible = false
+	generation_status_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))  # Yellow
+	content.add_child(generation_status_label)
 
 	# Buttons
 	var btn_hbox = HBoxContainer.new()
@@ -589,6 +608,24 @@ func _update_slider_label(slider: HSlider, value: float, is_int: bool = false) -
 			var label = parent.get_child(2) as Label
 			if label:
 				label.text = "%d" % int(value) if is_int else "%.2f" % value
+
+
+func _on_async_toggled(enabled: bool) -> void:
+	async_toggle_changed.emit(enabled)
+
+
+## Show generation status message
+func show_generation_status(message: String) -> void:
+	if generation_status_label:
+		generation_status_label.text = message
+		generation_status_label.visible = true
+
+
+## Hide generation status message
+func hide_generation_status() -> void:
+	if generation_status_label:
+		generation_status_label.visible = false
+		generation_status_label.text = ""
 
 
 func _get_controls_text() -> String:

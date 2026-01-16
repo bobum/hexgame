@@ -36,6 +36,11 @@ var performance_monitor: Control  # PerformanceMonitor
 var map_width: int = 32
 var map_height: int = 32
 
+# Async generation
+var use_async_generation: bool = true
+var _async_generation_pending: bool = false
+var _async_needs_new_units: bool = false  # True when grid size changed
+
 # UI scene
 const GameUIScene = preload("res://scenes/game_ui.tscn")
 
@@ -68,6 +73,7 @@ func _setup_ui() -> void:
 	game_ui.shader_param_changed.connect(_on_shader_param_changed)
 	game_ui.lighting_param_changed.connect(_on_lighting_param_changed)
 	game_ui.fog_param_changed.connect(_on_fog_param_changed)
+	game_ui.async_toggle_changed.connect(_on_async_toggle_changed)
 
 
 func _setup_screenshot_capture() -> void:
@@ -266,6 +272,11 @@ func _on_fog_param_changed(param: String, value: float) -> void:
 				world_env.environment.fog_light_energy = value
 
 
+func _on_async_toggle_changed(enabled: bool) -> void:
+	use_async_generation = enabled
+	print("Async generation: %s" % ("enabled" if enabled else "disabled"))
+
+
 func _on_end_turn() -> void:
 	if turn_manager:
 		turn_manager.end_turn()
@@ -354,6 +365,10 @@ func _build_rivers() -> void:
 
 
 func _process(delta: float) -> void:
+	# Check for async generation completion
+	if _async_generation_pending and map_generator and map_generator.is_generation_complete():
+		_finish_async_generation()
+
 	# Update water animation and visibility
 	if chunked_water:
 		chunked_water.update_animation(delta)
@@ -410,6 +425,11 @@ func _input(event: InputEvent) -> void:
 
 
 func _regenerate_map() -> void:
+	# Cancel any pending async generation
+	if _async_generation_pending and map_generator:
+		map_generator.cancel_generation()
+		_async_generation_pending = false
+
 	# Remove old terrain
 	if chunked_terrain:
 		chunked_terrain.dispose()
@@ -432,8 +452,36 @@ func _regenerate_map() -> void:
 	if unit_manager:
 		unit_manager.clear()
 
-	# Regenerate
-	map_generator.generate(grid, current_seed)
+	# Regenerate - async or sync based on setting
+	if use_async_generation:
+		_async_generation_pending = true
+		_async_needs_new_units = false  # Same grid, respawn units
+		map_generator.generate_async(grid, current_seed)
+		print("Async map generation started with seed: %d" % current_seed)
+		if game_ui:
+			game_ui.show_generation_status("Generating terrain...")
+	else:
+		map_generator.generate(grid, current_seed)
+		print("Map generated (sync) with seed: %d" % current_seed)
+		_finish_map_build()
+
+
+## Called when async generation completes
+func _finish_async_generation() -> void:
+	_async_generation_pending = false
+	var result = map_generator.finish_async_generation()
+	print("Map generated (async): worker=%dms, features=%dms" % [result["worker_time"], result["feature_time"]])
+	if game_ui:
+		game_ui.hide_generation_status()
+
+	if _async_needs_new_units:
+		_finish_map_build_with_new_units()
+	else:
+		_finish_map_build()
+
+
+## Common map building after generation completes
+func _finish_map_build() -> void:
 	_build_terrain()
 	_build_features()
 
@@ -463,6 +511,38 @@ func _regenerate_map() -> void:
 		_update_unit_counts()
 
 
+## Map building when grid size changed (needs new unit manager)
+func _finish_map_build_with_new_units() -> void:
+	_build_terrain()
+	_build_features()
+
+	# Update hover with new grid
+	if hex_hover:
+		hex_hover.setup(grid, camera)
+
+	# Setup new unit manager with new grid
+	unit_manager = UnitManager.new(grid)
+	var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
+	print("Spawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
+	if unit_renderer:
+		unit_renderer.setup(unit_manager, grid)
+		unit_renderer.build()
+
+	# Update pathfinder
+	pathfinder = Pathfinder.new(grid, unit_manager)
+
+	# Update turn manager
+	turn_manager = TurnManager.new(unit_manager)
+	turn_manager.start_game()
+
+	if selection_manager:
+		selection_manager.clear_selection()
+		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
+
+	_update_turn_display()
+	_update_unit_counts()
+
+
 ## Get the hex cell at a world position (for raycasting)
 func get_cell_at_world_pos(world_pos: Vector3) -> HexCell:
 	var coords = HexCoordinates.from_world_position(world_pos)
@@ -471,6 +551,11 @@ func get_cell_at_world_pos(world_pos: Vector3) -> HexCell:
 
 ## Regenerate with specific settings
 func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
+	# Cancel any pending async generation
+	if _async_generation_pending and map_generator:
+		map_generator.cancel_generation()
+		_async_generation_pending = false
+
 	map_width = width
 	map_height = height
 	current_seed = seed_val
@@ -501,33 +586,15 @@ func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
 	grid = HexGrid.new(map_width, map_height)
 	grid.initialize()
 
-	# Generate and build
-	map_generator.generate(grid, current_seed)
-	_build_terrain()
-	_build_features()
-
-	# Update hover with new grid
-	if hex_hover:
-		hex_hover.setup(grid, camera)
-
-	# Setup new unit manager with new grid
-	unit_manager = UnitManager.new(grid)
-	var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
-	print("Spawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
-	if unit_renderer:
-		unit_renderer.setup(unit_manager, grid)
-		unit_renderer.build()
-
-	# Update pathfinder
-	pathfinder = Pathfinder.new(grid, unit_manager)
-
-	# Update turn manager
-	turn_manager = TurnManager.new(unit_manager)
-	turn_manager.start_game()
-
-	if selection_manager:
-		selection_manager.clear_selection()
-		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
-
-	_update_turn_display()
-	_update_unit_counts()
+	# Generate - async or sync based on setting
+	if use_async_generation:
+		_async_generation_pending = true
+		_async_needs_new_units = true  # New grid size, need new unit manager
+		map_generator.generate_async(grid, current_seed)
+		print("Async map generation started with seed: %d (size: %dx%d)" % [current_seed, map_width, map_height])
+		if game_ui:
+			game_ui.show_generation_status("Generating terrain...")
+	else:
+		map_generator.generate(grid, current_seed)
+		print("Map generated (sync) with seed: %d" % current_seed)
+		_finish_map_build_with_new_units()
