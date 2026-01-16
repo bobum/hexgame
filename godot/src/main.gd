@@ -47,6 +47,11 @@ const GameUIScene = preload("res://scenes/game_ui.tscn")
 
 func _ready() -> void:
 	print("HexGame starting...")
+
+	# Uncap FPS (default VSync limits to monitor refresh rate)
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = 0  # 0 = uncapped
+
 	current_seed = randi()
 	_setup_ui()
 	_initialize_game()
