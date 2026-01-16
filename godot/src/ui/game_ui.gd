@@ -34,6 +34,7 @@ var draw_calls_label: Label
 var triangles_label: Label
 var turn_label: Label
 var unit_count_label: Label
+var pool_stats_label: Label
 var generation_status_label: Label
 
 # Checkboxes
@@ -320,6 +321,11 @@ func _create_units_folder() -> void:
 	unit_count_label.text = "Land: 0  Naval: 0"
 	content.add_child(unit_count_label)
 
+	# Pool stats label
+	pool_stats_label = Label.new()
+	pool_stats_label.text = "Pool: 0/0 (0%)"
+	content.add_child(pool_stats_label)
+
 	# Spawn buttons
 	var spawn_hbox = HBoxContainer.new()
 	spawn_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -454,6 +460,11 @@ func set_turn_status(status: String) -> void:
 func set_unit_counts(land: int, naval: int) -> void:
 	if unit_count_label:
 		unit_count_label.text = "Land: %d  Naval: %d" % [land, naval]
+
+
+func set_pool_stats(active: int, created: int, reuse_rate: float) -> void:
+	if pool_stats_label:
+		pool_stats_label.text = "Pool: %d/%d (%d%%)" % [active, created, int(reuse_rate * 100)]
 
 
 func _update_cell_count() -> void:
