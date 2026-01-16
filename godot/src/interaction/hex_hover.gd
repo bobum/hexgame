@@ -101,41 +101,18 @@ func _update_hover() -> void:
 
 
 func _raycast_to_hex(origin: Vector3, direction: Vector3) -> HexCell:
-	# Raycast against multiple elevation levels to find the actual terrain surface
-	# Check from highest to lowest elevation to find the first valid intersection
+	# Simple approach: use y=0 plane (where water and sea-level land render)
 	if abs(direction.y) < 0.001:
 		return null
 
-	var best_cell: HexCell = null
-	var best_distance: float = INF
+	# Cast to y=0 plane to get XZ position
+	var t = -origin.y / direction.y
 
-	# Check elevations from high to low (max elevation to min)
-	for elev in range(HexMetrics.MAX_ELEVATION, HexMetrics.MIN_ELEVATION - 1, -1):
-		var plane_y = elev * HexMetrics.ELEVATION_STEP
-		var t = (plane_y - origin.y) / direction.y
+	if t <= 0:
+		return null
 
-		if t <= 0:
-			continue  # Behind camera
-
-		var hit_point = origin + direction * t
-		var cell = _get_cell_at_position(hit_point)
-
-		if cell and cell.elevation == elev:
-			# Found a cell at this elevation - check if it's closer than previous
-			if t < best_distance:
-				best_distance = t
-				best_cell = cell
-				# Since we're going high to low, first valid hit is closest
-				break
-
-	# If no elevated cell found, fall back to water level
-	if best_cell == null:
-		var t = -origin.y / direction.y
-		if t > 0:
-			var hit_point = origin + direction * t
-			best_cell = _get_cell_at_position(hit_point)
-
-	return best_cell
+	var hit_point = origin + direction * t
+	return _get_cell_at_position(hit_point)
 
 
 func _get_cell_at_position(world_pos: Vector3) -> HexCell:

@@ -159,6 +159,10 @@ func _generate_features(seed_val: int) -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = seed_val + 2000
 
+	# Clear existing features from all cells before generating new ones
+	for cell in grid.get_all_cells():
+		cell.features.clear()
+
 	var tree_count = 0
 	var rock_count = 0
 
