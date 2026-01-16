@@ -7,11 +7,12 @@ extends RefCounted
 const OUTER_RADIUS: float = 1.0  # Corner to center distance
 const INNER_RADIUS: float = OUTER_RADIUS * 0.866025404  # Edge to center (outer * sqrt(3)/2)
 
-# Elevation
+# Elevation - sea level system (no negative elevations)
 const ELEVATION_STEP: float = 0.4  # Height per elevation level
-const MAX_ELEVATION: int = 8
-const MIN_ELEVATION: int = -2
-const WATER_LEVEL: int = 0  # Sea level
+const MIN_ELEVATION: int = 0       # Ocean floor (deepest water)
+const SEA_LEVEL: int = 4           # Water surface elevation (water is 0-4)
+const LAND_MIN_ELEVATION: int = 5  # Minimum land elevation (always 1 above sea level)
+const MAX_ELEVATION: int = 13      # Highest land (8 levels above land min)
 
 # Terraces (Catlike Coding style)
 const TERRACES_PER_SLOPE: int = 2  # Number of flat terraces per slope

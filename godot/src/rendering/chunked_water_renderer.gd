@@ -5,7 +5,7 @@ extends Node3D
 
 const CHUNK_SIZE: float = 16.0
 const MAX_RENDER_DISTANCE: float = 50.0  # Match terrain culling distance
-const WATER_LEVEL: float = -0.05  # Slightly below terrain to avoid z-fighting
+const WATER_SURFACE_OFFSET: float = 0.12  # Above terrain to cover hex tops cleanly
 const DEEP_COLOR: Color = Color(0.102, 0.298, 0.431)  # 0x1a4c6e
 const SHALLOW_COLOR: Color = Color(0.176, 0.545, 0.788)  # 0x2d8bc9
 
@@ -50,7 +50,7 @@ func build(grid: HexGrid) -> void:
 	var chunk_cells: Dictionary = {}  # key -> Array of cells
 
 	for cell in grid.get_all_cells():
-		if cell.elevation < 0:  # Underwater
+		if cell.elevation < HexMetrics.LAND_MIN_ELEVATION:  # Underwater (0-4)
 			var chunk_coords = _get_cell_chunk_coords(cell)
 			var key = _get_chunk_key(chunk_coords.x, chunk_coords.y)
 
@@ -88,13 +88,16 @@ func _build_water_mesh(cells: Array) -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var corners = HexMetrics.get_corners()
+	# Water renders at sea level Y position
+	var water_y = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP + WATER_SURFACE_OFFSET
 
 	for cell in cells:
 		var center = cell.get_world_position()
-		center.y = WATER_LEVEL
+		center.y = water_y
 
-		# Color based on depth
-		var depth_factor = clampf(float(-cell.elevation) / 3.0, 0.0, 1.0)
+		# Color based on depth (distance below sea level)
+		var depth = HexMetrics.SEA_LEVEL - cell.elevation
+		var depth_factor = clampf(float(depth) / 3.0, 0.0, 1.0)
 		var color = SHALLOW_COLOR.lerp(DEEP_COLOR, depth_factor)
 
 		# Build hexagonal water surface

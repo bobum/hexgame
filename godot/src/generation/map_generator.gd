@@ -88,12 +88,18 @@ func _generate_elevation() -> void:
 		var world_pos = cell.get_world_position()
 		var noise_val = (noise.get_noise_2d(world_pos.x, world_pos.z) + 1.0) / 2.0
 
-		# Convert to elevation
+		# Convert to elevation using sea level system
+		# Water: 0-4 (SEA_LEVEL), Land: 5-13 (LAND_MIN_ELEVATION to MAX_ELEVATION)
 		if noise_val < sea_level:
-			cell.elevation = HexMetrics.MIN_ELEVATION
+			# Underwater: elevation 0 to SEA_LEVEL (water is 0-4)
+			# Use roundi() so coastal water gets elevation 4, ensuring 1-level terrace to land
+			var normalized = noise_val / sea_level
+			cell.elevation = roundi(normalized * HexMetrics.SEA_LEVEL)
 		else:
+			# Land: elevation LAND_MIN_ELEVATION to MAX_ELEVATION (5-13)
 			var normalized = (noise_val - sea_level) / (1.0 - sea_level)
-			cell.elevation = int(normalized * HexMetrics.MAX_ELEVATION)
+			var land_range = HexMetrics.MAX_ELEVATION - HexMetrics.LAND_MIN_ELEVATION
+			cell.elevation = HexMetrics.LAND_MIN_ELEVATION + int(normalized * land_range)
 
 
 func _generate_moisture() -> void:
@@ -113,23 +119,26 @@ func _assign_biomes() -> void:
 
 
 func _get_biome(elevation: int, moisture: float) -> TerrainType.Type:
-	# Water
-	if elevation < HexMetrics.WATER_LEVEL:
-		if elevation < HexMetrics.WATER_LEVEL - 1:
-			return TerrainType.Type.OCEAN
-		return TerrainType.Type.COAST
+	# Water - below land minimum (elevation 0-4)
+	if elevation < HexMetrics.LAND_MIN_ELEVATION:
+		if elevation < HexMetrics.SEA_LEVEL - 2:
+			return TerrainType.Type.OCEAN  # Deep water (0-1)
+		return TerrainType.Type.COAST  # Shallow water (2-4)
+
+	# Height above land minimum for land biomes
+	var height_above_sea = elevation - HexMetrics.LAND_MIN_ELEVATION
 
 	# High elevation
-	if elevation >= 6:
+	if height_above_sea >= 6:
 		return TerrainType.Type.SNOW
-	if elevation >= 4:
+	if height_above_sea >= 4:
 		return TerrainType.Type.MOUNTAINS
 
 	# Land biomes based on moisture
 	if moisture < 0.2:
 		return TerrainType.Type.DESERT
 	elif moisture < 0.4:
-		if elevation >= 2:
+		if height_above_sea >= 2:
 			return TerrainType.Type.HILLS
 		return TerrainType.Type.SAVANNA
 	elif moisture < 0.6:
@@ -313,14 +322,20 @@ func _thread_generate_terrain(input: Dictionary) -> Dictionary:
 			var x = (q + r * 0.5) * (HexMetrics.INNER_RADIUS * 2.0)
 			var z = r * (HexMetrics.OUTER_RADIUS * 1.5)
 
-			# Elevation from noise
+			# Elevation from noise - using sea level system
+			# Water: 0-4 (SEA_LEVEL), Land: 5-13 (LAND_MIN_ELEVATION to MAX_ELEVATION)
 			var noise_val = (elev_noise.get_noise_2d(x, z) + 1.0) / 2.0
 			var elevation: int
 			if noise_val < sea_lvl:
-				elevation = HexMetrics.MIN_ELEVATION
+				# Underwater: elevation 0 to SEA_LEVEL (water is 0-4)
+				# Use roundi() so coastal water gets elevation 4, ensuring 1-level terrace to land
+				var normalized = noise_val / sea_lvl
+				elevation = roundi(normalized * HexMetrics.SEA_LEVEL)
 			else:
+				# Land: elevation LAND_MIN_ELEVATION to MAX_ELEVATION (5-13)
 				var normalized = (noise_val - sea_lvl) / (1.0 - sea_lvl)
-				elevation = int(normalized * HexMetrics.MAX_ELEVATION)
+				var land_range = HexMetrics.MAX_ELEVATION - HexMetrics.LAND_MIN_ELEVATION
+				elevation = HexMetrics.LAND_MIN_ELEVATION + int(normalized * land_range)
 
 			# Moisture from noise
 			var moisture = (moist_noise.get_noise_2d(x, z) + 1.0) / 2.0
@@ -344,23 +359,26 @@ func _thread_generate_terrain(input: Dictionary) -> Dictionary:
 
 ## Static biome function for thread (avoids instance access)
 static func _get_biome_for_thread(elevation: int, moisture: float) -> int:
-	# Water
-	if elevation < HexMetrics.WATER_LEVEL:
-		if elevation < HexMetrics.WATER_LEVEL - 1:
-			return TerrainType.Type.OCEAN
-		return TerrainType.Type.COAST
+	# Water - below land minimum (elevation 0-4)
+	if elevation < HexMetrics.LAND_MIN_ELEVATION:
+		if elevation < HexMetrics.SEA_LEVEL - 2:
+			return TerrainType.Type.OCEAN  # Deep water (0-1)
+		return TerrainType.Type.COAST  # Shallow water (2-4)
+
+	# Height above land minimum for land biomes
+	var height_above_sea = elevation - HexMetrics.LAND_MIN_ELEVATION
 
 	# High elevation
-	if elevation >= 6:
+	if height_above_sea >= 6:
 		return TerrainType.Type.SNOW
-	if elevation >= 4:
+	if height_above_sea >= 4:
 		return TerrainType.Type.MOUNTAINS
 
 	# Land biomes based on moisture
 	if moisture < 0.2:
 		return TerrainType.Type.DESERT
 	elif moisture < 0.4:
-		if elevation >= 2:
+		if height_above_sea >= 2:
 			return TerrainType.Type.HILLS
 		return TerrainType.Type.SAVANNA
 	elif moisture < 0.6:
