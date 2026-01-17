@@ -1,4 +1,5 @@
 using HexGame.Core;
+using HexGame.Units;
 
 namespace HexGame.Pathfinding;
 

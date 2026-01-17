@@ -149,9 +149,9 @@ public class AIManager : IService
     private void OnTurnStartedEvent(TurnStartedEvent evt)
     {
         // Alternative event-based trigger
-        if (evt.PlayerId >= TurnManager.PlayerAiStart && HasController(evt.PlayerId))
+        if (evt.CurrentPlayerId >= TurnManager.PlayerAiStart && HasController(evt.CurrentPlayerId))
         {
-            ProcessAITurn(evt.PlayerId);
+            ProcessAITurn(evt.CurrentPlayerId);
         }
     }
 
@@ -263,7 +263,13 @@ public class AIManager : IService
         var pathResult = _pathfinder.FindPath(startCell, endCell, new PathOptions { UnitType = unit.Type });
         if (!pathResult.Reachable) return false;
 
-        var command = new MoveUnitCommand(_unitManager, unit.Id, action.TargetQ, action.TargetR, (int)pathResult.Cost);
+        var command = new MoveUnitCommand(
+            unit.Id,
+            unit.Q, unit.R,
+            action.TargetQ, action.TargetR,
+            (int)pathResult.Cost,
+            (unitId, toQ, toR, cost) => _unitManager.MoveUnit(unitId, toQ, toR, cost)
+        );
         return _commandHistory.Execute(command);
     }
 
