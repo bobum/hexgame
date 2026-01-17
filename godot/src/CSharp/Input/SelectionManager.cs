@@ -393,7 +393,7 @@ public class PathMoveCommand : ICommand
     public bool Execute()
     {
         var destination = _path[^1];
-        return _unitManager.MoveUnit(_unit.Id, destination.Q, destination.R, _movementCost);
+        return _unitManager.MoveUnit(_unit.Id, destination.Q, destination.R, (int)_movementCost);
     }
 
     public bool Undo()

@@ -229,7 +229,7 @@ public class SaveManager : IService
 
         if (ServiceLocator.TryGet<GameStateMachine>(out var stateMachine))
         {
-            stateData.StateMachineName = stateMachine.CurrentState?.Name ?? "Playing";
+            stateData.StateMachineName = stateMachine.CurrentState.ToString();
         }
 
         return stateData;

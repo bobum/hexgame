@@ -240,7 +240,7 @@ public partial class HighlightRenderer : RendererBase
     {
         ClearPath();
 
-        if (pathResult == null || !pathResult.Success || _pathContainer == null) return;
+        if (pathResult == null || !pathResult.Reachable || _pathContainer == null) return;
 
         var hexMesh = CreateHexMesh();
 

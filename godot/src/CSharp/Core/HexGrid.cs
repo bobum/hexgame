@@ -3,8 +3,22 @@ namespace HexGame.Core;
 /// <summary>
 /// Manages the hex grid data structure containing all cells.
 /// </summary>
-public class HexGrid
+public class HexGrid : IService
 {
+    #region IService Implementation
+
+    void IService.Initialize()
+    {
+        // Grid initializes via Initialize() method
+    }
+
+    void IService.Shutdown()
+    {
+        Clear();
+    }
+
+    #endregion
+
     /// <summary>
     /// Width of the grid in cells.
     /// </summary>

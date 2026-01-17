@@ -290,12 +290,12 @@ public partial class UnitVisual : Node3D, IPoolable
     /// <summary>
     /// Called when acquired from pool.
     /// </summary>
-    public void OnAcquire() { }
+    public void OnGetFromPool() { }
 
     /// <summary>
     /// Called when released to pool.
     /// </summary>
-    public void OnRelease()
+    public void OnReturnToPool()
     {
         Reset();
     }
