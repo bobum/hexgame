@@ -22,6 +22,9 @@ func _ready() -> void:
 
 
 func setup(p_grid: HexGrid, p_camera: Camera3D) -> void:
+	assert(p_grid != null, "HexHover requires HexGrid")
+	assert(p_camera != null, "HexHover requires Camera3D")
+
 	grid = p_grid
 	camera = p_camera
 
@@ -101,12 +104,15 @@ func _update_hover() -> void:
 
 
 func _raycast_to_hex(origin: Vector3, direction: Vector3) -> HexCell:
-	# Simple approach: use y=0 plane (where water and sea-level land render)
+	# Cast to sea level plane (where water and most terrain interaction happens)
 	if abs(direction.y) < 0.001:
 		return null
 
-	# Cast to y=0 plane to get XZ position
-	var t = -origin.y / direction.y
+	# Sea level Y position
+	var sea_level_y = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP
+
+	# Cast to sea level plane to get XZ position
+	var t = (sea_level_y - origin.y) / direction.y
 
 	if t <= 0:
 		return null

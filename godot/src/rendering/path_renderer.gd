@@ -26,6 +26,8 @@ func _init() -> void:
 
 
 func setup(p_grid: HexGrid) -> void:
+	assert(p_grid != null, "PathRenderer requires HexGrid")
+
 	grid = p_grid
 
 
@@ -141,8 +143,8 @@ func show_reachable_cells(reachable_cells: Dictionary) -> void:
 
 		# For water cells, render on water surface; for land, render on terrain
 		var y_offset: float
-		if cell.elevation < 0:
-			y_offset = 0.1  # Just above water surface
+		if cell.elevation < HexMetrics.SEA_LEVEL:
+			y_offset = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP + 0.1  # Just above water surface
 		else:
 			y_offset = cell.elevation * HexMetrics.ELEVATION_STEP + 0.15
 
@@ -182,8 +184,8 @@ func show_path(path: Array) -> void:
 	for cell in path:
 		var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(0)
 		var y_pos: float
-		if cell.elevation < 0:
-			y_pos = 0.15  # Above water surface
+		if cell.elevation < HexMetrics.SEA_LEVEL:
+			y_pos = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP + 0.15  # Above water surface
 		else:
 			y_pos = cell.elevation * HexMetrics.ELEVATION_STEP + 0.2
 		points.append(Vector3(world_pos.x, y_pos, world_pos.z))
@@ -220,8 +222,8 @@ func show_destination_marker(cell: HexCell) -> void:
 
 	var world_pos = HexCoordinates.new(cell.q, cell.r).to_world_position(0)
 	var y_pos: float
-	if cell.elevation < 0:
-		y_pos = 0.12  # Above water surface
+	if cell.elevation < HexMetrics.SEA_LEVEL:
+		y_pos = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP + 0.12  # Above water surface
 	else:
 		y_pos = cell.elevation * HexMetrics.ELEVATION_STEP + 0.15
 	destination_marker.position = Vector3(world_pos.x, y_pos, world_pos.z)

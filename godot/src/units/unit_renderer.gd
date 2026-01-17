@@ -63,6 +63,9 @@ func _init() -> void:
 
 
 func setup(p_unit_manager: UnitManager, p_grid: HexGrid) -> void:
+	assert(p_unit_manager != null, "UnitRenderer requires UnitManager")
+	assert(p_grid != null, "UnitRenderer requires HexGrid")
+
 	unit_manager = p_unit_manager
 	grid = p_grid
 
@@ -161,9 +164,9 @@ func _create_chunk_type_multimesh(chunk_key: String, unit_type: UnitTypes.Type, 
 		var world_pos = unit.get_world_position()
 		var elevation = cell.elevation if cell else 0
 
-		var is_on_water = cell != null and cell.elevation < HexMetrics.WATER_LEVEL
+		var is_on_water = cell != null and cell.elevation < HexMetrics.SEA_LEVEL
 		if UnitTypes.is_naval(unit.type) or (UnitTypes.is_amphibious(unit.type) and is_on_water):
-			world_pos.y = 0.1
+			world_pos.y = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP + 0.1  # Water surface + slight offset
 		else:
 			world_pos.y = elevation * HexMetrics.ELEVATION_STEP + 0.25
 
@@ -210,9 +213,9 @@ func _create_type_multimesh(unit_type: UnitTypes.Type, units: Array, mesh: Mesh,
 
 		# Naval units float on water surface, land units on terrain
 		# Amphibious units use water surface when in water, terrain when on land
-		var is_on_water = cell != null and cell.elevation < HexMetrics.WATER_LEVEL
+		var is_on_water = cell != null and cell.elevation < HexMetrics.SEA_LEVEL
 		if UnitTypes.is_naval(unit.type) or (UnitTypes.is_amphibious(unit.type) and is_on_water):
-			world_pos.y = 0.1  # Water surface + slight offset
+			world_pos.y = HexMetrics.SEA_LEVEL * HexMetrics.ELEVATION_STEP + 0.1  # Water surface + slight offset
 		else:
 			world_pos.y = elevation * HexMetrics.ELEVATION_STEP + 0.25
 
