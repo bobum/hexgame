@@ -110,7 +110,7 @@ public partial class TerrainRenderer : ChunkedRendererBase
     private void AddCellToMesh(SurfaceTool st, HexCell cell)
     {
         var center = cell.Coordinates.ToWorldPosition(cell.Elevation * HexMetrics.ElevationStep);
-        var color = GetTerrainColor(cell.Terrain);
+        var color = GetTerrainColor(cell.TerrainType);
         var corners = HexMetrics.GetCorners();
 
         // Build center triangles (solid region)
@@ -159,7 +159,7 @@ public partial class TerrainRenderer : ChunkedRendererBase
         var bridge2 = center + corners[nextDir];
 
         // Blend colors at edges
-        var neighborColor = GetTerrainColor(neighbor.Terrain);
+        var neighborColor = GetTerrainColor(neighbor.TerrainType);
         var midColor = cellColor.Lerp(neighborColor, 0.5f);
 
         // Check elevation difference for terracing
