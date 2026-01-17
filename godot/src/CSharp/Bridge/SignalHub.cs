@@ -1,4 +1,5 @@
 using HexGame.Core;
+using HexGame.Events;
 using HexGame.GameState;
 using HexGame.Input;
 using HexGame.Units;
@@ -34,7 +35,7 @@ public class SignalHub : IService
     {
         // Subscribe to EventBus events
         _eventBus.Subscribe<UnitMovedEvent>(OnUnitMoved);
-        _eventBus.Subscribe<UnitDestroyedEvent>(OnUnitDestroyed);
+        _eventBus.Subscribe<UnitRemovedEvent>(OnUnitRemoved);
         _eventBus.Subscribe<TurnStartedEvent>(OnTurnStarted);
         _eventBus.Subscribe<TurnEndedEvent>(OnTurnEnded);
         _eventBus.Subscribe<GameStateChangedEvent>(OnGameStateChanged);
@@ -68,7 +69,7 @@ public class SignalHub : IService
     {
         // Unsubscribe from EventBus
         _eventBus.Unsubscribe<UnitMovedEvent>(OnUnitMoved);
-        _eventBus.Unsubscribe<UnitDestroyedEvent>(OnUnitDestroyed);
+        _eventBus.Unsubscribe<UnitRemovedEvent>(OnUnitRemoved);
         _eventBus.Unsubscribe<TurnStartedEvent>(OnTurnStarted);
         _eventBus.Unsubscribe<TurnEndedEvent>(OnTurnEnded);
         _eventBus.Unsubscribe<GameStateChangedEvent>(OnGameStateChanged);
@@ -104,7 +105,7 @@ public class SignalHub : IService
         _bridge.NotifyUnitMoved(evt.UnitId, evt.FromQ, evt.FromR, evt.ToQ, evt.ToR);
     }
 
-    private void OnUnitDestroyed(UnitDestroyedEvent evt)
+    private void OnUnitRemoved(UnitRemovedEvent evt)
     {
         // Notify UI that unit was destroyed
         _bridge.ShowMessage($"Unit {evt.UnitId} was destroyed", "combat");
@@ -113,15 +114,15 @@ public class SignalHub : IService
     private void OnTurnStarted(TurnStartedEvent evt)
     {
         string phase = _turnManager?.CurrentPhase.ToString() ?? "Movement";
-        _bridge.NotifyTurnChanged(evt.TurnNumber, evt.PlayerId, phase);
+        _bridge.NotifyTurnChanged(evt.TurnNumber, evt.CurrentPlayerId, phase);
 
-        if (evt.PlayerId == GameConstants.GameState.HumanPlayerId)
+        if (evt.CurrentPlayerId == GameConstants.GameState.HumanPlayerId)
         {
             _bridge.ShowMessage($"Turn {evt.TurnNumber} - Your turn!", "turn");
         }
         else
         {
-            _bridge.ShowMessage($"Turn {evt.TurnNumber} - AI Player {evt.PlayerId}'s turn", "turn");
+            _bridge.ShowMessage($"Turn {evt.TurnNumber} - AI Player {evt.CurrentPlayerId}'s turn", "turn");
         }
     }
 
@@ -171,19 +172,10 @@ public class SignalHub : IService
         }
     }
 
-    private void OnStateMachineChanged(GameState.GameState oldState, GameState.GameState newState)
+    private void OnStateMachineChanged(GameStateType oldState, GameStateType newState)
     {
-        _bridge.NotifyGameStateChanged(newState.Name);
+        _bridge.NotifyGameStateChanged(newState.ToString());
     }
 
     #endregion
 }
-
-#region Additional Events
-
-/// <summary>
-/// Event fired when game state changes.
-/// </summary>
-public record GameStateChangedEvent(string NewState);
-
-#endregion

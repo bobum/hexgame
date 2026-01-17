@@ -414,6 +414,6 @@ public class PathMoveCommand : ICommand
 /// <summary>
 /// Event fired when an attack command is issued.
 /// </summary>
-public record AttackCommandEvent(int AttackerId, int TargetId);
+public record AttackCommandEvent(int AttackerId, int TargetId) : GameEventBase;
 
 #endregion

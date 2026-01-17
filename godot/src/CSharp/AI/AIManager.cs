@@ -279,7 +279,7 @@ public class AIManager : IService
         _eventBus.Publish(new AttackRequestedEvent(attacker.Id, target.Id));
 
         // Mark attacker as having acted
-        attacker.HasActedThisTurn = true;
+        attacker.HasActed = true;
 
         return true;
     }
@@ -304,7 +304,7 @@ public class AIManager : IService
 
         // Use all movement and mark as acted
         unit.Movement = 0;
-        unit.HasActedThisTurn = true;
+        unit.HasActed = true;
 
         _eventBus.Publish(new UnitFortifiedEvent(unit.Id));
 
@@ -320,11 +320,11 @@ public class AIManager : IService
 /// Event fired when an attack is requested.
 /// Combat system should subscribe to resolve the attack.
 /// </summary>
-public record AttackRequestedEvent(int AttackerId, int TargetId) : IGameEvent;
+public record AttackRequestedEvent(int AttackerId, int TargetId) : GameEventBase;
 
 /// <summary>
 /// Event fired when a unit fortifies.
 /// </summary>
-public record UnitFortifiedEvent(int UnitId) : IGameEvent;
+public record UnitFortifiedEvent(int UnitId) : GameEventBase;
 
 #endregion

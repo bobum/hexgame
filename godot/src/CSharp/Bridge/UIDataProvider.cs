@@ -30,9 +30,9 @@ public partial class UIDataProvider : Node
         // Game state
         if (ServiceLocator.TryGet<GameStateMachine>(out var stateMachine))
         {
-            state["game_state"] = stateMachine.CurrentState?.Name ?? "Unknown";
-            state["is_playing"] = stateMachine.CurrentState is PlayingState;
-            state["is_paused"] = stateMachine.CurrentState is PausedState;
+            state["game_state"] = stateMachine.CurrentState.ToString();
+            state["is_playing"] = stateMachine.IsPlaying;
+            state["is_paused"] = stateMachine.IsPaused;
         }
 
         // Unit counts
@@ -132,8 +132,8 @@ public partial class UIDataProvider : Node
 
         data["id"] = unit.Id;
         data["type"] = unit.UnitType.ToString();
-        data["type_name"] = unit.UnitType.GetName();
-        data["type_description"] = unit.UnitType.GetDescription();
+        data["type_name"] = unit.UnitType.GetDisplayName();
+        data["type_description"] = unit.UnitType.GetStats().Description;
         data["player_id"] = unit.PlayerId;
 
         // Position
@@ -243,8 +243,8 @@ public partial class UIDataProvider : Node
         // Game controls
         if (ServiceLocator.TryGet<GameStateMachine>(out var stateMachine))
         {
-            states["pause_enabled"] = stateMachine.CurrentState is PlayingState;
-            states["resume_enabled"] = stateMachine.CurrentState is PausedState;
+            states["pause_enabled"] = stateMachine.IsPlaying;
+            states["resume_enabled"] = stateMachine.IsPaused;
         }
 
         return states;

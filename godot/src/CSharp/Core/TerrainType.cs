@@ -54,7 +54,7 @@ public static class TerrainTypeExtensions
     /// <returns>The associated color.</returns>
     public static Color GetColor(this TerrainType terrain)
     {
-        return Colors.TryGetValue(terrain, out var color) ? color : Colors.White;
+        return Colors.TryGetValue(terrain, out var color) ? color : new Color(1f, 1f, 1f);
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using HexGame.Core;
+using HexGame.Events;
 using HexGame.GameState;
 using HexGame.Units;
 
@@ -398,9 +399,9 @@ public class SaveManager : IService
         {
             var unit = unitManager.CreateUnit(
                 (UnitType)unitData.UnitType,
-                unitData.PlayerId,
                 unitData.Q,
-                unitData.R
+                unitData.R,
+                unitData.PlayerId
             );
 
             if (unit != null)
@@ -559,11 +560,11 @@ public class SaveManager : IService
 /// <summary>
 /// Event fired when game is saved.
 /// </summary>
-public record GameSavedEvent(string SaveName, string FilePath);
+public record GameSavedEvent(string SaveName, string FilePath) : GameEventBase;
 
 /// <summary>
 /// Event fired when game is loaded.
 /// </summary>
-public record GameLoadedEvent(string SaveName, string FilePath);
+public record GameLoadedEvent(string SaveName, string FilePath) : GameEventBase;
 
 #endregion

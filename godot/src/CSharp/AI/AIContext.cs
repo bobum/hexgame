@@ -103,7 +103,7 @@ public class AIContext
     public IReadOnlyList<UnitSnapshot> GetReadyUnits()
     {
         return _unitManager.GetPlayerUnits(PlayerId)
-            .Where(u => !u.HasActedThisTurn)
+            .Where(u => !u.HasActed)
             .Select(u => new UnitSnapshot(u))
             .ToList();
     }
@@ -316,7 +316,7 @@ public readonly struct UnitSnapshot
         MaxHealth = unit.MaxHealth;
         Movement = unit.Movement;
         MaxMovement = unit.MaxMovement;
-        HasActed = unit.HasActedThisTurn;
+        HasActed = unit.HasActed;
     }
 }
 
