@@ -220,6 +220,9 @@ func _build_flat_hex_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	var up_normal = Vector3(0, 1, 0)
 
 	for cell in cells:
+		# Skip shallow water cells at sea level - rendered by water surface only
+		if cell.is_underwater() and cell.elevation >= HexMetrics.SEA_LEVEL - 2:
+			continue
 		var center = cell.get_world_position()
 		var base_color = cell.get_color()
 		# Boost saturation slightly to compensate for lack of terrace detail
@@ -290,6 +293,9 @@ func _build_simple_quad_mesh(cells: Array[HexCell]) -> ArrayMesh:
 	var up_normal = Vector3(0, 1, 0)
 
 	for cell in cells:
+		# Skip shallow water cells at sea level - rendered by water surface only
+		if cell.is_underwater() and cell.elevation >= HexMetrics.SEA_LEVEL - 2:
+			continue
 		var center = cell.get_world_position()
 		var base_color = cell.get_color()
 		# Boost saturation slightly to compensate for lack of terrace detail

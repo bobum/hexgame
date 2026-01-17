@@ -479,13 +479,19 @@ func _input(event: InputEvent) -> void:
 				performance_monitor.toggle_graph()
 
 
-func _regenerate_map() -> void:
-	# Cancel any pending async generation
+# =============================================================================
+# MAP REGENERATION HELPERS (extracted to reduce duplication)
+# =============================================================================
+
+## Cancel any pending async generation
+func _cancel_pending_generation() -> void:
 	if _async_generation_pending and map_generator:
 		map_generator.cancel_generation()
 		_async_generation_pending = false
 
-	# Remove old terrain
+
+## Cleanup all renderers and features
+func _cleanup_renderers() -> void:
 	if chunked_terrain:
 		chunked_terrain.dispose()
 		chunked_terrain.queue_free()
@@ -505,6 +511,51 @@ func _regenerate_map() -> void:
 	if ground_plane:
 		ground_plane.queue_free()
 		ground_plane = null
+
+
+## Setup systems after map generation (pathfinder, turn manager, selection)
+func _setup_systems_after_build(create_new_unit_manager: bool) -> void:
+	# Update hover with new grid
+	if hex_hover:
+		hex_hover.setup(grid, camera)
+
+	# Create or reuse unit manager
+	if create_new_unit_manager:
+		unit_manager = UnitManager.new(grid)
+		unit_manager.setup_pool()
+
+	# Spawn units
+	var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
+	print("Spawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
+
+	# Setup unit renderer
+	if unit_renderer:
+		unit_renderer.setup(unit_manager, grid)
+		unit_renderer.build()
+
+	# Update pathfinder
+	pathfinder = Pathfinder.new(grid, unit_manager)
+
+	# Update turn manager
+	turn_manager = TurnManager.new(unit_manager)
+	turn_manager.start_game()
+
+	# Update selection manager
+	if selection_manager:
+		selection_manager.clear_selection()
+		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
+
+	_update_turn_display()
+	_update_unit_counts()
+
+
+# =============================================================================
+# MAP REGENERATION
+# =============================================================================
+
+func _regenerate_map() -> void:
+	_cancel_pending_generation()
+	_cleanup_renderers()
 
 	# Clear units
 	if unit_manager:
@@ -538,68 +589,18 @@ func _finish_async_generation() -> void:
 		_finish_map_build()
 
 
-## Common map building after generation completes
+## Common map building after generation completes (same grid size)
 func _finish_map_build() -> void:
 	_build_terrain()
 	_build_features()
-
-	# Update hover with new grid
-	if hex_hover:
-		hex_hover.setup(grid, camera)
-
-	# Respawn units
-	if unit_manager:
-		var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
-		print("Respawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
-		if unit_renderer:
-			unit_renderer.setup(unit_manager, grid)
-			unit_renderer.build()
-		# Update pathfinder
-		pathfinder = Pathfinder.new(grid, unit_manager)
-
-		# Update turn manager
-		turn_manager = TurnManager.new(unit_manager)
-		turn_manager.start_game()
-
-		if selection_manager:
-			selection_manager.clear_selection()
-			selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
-
-		_update_turn_display()
-		_update_unit_counts()
+	_setup_systems_after_build(false)  # Reuse existing unit manager
 
 
 ## Map building when grid size changed (needs new unit manager)
 func _finish_map_build_with_new_units() -> void:
 	_build_terrain()
 	_build_features()
-
-	# Update hover with new grid
-	if hex_hover:
-		hex_hover.setup(grid, camera)
-
-	# Setup new unit manager with new grid
-	unit_manager = UnitManager.new(grid)
-	unit_manager.setup_pool()
-	var spawned = unit_manager.spawn_mixed_units(10, 5, 1)
-	print("Spawned %d land, %d naval units" % [spawned["land"], spawned["naval"]])
-	if unit_renderer:
-		unit_renderer.setup(unit_manager, grid)
-		unit_renderer.build()
-
-	# Update pathfinder
-	pathfinder = Pathfinder.new(grid, unit_manager)
-
-	# Update turn manager
-	turn_manager = TurnManager.new(unit_manager)
-	turn_manager.start_game()
-
-	if selection_manager:
-		selection_manager.clear_selection()
-		selection_manager.setup(unit_manager, unit_renderer, grid, camera, pathfinder, path_renderer, turn_manager)
-
-	_update_turn_display()
-	_update_unit_counts()
+	_setup_systems_after_build(true)  # Create new unit manager
 
 
 ## Get the hex cell at a world position (for raycasting)
@@ -608,37 +609,14 @@ func get_cell_at_world_pos(world_pos: Vector3) -> HexCell:
 	return grid.get_cell(coords.q, coords.r)
 
 
-## Regenerate with specific settings
+## Regenerate with specific settings (width/height/seed from UI)
 func regenerate_with_settings(width: int, height: int, seed_val: int) -> void:
-	# Cancel any pending async generation
-	if _async_generation_pending and map_generator:
-		map_generator.cancel_generation()
-		_async_generation_pending = false
+	_cancel_pending_generation()
+	_cleanup_renderers()
 
 	map_width = width
 	map_height = height
 	current_seed = seed_val
-
-	# Remove old terrain
-	if chunked_terrain:
-		chunked_terrain.dispose()
-		chunked_terrain.queue_free()
-		chunked_terrain = null
-	if chunked_water:
-		chunked_water.dispose()
-		chunked_water.queue_free()
-		chunked_water = null
-	if chunked_rivers:
-		chunked_rivers.dispose()
-		chunked_rivers.queue_free()
-		chunked_rivers = null
-	if feature_renderer:
-		feature_renderer.dispose()
-		feature_renderer.queue_free()
-		feature_renderer = null
-	if ground_plane:
-		ground_plane.queue_free()
-		ground_plane = null
 
 	# Clear units
 	if unit_manager:

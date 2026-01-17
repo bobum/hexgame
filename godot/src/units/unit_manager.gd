@@ -54,7 +54,7 @@ func create_unit(type: UnitTypes.Type, q: int, r: int, player_id: int) -> Unit:
 		return null
 
 	# Check domain compatibility
-	var is_water = cell.elevation < 0
+	var is_water = cell.elevation < HexMetrics.SEA_LEVEL
 	if is_water and not UnitTypes.can_traverse_water(type):
 		return null  # Land unit can't be placed on water
 	if not is_water and not UnitTypes.can_traverse_land(type):
@@ -122,7 +122,7 @@ func move_unit(unit_id: int, to_q: int, to_r: int, movement_cost: int = -1) -> b
 		return false
 
 	# Check domain compatibility
-	var is_water = cell.elevation < 0
+	var is_water = cell.elevation < HexMetrics.SEA_LEVEL
 	if is_water and not unit.can_traverse_water():
 		return false
 	if not is_water and not unit.can_traverse_land():
@@ -270,7 +270,7 @@ func prewarm_pool(count: int) -> void:
 func spawn_random_units(count: int, player_id: int = 1) -> int:
 	var land_cells: Array = []
 	for cell in grid.get_all_cells():
-		if cell.elevation >= 0:
+		if cell.elevation >= HexMetrics.SEA_LEVEL:
 			land_cells.append(cell)
 
 	var spawned = 0
@@ -294,7 +294,7 @@ func spawn_random_units(count: int, player_id: int = 1) -> int:
 func spawn_random_naval_units(count: int, player_id: int = 1) -> int:
 	var water_cells: Array = []
 	for cell in grid.get_all_cells():
-		if cell.elevation < 0:
+		if cell.elevation < HexMetrics.SEA_LEVEL:
 			water_cells.append(cell)
 
 	var spawned = 0

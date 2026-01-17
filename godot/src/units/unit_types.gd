@@ -5,8 +5,8 @@ extends RefCounted
 
 ## Domain determines where a unit can move.
 enum Domain {
-	LAND,        # Can only move on land (elevation >= 0, not water)
-	NAVAL,       # Can only move on water (elevation < 0)
+	LAND,        # Can only move on land (elevation >= SEA_LEVEL)
+	NAVAL,       # Can only move on water (elevation < SEA_LEVEL)
 	AMPHIBIOUS,  # Can move on both land and water
 }
 

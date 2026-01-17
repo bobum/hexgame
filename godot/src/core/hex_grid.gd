@@ -5,7 +5,7 @@ extends RefCounted
 
 var width: int = 0
 var height: int = 0
-var cells: Dictionary = {}  # Key: "q,r" -> HexCell
+var cells: Dictionary = {}  # Key: Vector2i(q, r) -> HexCell
 
 
 func _init(w: int = 64, h: int = 64) -> void:
@@ -23,20 +23,18 @@ func initialize() -> void:
 			cell.r = r
 			cell.elevation = 0
 			cell.terrain_type = TerrainType.Type.PLAINS
-			cells[_key(q, r)] = cell
+			cells[Vector2i(q, r)] = cell
 
 
 ## Get cell at coordinates
 func get_cell(q: int, r: int) -> HexCell:
-	var key = _key(q, r)
-	if cells.has(key):
-		return cells[key]
-	return null
+	var key = Vector2i(q, r)
+	return cells.get(key)
 
 
 ## Set cell at coordinates
 func set_cell(q: int, r: int, cell: HexCell) -> void:
-	cells[_key(q, r)] = cell
+	cells[Vector2i(q, r)] = cell
 
 
 ## Get neighbor of a cell in given direction
@@ -68,6 +66,3 @@ func get_all_cells() -> Array[HexCell]:
 	return result
 
 
-## Generate dictionary key from coordinates
-func _key(q: int, r: int) -> String:
-	return "%d,%d" % [q, r]

@@ -165,7 +165,7 @@ func _build_river_mesh(river_data: Array) -> ArrayMesh:
 
 			# Waterfall if downhill
 			if cell.elevation > neighbor.elevation:
-				var neighbor_has_river = not neighbor.river_directions.is_empty() or neighbor.elevation < HexMetrics.WATER_LEVEL
+				var neighbor_has_river = not neighbor.river_directions.is_empty() or neighbor.elevation < HexMetrics.SEA_LEVEL
 				if neighbor_has_river:
 					var edge_norm_x = edge_dx / edge_len * half_width
 					var edge_norm_z = edge_dz / edge_len * half_width

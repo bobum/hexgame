@@ -127,7 +127,7 @@ func build() -> void:
 			# If river flows downhill, draw waterfall
 			if elevation_diff > 0:
 				var neighbor_has_river = not neighbor.river_directions.is_empty() or \
-					neighbor.elevation < HexMetrics.WATER_LEVEL
+					neighbor.elevation < HexMetrics.SEA_LEVEL
 
 				if neighbor_has_river:
 					# Waterfall width along edge direction

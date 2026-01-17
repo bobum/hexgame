@@ -25,6 +25,11 @@ var selection_box: ColorRect
 
 
 func setup(p_unit_manager: UnitManager, p_unit_renderer: UnitRenderer, p_grid: HexGrid, p_camera: Camera3D, p_pathfinder: Pathfinder = null, p_path_renderer: PathRenderer = null, p_turn_manager: TurnManager = null) -> void:
+	assert(p_unit_manager != null, "SelectionManager requires UnitManager")
+	assert(p_unit_renderer != null, "SelectionManager requires UnitRenderer")
+	assert(p_grid != null, "SelectionManager requires HexGrid")
+	assert(p_camera != null, "SelectionManager requires Camera3D")
+
 	unit_manager = p_unit_manager
 	unit_renderer = p_unit_renderer
 	grid = p_grid
@@ -152,7 +157,7 @@ func _handle_right_click(screen_pos: Vector2) -> void:
 			print("No valid path to destination")
 	else:
 		# Fallback: Simple direct move (for testing)
-		var is_water = target_cell.elevation < 0
+		var is_water = target_cell.elevation < HexMetrics.SEA_LEVEL
 		if is_water and not unit.can_traverse_water():
 			return
 		if not is_water and not unit.can_traverse_land():
