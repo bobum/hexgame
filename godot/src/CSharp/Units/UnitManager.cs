@@ -181,7 +181,7 @@ public class UnitManager : IUnitManager
             }
 
             // Check domain compatibility
-            bool isWater = cell.Elevation < HexMetrics.SeaLevel;
+            bool isWater = HexMetrics.IsWaterElevation(cell.Elevation);
             if (isWater && !type.CanTraverseWater())
             {
                 return null; // Land unit can't be on water
@@ -249,7 +249,7 @@ public class UnitManager : IUnitManager
             }
 
             // Check domain compatibility
-            bool isWater = cell.Elevation < HexMetrics.SeaLevel;
+            bool isWater = HexMetrics.IsWaterElevation(cell.Elevation);
             if (isWater && !unit.CanTraverseWater)
             {
                 return false;
@@ -389,7 +389,7 @@ public class UnitManager : IUnitManager
         var landCells = new List<HexCell>();
         foreach (var cell in _grid.GetAllCells())
         {
-            if (cell.Elevation >= HexMetrics.SeaLevel)
+            if (HexMetrics.IsLandElevation(cell.Elevation))
             {
                 landCells.Add(cell);
             }
@@ -419,7 +419,7 @@ public class UnitManager : IUnitManager
         var waterCells = new List<HexCell>();
         foreach (var cell in _grid.GetAllCells())
         {
-            if (cell.Elevation < HexMetrics.SeaLevel)
+            if (HexMetrics.IsWaterElevation(cell.Elevation))
             {
                 waterCells.Add(cell);
             }

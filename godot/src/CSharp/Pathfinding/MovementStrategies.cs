@@ -39,7 +39,7 @@ public class LandMovementStrategy : IMovementStrategy
     public float GetMovementCost(HexCell from, HexCell to)
     {
         // Water is impassable for land units
-        if (to.Elevation < HexMetrics.SeaLevel)
+        if (HexMetrics.IsWaterElevation(to.Elevation))
         {
             return float.PositiveInfinity;
         }
@@ -81,7 +81,7 @@ public class LandMovementStrategy : IMovementStrategy
 
     public bool IsPassable(HexCell cell)
     {
-        if (cell.Elevation < HexMetrics.SeaLevel)
+        if (HexMetrics.IsWaterElevation(cell.Elevation))
         {
             return false;
         }
@@ -106,8 +106,29 @@ public class LandMovementStrategy : IMovementStrategy
             return false;
         }
 
-        // TODO: Implement proper river crossing detection
-        // For now, simplified check
+        // Find the direction from 'from' to 'to'
+        for (int dir = 0; dir < 6; dir++)
+        {
+            var offset = ((HexDirection)dir).GetOffset();
+            if (from.Q + offset.X == to.Q && from.R + offset.Y == to.R)
+            {
+                // Check if 'from' has a river flowing in this direction
+                if (from.RiverDirections.Contains(dir))
+                {
+                    return true;
+                }
+
+                // Check if 'to' has a river flowing in the opposite direction (toward 'from')
+                int oppositeDir = (dir + 3) % 6;
+                if (to.RiverDirections.Contains(oppositeDir))
+                {
+                    return true;
+                }
+
+                break;
+            }
+        }
+
         return false;
     }
 }
@@ -146,7 +167,7 @@ public class NavalMovementStrategy : IMovementStrategy
     public float GetMovementCost(HexCell from, HexCell to)
     {
         // Naval units can move on water
-        bool isWaterCell = to.Elevation < HexMetrics.SeaLevel ||
+        bool isWaterCell = HexMetrics.IsWaterElevation(to.Elevation) ||
                           to.TerrainType is TerrainType.Ocean or TerrainType.Coast;
 
         if (!isWaterCell)
@@ -160,7 +181,7 @@ public class NavalMovementStrategy : IMovementStrategy
             : float.PositiveInfinity;
 
         // If terrain type isn't in naval costs but cell is water, use default
-        if (float.IsPositiveInfinity(cost) && to.Elevation < HexMetrics.SeaLevel)
+        if (float.IsPositiveInfinity(cost) && HexMetrics.IsWaterElevation(to.Elevation))
         {
             cost = 1.0f;
         }
@@ -170,7 +191,7 @@ public class NavalMovementStrategy : IMovementStrategy
 
     public bool IsPassable(HexCell cell)
     {
-        if (cell.Elevation < HexMetrics.SeaLevel)
+        if (HexMetrics.IsWaterElevation(cell.Elevation))
         {
             return true;
         }
@@ -218,8 +239,8 @@ public class AmphibiousMovementStrategy : IMovementStrategy
         }
 
         // Add embark/disembark cost when transitioning between land and water
-        bool fromWater = from.Elevation < HexMetrics.SeaLevel;
-        bool toWater = to.Elevation < HexMetrics.SeaLevel;
+        bool fromWater = HexMetrics.IsWaterElevation(from.Elevation);
+        bool toWater = HexMetrics.IsWaterElevation(to.Elevation);
 
         if (fromWater != toWater)
         {

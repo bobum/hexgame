@@ -6,7 +6,7 @@ namespace HexGame.Pathfinding;
 /// A* pathfinder for hex grids.
 /// Finds optimal paths considering terrain costs, elevation, and unit obstacles.
 /// </summary>
-public class Pathfinder
+public class Pathfinder : IPathfinder
 {
     private readonly HexGrid _grid;
     private readonly IUnitManager? _unitManager;
@@ -21,6 +21,26 @@ public class Pathfinder
         _grid = grid;
         _unitManager = unitManager;
     }
+
+    #region IService Implementation
+
+    /// <summary>
+    /// Initializes the pathfinder service.
+    /// </summary>
+    public void Initialize()
+    {
+        // Already initialized in constructor
+    }
+
+    /// <summary>
+    /// Shuts down the pathfinder service.
+    /// </summary>
+    public void Shutdown()
+    {
+        // No cleanup needed
+    }
+
+    #endregion
 
     /// <summary>
     /// Finds the optimal path between two cells using A* algorithm.

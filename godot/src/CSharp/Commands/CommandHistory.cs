@@ -226,15 +226,21 @@ public class CommandHistory : IService
 
     private void TrimHistory()
     {
-        while (_undoStack.Count > MaxHistorySize)
+        if (_undoStack.Count <= MaxHistorySize)
         {
-            // Remove oldest commands by converting to array and rebuilding
-            var commands = _undoStack.ToArray();
-            _undoStack.Clear();
-            for (int i = 0; i < MaxHistorySize; i++)
-            {
-                _undoStack.Push(commands[i]);
-            }
+            return;
+        }
+
+        // Stack.ToArray() returns elements in LIFO order (newest first at index 0)
+        // We want to keep the newest MaxHistorySize commands
+        var commands = _undoStack.ToArray();
+        _undoStack.Clear();
+
+        // Push from index MaxHistorySize-1 down to 0 to restore correct order
+        // (oldest of the kept commands first, newest last)
+        for (int i = MaxHistorySize - 1; i >= 0; i--)
+        {
+            _undoStack.Push(commands[i]);
         }
     }
 

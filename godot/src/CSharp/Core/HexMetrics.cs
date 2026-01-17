@@ -51,6 +51,20 @@ public static class HexMetrics
     /// </summary>
     public const int MaxElevation = 13;
 
+    /// <summary>
+    /// Checks if an elevation value represents water (below land minimum).
+    /// </summary>
+    /// <param name="elevation">The elevation to check.</param>
+    /// <returns>True if the elevation is underwater.</returns>
+    public static bool IsWaterElevation(int elevation) => elevation < LandMinElevation;
+
+    /// <summary>
+    /// Checks if an elevation value represents land (at or above land minimum).
+    /// </summary>
+    /// <param name="elevation">The elevation to check.</param>
+    /// <returns>True if the elevation is land.</returns>
+    public static bool IsLandElevation(int elevation) => elevation >= LandMinElevation;
+
     #endregion
 
     #region Terraces (Catlike Coding Style)

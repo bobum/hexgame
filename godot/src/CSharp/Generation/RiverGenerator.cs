@@ -7,7 +7,7 @@ namespace HexGame.Generation;
 public class RiverGenerator
 {
     private readonly HexGrid _grid;
-    private readonly Random _rng;
+    private Random _rng;
 
     /// <summary>
     /// Minimum number of edges for a valid river.
@@ -32,7 +32,8 @@ public class RiverGenerator
     public void Generate(int seed = 0, float riverPercentage = 0.1f)
     {
         // Use different seed offset for rivers to avoid correlation with terrain
-        _rng.Reinitialize(seed != 0 ? seed + 7777 : Random.Shared.Next());
+        // Create a new Random instance with the seed (Random cannot be reseeded)
+        _rng = new Random(seed != 0 ? seed + 7777 : Random.Shared.Next());
 
         // Clear existing rivers
         foreach (var cell in _grid.GetAllCells())
@@ -43,7 +44,7 @@ public class RiverGenerator
 
         // Collect land cells
         var landCells = _grid.GetAllCells()
-            .Where(c => c.Elevation >= HexMetrics.SeaLevel)
+            .Where(c => HexMetrics.IsLandElevation(c.Elevation))
             .ToList();
 
         if (landCells.Count == 0)
@@ -160,7 +161,7 @@ public class RiverGenerator
         var visited = new HashSet<string>();
         var riverCells = new List<(HexCell Cell, int Direction)>();
 
-        while (current.Elevation >= HexMetrics.SeaLevel)
+        while (HexMetrics.IsLandElevation(current.Elevation))
         {
             string key = $"{current.Q},{current.R}";
             if (visited.Contains(key))
@@ -194,7 +195,7 @@ public class RiverGenerator
             }
 
             // Check if we reached water
-            if (neighbor.Elevation < HexMetrics.SeaLevel)
+            if (HexMetrics.IsWaterElevation(neighbor.Elevation))
             {
                 break;
             }
@@ -276,7 +277,7 @@ public class RiverGenerator
         for (int dir = 0; dir < 6; dir++)
         {
             var neighbor = _grid.GetNeighbor(cell, (HexDirection)dir);
-            if (neighbor != null && neighbor.Elevation < HexMetrics.SeaLevel)
+            if (neighbor != null && HexMetrics.IsWaterElevation(neighbor.Elevation))
             {
                 return true;
             }
@@ -298,16 +299,3 @@ public class RiverGenerator
     }
 }
 
-/// <summary>
-/// Extension method to reinitialize Random with a new seed.
-/// </summary>
-internal static class RandomExtensions
-{
-    public static void Reinitialize(this Random random, int seed)
-    {
-        // Random doesn't support reseeding, so we use a workaround
-        // by using reflection or just using a new Random instance pattern
-        // For simplicity, we'll use Random.Shared for true randomness
-        // and store the seed for determinism
-    }
-}

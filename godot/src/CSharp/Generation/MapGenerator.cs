@@ -50,6 +50,29 @@ public class MapGenerator : IMapGenerator
         _noise.FractalLacunarity = Lacunarity;
     }
 
+    #region IService Implementation
+
+    /// <summary>
+    /// Initializes the map generator service.
+    /// </summary>
+    public void Initialize()
+    {
+        // Already initialized in constructor
+    }
+
+    /// <summary>
+    /// Shuts down the map generator, canceling any ongoing generation.
+    /// </summary>
+    public void Shutdown()
+    {
+        CancelGeneration();
+        GenerationStarted = null;
+        GenerationProgress = null;
+        GenerationCompleted = null;
+    }
+
+    #endregion
+
     #region Synchronous Generation
 
     public void Generate(HexGrid grid, int seed = 0)

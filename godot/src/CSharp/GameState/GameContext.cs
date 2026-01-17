@@ -8,15 +8,35 @@ public static class GameContext
 {
     /// <summary>
     /// Gets the EventBus service for publishing and subscribing to game events.
+    /// Returns null if EventBus is not registered.
     /// </summary>
-    /// <exception cref="InvalidOperationException">If EventBus is not registered.</exception>
-    public static EventBus Events => ServiceLocator.Get<EventBus>();
+    /// <remarks>
+    /// Prefer using <see cref="TryGetEvents"/> or <see cref="PublishEvent{T}"/> for null-safe access.
+    /// </remarks>
+    public static EventBus? Events => ServiceLocator.TryGet<EventBus>(out var eventBus) ? eventBus : null;
 
     /// <summary>
     /// Gets the CommandHistory service for undo/redo operations.
+    /// Returns null if CommandHistory is not registered.
+    /// </summary>
+    /// <remarks>
+    /// Prefer using <see cref="TryGetCommands"/> or <see cref="ExecuteCommand"/> for null-safe access.
+    /// </remarks>
+    public static CommandHistory? Commands => ServiceLocator.TryGet<CommandHistory>(out var commands) ? commands : null;
+
+    /// <summary>
+    /// Gets the EventBus service, throwing if not registered.
+    /// Use this only when you're certain the service is registered.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">If EventBus is not registered.</exception>
+    public static EventBus GetEventsRequired() => ServiceLocator.Get<EventBus>();
+
+    /// <summary>
+    /// Gets the CommandHistory service, throwing if not registered.
+    /// Use this only when you're certain the service is registered.
     /// </summary>
     /// <exception cref="InvalidOperationException">If CommandHistory is not registered.</exception>
-    public static CommandHistory Commands => ServiceLocator.Get<CommandHistory>();
+    public static CommandHistory GetCommandsRequired() => ServiceLocator.Get<CommandHistory>();
 
     /// <summary>
     /// Attempts to get the EventBus service.

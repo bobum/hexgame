@@ -36,6 +36,9 @@ public partial class TestRunner : Node
         passed += RunTestSuite<HexGridTests>("HexGrid", ref failed);
         passed += RunTestSuite<EventBusTests>("EventBus", ref failed);
         passed += RunTestSuite<CommandHistoryTests>("CommandHistory", ref failed);
+        passed += RunTestSuite<UnitManagerTests>("UnitManager", ref failed);
+        passed += RunTestSuite<PathfinderTests>("Pathfinder", ref failed);
+        passed += RunTestSuite<MapGeneratorTests>("MapGenerator", ref failed);
 
         GD.Print("");
         GD.Print("╔══════════════════════════════════════════╗");

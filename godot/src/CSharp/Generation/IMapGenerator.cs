@@ -2,8 +2,9 @@ namespace HexGame.Generation;
 
 /// <summary>
 /// Interface for map generation systems.
+/// Extends IService for ServiceLocator registration.
 /// </summary>
-public interface IMapGenerator
+public interface IMapGenerator : IService
 {
     #region Configuration Properties
 
