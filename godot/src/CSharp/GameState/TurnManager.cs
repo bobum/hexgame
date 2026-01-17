@@ -1,3 +1,4 @@
+using HexGame.Core;
 using HexGame.Units;
 
 namespace HexGame.GameState;
@@ -11,12 +12,12 @@ public class TurnManager : IService
     /// <summary>
     /// Player ID for the human player.
     /// </summary>
-    public const int PlayerHuman = 1;
+    public static int PlayerHuman => GameConstants.GameState.HumanPlayerId;
 
     /// <summary>
     /// Starting player ID for AI players.
     /// </summary>
-    public const int PlayerAiStart = 2;
+    public static int PlayerAiStart => GameConstants.GameState.FirstAIPlayerId;
 
     private readonly IUnitManager _unitManager;
 
@@ -38,7 +39,7 @@ public class TurnManager : IService
     /// <summary>
     /// Total number of players (including human).
     /// </summary>
-    public int PlayerCount { get; set; } = 2;
+    public int PlayerCount { get; set; } = GameConstants.GameState.DefaultPlayerCount;
 
     #region Events
 

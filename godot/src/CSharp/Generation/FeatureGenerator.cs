@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Generation;
 
 /// <summary>
@@ -24,7 +26,7 @@ public class FeatureGenerator
     /// <param name="seed">Random seed.</param>
     public void Generate(int seed)
     {
-        _rng = new Random(seed + 2000);
+        _rng = new Random(seed + GameConstants.Generation.FeatureSeedOffset);
 
         // Clear existing features
         foreach (var cell in _grid.GetAllCells())
@@ -57,19 +59,19 @@ public class FeatureGenerator
             // Try to place trees
             if (treeChance > 0 && _rng.NextDouble() < treeChance)
             {
-                int numTrees = _rng.Next(1, 4);
+                int numTrees = _rng.Next(GameConstants.Features.MinTreesPerCell, GameConstants.Features.MaxTreesPerCell);
                 for (int i = 0; i < numTrees; i++)
                 {
                     var offset = new Vector3(
-                        RandomRange(-0.3f, 0.3f),
+                        RandomRange(GameConstants.Features.TreeOffsetMin, GameConstants.Features.TreeOffsetMax),
                         0,
-                        RandomRange(-0.3f, 0.3f)
+                        RandomRange(GameConstants.Features.TreeOffsetMin, GameConstants.Features.TreeOffsetMax)
                     );
                     var feature = new Feature(
                         Feature.FeatureType.Tree,
                         center + offset,
                         (float)(_rng.NextDouble() * Math.Tau),
-                        RandomRange(0.8f, 1.2f)
+                        RandomRange(GameConstants.Features.TreeScaleMin, GameConstants.Features.TreeScaleMax)
                     );
                     cell.Features.Add(feature);
                     treeCount++;
@@ -79,19 +81,19 @@ public class FeatureGenerator
             // Try to place rocks
             if (rockChance > 0 && _rng.NextDouble() < rockChance)
             {
-                int numRocks = _rng.Next(1, 3);
+                int numRocks = _rng.Next(GameConstants.Features.MinRocksPerCell, GameConstants.Features.MaxRocksPerCell);
                 for (int i = 0; i < numRocks; i++)
                 {
                     var offset = new Vector3(
-                        RandomRange(-0.35f, 0.35f),
+                        RandomRange(GameConstants.Features.RockOffsetMin, GameConstants.Features.RockOffsetMax),
                         0,
-                        RandomRange(-0.35f, 0.35f)
+                        RandomRange(GameConstants.Features.RockOffsetMin, GameConstants.Features.RockOffsetMax)
                     );
                     var feature = new Feature(
                         Feature.FeatureType.Rock,
                         center + offset,
                         (float)(_rng.NextDouble() * Math.Tau),
-                        RandomRange(0.6f, 1.4f)
+                        RandomRange(GameConstants.Features.RockScaleMin, GameConstants.Features.RockScaleMax)
                     );
                     cell.Features.Add(feature);
                     rockCount++;
@@ -109,16 +111,16 @@ public class FeatureGenerator
     {
         return terrain switch
         {
-            TerrainType.Forest => (0.7f, 0.1f),
-            TerrainType.Jungle => (0.85f, 0.05f),
-            TerrainType.Plains => (0.15f, 0.1f),
-            TerrainType.Savanna => (0.1f, 0.15f),
-            TerrainType.Hills => (0.2f, 0.3f),
-            TerrainType.Mountains => (0.05f, 0.4f),
-            TerrainType.Desert => (0f, 0.2f),
-            TerrainType.Snow => (0f, 0.15f),
-            TerrainType.Taiga => (0.4f, 0.1f),
-            TerrainType.Tundra => (0.05f, 0.2f),
+            TerrainType.Forest => (GameConstants.Features.ForestTreeChance, GameConstants.Features.ForestRockChance),
+            TerrainType.Jungle => (GameConstants.Features.JungleTreeChance, GameConstants.Features.JungleRockChance),
+            TerrainType.Plains => (GameConstants.Features.GrasslandTreeChance, GameConstants.Features.GrasslandRockChance),
+            TerrainType.Savanna => (GameConstants.Features.SavannaTreeChance, GameConstants.Features.SavannaRockChance),
+            TerrainType.Hills => (GameConstants.Features.HillsTreeChance, GameConstants.Features.HillsRockChance),
+            TerrainType.Mountains => (GameConstants.Features.MountainTreeChance, GameConstants.Features.MountainRockChance),
+            TerrainType.Desert => (GameConstants.Features.DesertTreeChance, GameConstants.Features.DesertRockChance),
+            TerrainType.Snow => (GameConstants.Features.SnowTreeChance, GameConstants.Features.SnowRockChance),
+            TerrainType.Taiga => (GameConstants.Features.TaigaTreeChance, GameConstants.Features.TaigaRockChance),
+            TerrainType.Tundra => (GameConstants.Features.TundraTreeChance, GameConstants.Features.TundraRockChance),
             _ => (0f, 0f)
         };
     }

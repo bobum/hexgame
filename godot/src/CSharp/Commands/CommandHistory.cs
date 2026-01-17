@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Commands;
 
 /// <summary>
@@ -9,7 +11,7 @@ public class CommandHistory : IService
     /// <summary>
     /// Maximum number of commands to keep in history.
     /// </summary>
-    public const int MaxHistorySize = 100;
+    public static int MaxHistorySize => GameConstants.GameState.MaxHistorySize;
 
     private readonly Stack<ICommand> _undoStack = new();
     private readonly Stack<ICommand> _redoStack = new();

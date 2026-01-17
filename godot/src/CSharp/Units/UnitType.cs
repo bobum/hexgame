@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Units;
 
 /// <summary>
@@ -52,10 +54,10 @@ public static class UnitTypeExtensions
         {
             UnitType.Infantry, new UnitStats(
                 UnitDomain.Land,
-                Health: 100,
-                Movement: 2,
-                Attack: 10,
-                Defense: 8,
+                Health: GameConstants.UnitStats.InfantryHealth,
+                Movement: GameConstants.UnitStats.InfantryMovement,
+                Attack: GameConstants.UnitStats.InfantryAttack,
+                Defense: GameConstants.UnitStats.InfantryDefense,
                 Name: "Infantry",
                 Description: "Basic land unit. Slow but sturdy."
             )
@@ -63,10 +65,10 @@ public static class UnitTypeExtensions
         {
             UnitType.Cavalry, new UnitStats(
                 UnitDomain.Land,
-                Health: 80,
-                Movement: 4,
-                Attack: 12,
-                Defense: 5,
+                Health: GameConstants.UnitStats.CavalryHealth,
+                Movement: GameConstants.UnitStats.CavalryMovement,
+                Attack: GameConstants.UnitStats.CavalryAttack,
+                Defense: GameConstants.UnitStats.CavalryDefense,
                 Name: "Cavalry",
                 Description: "Fast land unit. Good for flanking."
             )
@@ -74,10 +76,10 @@ public static class UnitTypeExtensions
         {
             UnitType.Archer, new UnitStats(
                 UnitDomain.Land,
-                Health: 60,
-                Movement: 2,
-                Attack: 15,
-                Defense: 3,
+                Health: GameConstants.UnitStats.ArcherHealth,
+                Movement: GameConstants.UnitStats.ArcherMovement,
+                Attack: GameConstants.UnitStats.ArcherAttack,
+                Defense: GameConstants.UnitStats.ArcherDefense,
                 Name: "Archer",
                 Description: "Ranged land unit. High attack, low defense."
             )
@@ -85,10 +87,10 @@ public static class UnitTypeExtensions
         {
             UnitType.Galley, new UnitStats(
                 UnitDomain.Naval,
-                Health: 80,
-                Movement: 3,
-                Attack: 8,
-                Defense: 6,
+                Health: GameConstants.UnitStats.GalleyHealth,
+                Movement: GameConstants.UnitStats.GalleyMovement,
+                Attack: GameConstants.UnitStats.GalleyAttack,
+                Defense: GameConstants.UnitStats.GalleyDefense,
                 Name: "Galley",
                 Description: "Light naval unit. Fast and maneuverable."
             )
@@ -96,10 +98,10 @@ public static class UnitTypeExtensions
         {
             UnitType.Warship, new UnitStats(
                 UnitDomain.Naval,
-                Health: 150,
-                Movement: 2,
-                Attack: 20,
-                Defense: 12,
+                Health: GameConstants.UnitStats.WarshipHealth,
+                Movement: GameConstants.UnitStats.WarshipMovement,
+                Attack: GameConstants.UnitStats.WarshipAttack,
+                Defense: GameConstants.UnitStats.WarshipDefense,
                 Name: "Warship",
                 Description: "Heavy naval unit. Slow but powerful."
             )
@@ -107,10 +109,10 @@ public static class UnitTypeExtensions
         {
             UnitType.Marine, new UnitStats(
                 UnitDomain.Amphibious,
-                Health: 70,
-                Movement: 2,
-                Attack: 8,
-                Defense: 6,
+                Health: GameConstants.UnitStats.MarineHealth,
+                Movement: GameConstants.UnitStats.MarineMovement,
+                Attack: GameConstants.UnitStats.MarineAttack,
+                Defense: GameConstants.UnitStats.MarineDefense,
                 Name: "Marine",
                 Description: "Amphibious unit. Can move on land and water."
             )

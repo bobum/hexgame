@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Rendering;
 
 /// <summary>
@@ -63,32 +65,32 @@ public static class RenderingConfig
     /// <summary>
     /// Chunk size for chunked renderers.
     /// </summary>
-    public const int ChunkSize = 16;
+    public static int ChunkSize => GameConstants.Rendering.ChunkSize;
 
     /// <summary>
     /// Maximum render distance for terrain.
     /// </summary>
-    public const float TerrainRenderDistance = 200f;
+    public static float TerrainRenderDistance => GameConstants.Rendering.TerrainRenderDistance;
 
     /// <summary>
     /// Maximum render distance for features.
     /// </summary>
-    public const float FeatureRenderDistance = 100f;
+    public static float FeatureRenderDistance => GameConstants.Rendering.FeatureRenderDistance;
 
     /// <summary>
     /// Maximum render distance for units.
     /// </summary>
-    public const float UnitRenderDistance = 150f;
+    public static float UnitRenderDistance => GameConstants.Rendering.UnitRenderDistance;
 
     /// <summary>
     /// Maximum render distance for water effects.
     /// </summary>
-    public const float WaterRenderDistance = 200f;
+    public static float WaterRenderDistance => GameConstants.Rendering.WaterRenderDistance;
 
     /// <summary>
     /// Fade start distance (as percentage of max).
     /// </summary>
-    public const float FadeStartPercent = 0.8f;
+    public static float FadeStartPercent => GameConstants.Rendering.FadeStartPercentage;
 
     /// <summary>
     /// Player colors for unit rendering.

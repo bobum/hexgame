@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Utilities;
 
 /// <summary>
@@ -23,7 +25,7 @@ public class ObjectPool<T> where T : class, new()
     /// </summary>
     /// <param name="resetAction">Optional action to reset objects before reuse.</param>
     /// <param name="maxSize">Maximum pool size (prevents unbounded growth).</param>
-    public ObjectPool(Action<T>? resetAction = null, int maxSize = 1000)
+    public ObjectPool(Action<T>? resetAction = null, int maxSize = GameConstants.Pooling.DefaultPoolMaxSize)
     {
         _resetAction = resetAction;
         _maxSize = maxSize;

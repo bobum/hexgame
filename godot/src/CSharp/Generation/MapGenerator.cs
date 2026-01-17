@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Generation;
 
 /// <summary>
@@ -20,13 +22,13 @@ public class MapGenerator : IMapGenerator
 
     #region Configuration Properties
 
-    public float NoiseScale { get; set; } = 0.02f;
-    public int Octaves { get; set; } = 4;
-    public float Persistence { get; set; } = 0.5f;
-    public float Lacunarity { get; set; } = 2.0f;
-    public float SeaLevel { get; set; } = 0.35f;
-    public float MountainLevel { get; set; } = 0.75f;
-    public float RiverPercentage { get; set; } = 0.1f;
+    public float NoiseScale { get; set; } = GameConstants.Generation.NoiseScale;
+    public int Octaves { get; set; } = GameConstants.Generation.NoiseOctaves;
+    public float Persistence { get; set; } = GameConstants.Generation.NoisePersistence;
+    public float Lacunarity { get; set; } = GameConstants.Generation.NoiseLacunarity;
+    public float SeaLevel { get; set; } = GameConstants.Generation.SeaLevelThreshold;
+    public float MountainLevel { get; set; } = GameConstants.Generation.MountainLevelThreshold;
+    public float RiverPercentage { get; set; } = GameConstants.Generation.RiverPercentage;
 
     public bool IsGenerating => _isGenerating;
 
@@ -133,8 +135,8 @@ public class MapGenerator : IMapGenerator
     {
         var moistureNoise = new FastNoiseLite();
         moistureNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
-        moistureNoise.Seed = _noise.Seed + 1000;
-        moistureNoise.Frequency = 0.03f;
+        moistureNoise.Seed = _noise.Seed + GameConstants.Generation.MoistureNoiseSeedOffset;
+        moistureNoise.Frequency = GameConstants.Generation.MoistureNoiseFrequency;
 
         foreach (var cell in _grid!.GetAllCells())
         {
@@ -162,14 +164,14 @@ public class MapGenerator : IMapGenerator
         int heightAboveSea = elevation - HexMetrics.LandMinElevation;
 
         // High elevation
-        if (heightAboveSea >= 6) return TerrainType.Snow;
-        if (heightAboveSea >= 4) return TerrainType.Mountains;
+        if (heightAboveSea >= GameConstants.Generation.MountainElevation) return TerrainType.Snow;
+        if (heightAboveSea >= GameConstants.Generation.HillElevation) return TerrainType.Mountains;
 
         // Land biomes based on moisture
-        if (moisture < 0.2f) return TerrainType.Desert;
-        if (moisture < 0.4f) return heightAboveSea >= 2 ? TerrainType.Hills : TerrainType.Savanna;
-        if (moisture < 0.6f) return TerrainType.Plains;
-        if (moisture < 0.8f) return TerrainType.Forest;
+        if (moisture < GameConstants.Generation.DesertMoisture) return TerrainType.Desert;
+        if (moisture < GameConstants.Generation.GrasslandMoisture) return heightAboveSea >= 2 ? TerrainType.Hills : TerrainType.Savanna;
+        if (moisture < GameConstants.Generation.ForestMoisture) return TerrainType.Plains;
+        if (moisture < GameConstants.Generation.JungleMoisture) return TerrainType.Forest;
         return TerrainType.Jungle;
     }
 
@@ -226,8 +228,8 @@ public class MapGenerator : IMapGenerator
 
         var moistNoise = new FastNoiseLite();
         moistNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
-        moistNoise.Seed = _pendingSeed + 1000;
-        moistNoise.Frequency = 0.03f;
+        moistNoise.Seed = _pendingSeed + GameConstants.Generation.MoistureNoiseSeedOffset;
+        moistNoise.Frequency = GameConstants.Generation.MoistureNoiseFrequency;
 
         int width = _grid!.Width;
         int height = _grid.Height;

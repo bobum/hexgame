@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Generation;
 
 /// <summary>
@@ -9,10 +11,6 @@ public class RiverGenerator
     private readonly HexGrid _grid;
     private Random _rng;
 
-    /// <summary>
-    /// Minimum number of edges for a valid river.
-    /// </summary>
-    public const int MinRiverLength = 3;
 
     /// <summary>
     /// Creates a new river generator.
@@ -33,7 +31,7 @@ public class RiverGenerator
     {
         // Use different seed offset for rivers to avoid correlation with terrain
         // Create a new Random instance with the seed (Random cannot be reseeded)
-        _rng = new Random(seed != 0 ? seed + 7777 : Random.Shared.Next());
+        _rng = new Random(seed != 0 ? seed + GameConstants.Generation.RiverSeedOffset : Random.Shared.Next());
 
         // Clear existing rivers
         foreach (var cell in _grid.GetAllCells())
@@ -113,7 +111,7 @@ public class RiverGenerator
             float score = cell.Moisture * elevationFactor;
 
             // Add to sources if score is high enough
-            if (score > 0.25f)
+            if (score > GameConstants.Generation.RiverSourceFitnessThreshold)
             {
                 sources.Add(cell);
             }
@@ -136,7 +134,11 @@ public class RiverGenerator
             float score = cell.Moisture * elevationFactor;
 
             // Higher score = more weight
-            float weight = score > 0.75f ? 4f : (score > 0.5f ? 2f : 1f);
+            float weight = score > GameConstants.Generation.WeightedSelectionHigh
+                ? GameConstants.Generation.WeightHighPriority
+                : (score > GameConstants.Generation.WeightedSelectionMedium
+                    ? GameConstants.Generation.WeightMediumPriority
+                    : GameConstants.Generation.WeightLowPriority);
             weights.Add(weight);
             totalWeight += weight;
         }
@@ -203,14 +205,14 @@ public class RiverGenerator
             current = neighbor;
 
             // Safety limit
-            if (riverCells.Count > 100)
+            if (riverCells.Count > GameConstants.Generation.RiverTracingSafetyLimit)
             {
                 break;
             }
         }
 
         // Check minimum length
-        if (riverCells.Count < MinRiverLength)
+        if (riverCells.Count < GameConstants.Generation.MinRiverLength)
         {
             return 0;
         }
@@ -247,7 +249,7 @@ public class RiverGenerator
             }
 
             // Weight based on steepness
-            float weight = 1f + elevationDiff * 3f;
+            float weight = 1f + elevationDiff * GameConstants.Generation.RiverSteepnessWeight;
             candidates.Add((dir, weight));
         }
 

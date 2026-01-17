@@ -1,3 +1,5 @@
+using HexGame.Core;
+
 namespace HexGame.Pathfinding;
 
 /// <summary>
@@ -11,25 +13,20 @@ public class LandMovementStrategy : IMovementStrategy
     public static readonly LandMovementStrategy Instance = new();
 
     /// <summary>
-    /// River crossing cost.
-    /// </summary>
-    public const float RiverCrossingCost = 1.0f;
-
-    /// <summary>
     /// Base movement costs for each terrain type (land units).
     /// </summary>
     private static readonly Dictionary<TerrainType, float> TerrainCosts = new()
     {
-        { TerrainType.Plains, 1.0f },
-        { TerrainType.Coast, 1.0f },
-        { TerrainType.Desert, 1.0f },
-        { TerrainType.Savanna, 1.0f },
-        { TerrainType.Forest, 1.5f },
-        { TerrainType.Taiga, 1.5f },
-        { TerrainType.Jungle, 2.0f },
-        { TerrainType.Tundra, 1.5f },
-        { TerrainType.Hills, 2.0f },
-        { TerrainType.Snow, 2.5f },
+        { TerrainType.Plains, GameConstants.Movement.BaseCost },
+        { TerrainType.Coast, GameConstants.Movement.BaseCost },
+        { TerrainType.Desert, GameConstants.Movement.BaseCost },
+        { TerrainType.Savanna, GameConstants.Movement.BaseCost },
+        { TerrainType.Forest, GameConstants.Movement.ForestCost },
+        { TerrainType.Taiga, GameConstants.Movement.ForestCost },
+        { TerrainType.Jungle, GameConstants.Movement.JungleCost },
+        { TerrainType.Tundra, GameConstants.Movement.ForestCost },
+        { TerrainType.Hills, GameConstants.Movement.HillsCost },
+        { TerrainType.Snow, GameConstants.Movement.SnowCost },
         { TerrainType.Mountains, float.PositiveInfinity },
         { TerrainType.Ocean, float.PositiveInfinity }
     };
@@ -59,7 +56,7 @@ public class LandMovementStrategy : IMovementStrategy
         int elevDiff = to.Elevation - from.Elevation;
 
         // Cliffs (2+ elevation difference) are impassable
-        if (Math.Abs(elevDiff) >= 2)
+        if (Math.Abs(elevDiff) >= GameConstants.Movement.CliffElevationDifference)
         {
             return float.PositiveInfinity;
         }
@@ -67,13 +64,13 @@ public class LandMovementStrategy : IMovementStrategy
         // Climbing penalty - going uphill costs more
         if (elevDiff > 0)
         {
-            cost += elevDiff * 0.5f;
+            cost += elevDiff * GameConstants.Movement.ClimbingPenaltyMultiplier;
         }
 
         // River crossing penalty
         if (CrossesRiver(from, to))
         {
-            cost += RiverCrossingCost;
+            cost += GameConstants.Movement.RiverCrossingCost;
         }
 
         return cost;
@@ -148,8 +145,8 @@ public class NavalMovementStrategy : IMovementStrategy
     /// </summary>
     private static readonly Dictionary<TerrainType, float> TerrainCosts = new()
     {
-        { TerrainType.Ocean, 1.0f },
-        { TerrainType.Coast, 1.5f },
+        { TerrainType.Ocean, GameConstants.Movement.OceanCost },
+        { TerrainType.Coast, GameConstants.Movement.CoastCost },
         { TerrainType.Plains, float.PositiveInfinity },
         { TerrainType.Desert, float.PositiveInfinity },
         { TerrainType.Savanna, float.PositiveInfinity },
@@ -183,7 +180,7 @@ public class NavalMovementStrategy : IMovementStrategy
         // If terrain type isn't in naval costs but cell is water, use default
         if (float.IsPositiveInfinity(cost) && HexMetrics.IsWaterElevation(to.Elevation))
         {
-            cost = 1.0f;
+            cost = GameConstants.Movement.OceanCost;
         }
 
         return cost;
@@ -218,10 +215,6 @@ public class AmphibiousMovementStrategy : IMovementStrategy
     /// </summary>
     public static readonly AmphibiousMovementStrategy Instance = new();
 
-    /// <summary>
-    /// Extra cost for embarking/disembarking.
-    /// </summary>
-    public const float EmbarkCost = 1.0f;
 
     private AmphibiousMovementStrategy() { }
 
@@ -244,7 +237,7 @@ public class AmphibiousMovementStrategy : IMovementStrategy
 
         if (fromWater != toWater)
         {
-            baseCost += EmbarkCost;
+            baseCost += GameConstants.Movement.EmbarkDisembarkCost;
         }
 
         return baseCost;

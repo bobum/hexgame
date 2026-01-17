@@ -1,3 +1,4 @@
+using HexGame.Core;
 using HexGame.Utilities;
 
 namespace HexGame.Units;
@@ -11,7 +12,7 @@ public class UnitManager : IUnitManager
     private readonly HexGrid _grid;
     private readonly Dictionary<int, Unit> _units = new();
     private readonly Dictionary<string, Unit> _hexPositions = new(); // "q,r" -> Unit
-    private SpatialHash<Unit> _spatialHash = new(2.0f);
+    private SpatialHash<Unit> _spatialHash = new(GameConstants.Pooling.SpatialHashGridSize);
     private ObjectPool<Unit>? _unitPool;
     private int _nextId = 1;
     private readonly object _lock = new();
@@ -60,7 +61,7 @@ public class UnitManager : IUnitManager
 
     public void SetupPool()
     {
-        _unitPool = new ObjectPool<Unit>(maxSize: 500);
+        _unitPool = new ObjectPool<Unit>(maxSize: GameConstants.Pooling.UnitPoolMaxSize);
     }
 
     public void PrewarmPool(int count)
