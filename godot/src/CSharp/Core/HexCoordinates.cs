@@ -59,6 +59,18 @@ public readonly struct HexCoordinates : IEquatable<HexCoordinates>
     }
 
     /// <summary>
+    /// Converts hex coordinates to world position at the specified world height.
+    /// </summary>
+    /// <param name="worldY">The world Y coordinate (height).</param>
+    /// <returns>World position as Vector3.</returns>
+    public Vector3 ToWorldPosition(float worldY)
+    {
+        float x = (Q + R * 0.5f) * (HexMetrics.InnerRadius * 2f);
+        float z = R * (HexMetrics.OuterRadius * 1.5f);
+        return new Vector3(x, worldY, z);
+    }
+
+    /// <summary>
     /// Creates hex coordinates from a world position.
     /// </summary>
     /// <param name="position">World position.</param>

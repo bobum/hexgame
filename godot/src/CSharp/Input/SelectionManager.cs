@@ -1,5 +1,6 @@
 using HexGame.Commands;
 using HexGame.Core;
+using HexGame.Events;
 using HexGame.GameState;
 using HexGame.Pathfinding;
 using HexGame.Rendering;
@@ -88,14 +89,14 @@ public class SelectionManager : IService
     {
         // Subscribe to relevant events
         _eventBus.Subscribe<UnitMovedEvent>(OnUnitMoved);
-        _eventBus.Subscribe<UnitDestroyedEvent>(OnUnitDestroyed);
+        _eventBus.Subscribe<UnitRemovedEvent>(OnUnitDestroyed);
         _eventBus.Subscribe<TurnEndedEvent>(OnTurnEnded);
     }
 
     public void Shutdown()
     {
         _eventBus.Unsubscribe<UnitMovedEvent>(OnUnitMoved);
-        _eventBus.Unsubscribe<UnitDestroyedEvent>(OnUnitDestroyed);
+        _eventBus.Unsubscribe<UnitRemovedEvent>(OnUnitDestroyed);
         _eventBus.Unsubscribe<TurnEndedEvent>(OnTurnEnded);
 
         SelectionChanged = null;
@@ -238,7 +239,7 @@ public class SelectionManager : IService
                     new PathOptions { UnitType = _selectedUnit.UnitType, IgnoreUnits = false }
                 );
 
-                if (pathResult.Success && pathResult != _currentPath)
+                if (pathResult.Reachable && pathResult != _currentPath)
                 {
                     _currentPath = pathResult;
                     PathPreviewChanged?.Invoke(pathResult);
@@ -283,13 +284,13 @@ public class SelectionManager : IService
             new PathOptions { UnitType = _selectedUnit.UnitType }
         );
 
-        if (!pathResult.Success) return;
+        if (!pathResult.Reachable) return;
 
-        var moveCommand = new MoveUnitCommand(
+        var moveCommand = new PathMoveCommand(
             _selectedUnit,
             _unitManager,
-            pathResult.Path,
-            pathResult.TotalCost
+            pathResult.Path.ToList(),
+            pathResult.Cost
         );
 
         if (_commandHistory.Execute(moveCommand))
@@ -339,7 +340,7 @@ public class SelectionManager : IService
         }
     }
 
-    private void OnUnitDestroyed(UnitDestroyedEvent evt)
+    private void OnUnitDestroyed(UnitRemovedEvent evt)
     {
         if (_selectedUnit != null && _selectedUnit.Id == evt.UnitId)
         {
@@ -358,9 +359,10 @@ public class SelectionManager : IService
 #region Commands
 
 /// <summary>
-/// Command to move a unit along a path.
+/// Command to move a unit along a path with full state tracking.
+/// Named differently from Commands.MoveUnitCommand to avoid collision.
 /// </summary>
-public class MoveUnitCommand : ICommand
+public class PathMoveCommand : ICommand
 {
     private readonly Unit _unit;
     private readonly IUnitManager _unitManager;
@@ -372,7 +374,7 @@ public class MoveUnitCommand : ICommand
 
     public string Description => $"Move {_unit.UnitType} to ({_path[^1].Q}, {_path[^1].R})";
 
-    public MoveUnitCommand(Unit unit, IUnitManager unitManager, List<HexCell> path, float movementCost)
+    public PathMoveCommand(Unit unit, IUnitManager unitManager, List<HexCell> path, float movementCost)
     {
         _unit = unit;
         _unitManager = unitManager;
@@ -408,16 +410,6 @@ public class MoveUnitCommand : ICommand
 #endregion
 
 #region Events
-
-/// <summary>
-/// Event fired when a unit moves.
-/// </summary>
-public record UnitMovedEvent(int UnitId, int FromQ, int FromR, int ToQ, int ToR);
-
-/// <summary>
-/// Event fired when a unit is destroyed.
-/// </summary>
-public record UnitDestroyedEvent(int UnitId);
 
 /// <summary>
 /// Event fired when an attack command is issued.

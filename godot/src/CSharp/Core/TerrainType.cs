@@ -8,6 +8,7 @@ public enum TerrainType
     Ocean,
     Coast,
     Plains,
+    Grassland,
     Forest,
     Hills,
     Mountains,
@@ -15,6 +16,7 @@ public enum TerrainType
     Desert,
     Tundra,
     Jungle,
+    Swamp,
     Savanna,
     Taiga
 }
@@ -32,6 +34,7 @@ public static class TerrainTypeExtensions
         { TerrainType.Ocean, new Color(0.102f, 0.298f, 0.431f) },     // 0x1a4c6e - Deep blue
         { TerrainType.Coast, new Color(0.176f, 0.545f, 0.788f) },     // 0x2d8bc9 - Light blue
         { TerrainType.Plains, new Color(0.52f, 0.75f, 0.28f) },       // Brighter grass green
+        { TerrainType.Grassland, new Color(0.4f, 0.7f, 0.2f) },       // Light green
         { TerrainType.Forest, new Color(0.180f, 0.490f, 0.196f) },    // 0x2e7d32 - Dark green
         { TerrainType.Hills, new Color(0.553f, 0.431f, 0.388f) },     // 0x8d6e63 - Brown
         { TerrainType.Mountains, new Color(0.459f, 0.459f, 0.459f) }, // 0x757575 - Gray
@@ -39,6 +42,7 @@ public static class TerrainTypeExtensions
         { TerrainType.Desert, new Color(0.902f, 0.784f, 0.431f) },    // 0xe6c86e - Sand yellow
         { TerrainType.Tundra, new Color(0.565f, 0.643f, 0.682f) },    // 0x90a4ae - Blue-gray
         { TerrainType.Jungle, new Color(0.106f, 0.369f, 0.125f) },    // 0x1b5e20 - Deep green
+        { TerrainType.Swamp, new Color(0.3f, 0.35f, 0.2f) },          // Murky green-brown
         { TerrainType.Savanna, new Color(0.773f, 0.659f, 0.333f) },   // 0xc5a855 - Golden brown
         { TerrainType.Taiga, new Color(0.290f, 0.388f, 0.365f) }      // 0x4a635d - Dark teal-green
     };
@@ -75,6 +79,7 @@ public static class TerrainTypeExtensions
             TerrainType.Ocean => "Ocean",
             TerrainType.Coast => "Coast",
             TerrainType.Plains => "Plains",
+            TerrainType.Grassland => "Grassland",
             TerrainType.Forest => "Forest",
             TerrainType.Hills => "Hills",
             TerrainType.Mountains => "Mountains",
@@ -82,6 +87,7 @@ public static class TerrainTypeExtensions
             TerrainType.Desert => "Desert",
             TerrainType.Tundra => "Tundra",
             TerrainType.Jungle => "Jungle",
+            TerrainType.Swamp => "Swamp",
             TerrainType.Savanna => "Savanna",
             TerrainType.Taiga => "Taiga",
             _ => "Unknown"
@@ -100,10 +106,12 @@ public static class TerrainTypeExtensions
             TerrainType.Ocean => 1,
             TerrainType.Coast => 1,
             TerrainType.Plains => 1,
+            TerrainType.Grassland => 1,
             TerrainType.Savanna => 1,
             TerrainType.Desert => 2,
             TerrainType.Forest => 2,
             TerrainType.Jungle => 3,
+            TerrainType.Swamp => 3,
             TerrainType.Taiga => 2,
             TerrainType.Tundra => 2,
             TerrainType.Hills => 2,
