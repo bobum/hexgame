@@ -36,7 +36,7 @@ func generate(p_seed: int = 0, p_river_percentage: float = 0.1) -> void:
 	# Count land cells for budget calculation
 	var land_cells: Array[HexCell] = []
 	for cell in grid.get_all_cells():
-		if cell.elevation >= HexMetrics.WATER_LEVEL:
+		if cell.elevation >= HexMetrics.SEA_LEVEL:
 			land_cells.append(cell)
 
 	if land_cells.is_empty():
@@ -75,7 +75,7 @@ func generate(p_seed: int = 0, p_river_percentage: float = 0.1) -> void:
 ## High elevation + high moisture = good source.
 func _find_river_sources(land_cells: Array[HexCell]) -> Array[HexCell]:
 	var sources: Array[HexCell] = []
-	var elevation_range = HexMetrics.MAX_ELEVATION - HexMetrics.WATER_LEVEL
+	var elevation_range = HexMetrics.MAX_ELEVATION - HexMetrics.SEA_LEVEL
 
 	for cell in land_cells:
 		# Skip cells already with rivers
@@ -91,7 +91,7 @@ func _find_river_sources(land_cells: Array[HexCell]) -> Array[HexCell]:
 			continue
 
 		# Calculate source fitness score
-		var elevation_factor = float(cell.elevation - HexMetrics.WATER_LEVEL) / elevation_range
+		var elevation_factor = float(cell.elevation - HexMetrics.SEA_LEVEL) / elevation_range
 		var score = cell.moisture * elevation_factor
 
 		# Add to sources with weighting
@@ -103,14 +103,14 @@ func _find_river_sources(land_cells: Array[HexCell]) -> Array[HexCell]:
 
 ## Pick a source using weighted random selection.
 func _pick_weighted_source(sources: Array[HexCell]) -> int:
-	var elevation_range = HexMetrics.MAX_ELEVATION - HexMetrics.WATER_LEVEL
+	var elevation_range = HexMetrics.MAX_ELEVATION - HexMetrics.SEA_LEVEL
 
 	# Build weighted selection list
 	var weights: Array[float] = []
 	var total_weight: float = 0.0
 
 	for cell in sources:
-		var elevation_factor = float(cell.elevation - HexMetrics.WATER_LEVEL) / elevation_range
+		var elevation_factor = float(cell.elevation - HexMetrics.SEA_LEVEL) / elevation_range
 		var score = cell.moisture * elevation_factor
 
 		# Higher score = more weight
@@ -143,7 +143,7 @@ func _trace_river(source: HexCell) -> int:
 	# Track cells we add river segments to, so we can remove them if river is too short
 	var river_cells: Array[Dictionary] = []
 
-	while current.elevation >= HexMetrics.WATER_LEVEL:
+	while current.elevation >= HexMetrics.SEA_LEVEL:
 		var key = "%d,%d" % [current.q, current.r]
 		if visited.has(key):
 			break  # Avoid loops
@@ -169,7 +169,7 @@ func _trace_river(source: HexCell) -> int:
 			break
 
 		# Check if we reached water
-		if neighbor.elevation < HexMetrics.WATER_LEVEL:
+		if neighbor.elevation < HexMetrics.SEA_LEVEL:
 			break
 
 		# Move to next cell
@@ -238,7 +238,7 @@ func _find_flow_direction(cell: HexCell) -> int:
 func _is_adjacent_to_water(cell: HexCell) -> bool:
 	for dir in range(6):
 		var neighbor = grid.get_neighbor(cell, dir)
-		if neighbor and neighbor.elevation < HexMetrics.WATER_LEVEL:
+		if neighbor and neighbor.elevation < HexMetrics.SEA_LEVEL:
 			return true
 	return false
 

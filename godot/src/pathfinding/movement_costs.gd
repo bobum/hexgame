@@ -41,8 +41,8 @@ const NAVAL_TERRAIN_COSTS: Dictionary = {
 
 ## Calculate the movement cost for a LAND unit to move from one cell to an adjacent cell.
 static func get_land_movement_cost(from: HexCell, to: HexCell) -> float:
-	# Water is impassable for land units (elevation < 0)
-	if to.elevation < 0:
+	# Water is impassable for land units (elevation below sea level)
+	if to.elevation < HexMetrics.SEA_LEVEL:
 		return INF
 
 	# Get base terrain cost
@@ -72,8 +72,8 @@ static func get_land_movement_cost(from: HexCell, to: HexCell) -> float:
 
 ## Calculate the movement cost for a NAVAL unit to move from one cell to an adjacent cell.
 static func get_naval_movement_cost(_from: HexCell, to: HexCell) -> float:
-	# Naval units can move on water (elevation < 0) or Ocean/Coast terrain
-	var is_water_cell = to.elevation < 0 or \
+	# Naval units can move on water (elevation below sea level) or Ocean/Coast terrain
+	var is_water_cell = to.elevation < HexMetrics.SEA_LEVEL or \
 						to.terrain_type == TerrainType.Type.OCEAN or \
 						to.terrain_type == TerrainType.Type.COAST
 
@@ -84,7 +84,7 @@ static func get_naval_movement_cost(_from: HexCell, to: HexCell) -> float:
 	var cost: float = NAVAL_TERRAIN_COSTS.get(to.terrain_type, INF)
 
 	# If terrain type isn't in naval costs but cell is water, use default cost
-	if not is_finite(cost) and to.elevation < 0:
+	if not is_finite(cost) and to.elevation < HexMetrics.SEA_LEVEL:
 		cost = 1.0
 
 	return cost
@@ -114,7 +114,7 @@ static func get_movement_cost(from: HexCell, to: HexCell) -> float:
 
 ## Check if a cell is passable for land units.
 static func is_passable_for_land(cell: HexCell) -> bool:
-	if cell.elevation < 0:
+	if cell.elevation < HexMetrics.SEA_LEVEL:
 		return false
 	if cell.terrain_type == TerrainType.Type.MOUNTAINS:
 		return false
@@ -125,8 +125,8 @@ static func is_passable_for_land(cell: HexCell) -> bool:
 
 ## Check if a cell is passable for naval units.
 static func is_passable_for_naval(cell: HexCell) -> bool:
-	# Naval can go on water (elevation < 0) or Ocean/Coast terrain
-	if cell.elevation < 0:
+	# Naval can go on water (elevation below sea level) or Ocean/Coast terrain
+	if cell.elevation < HexMetrics.SEA_LEVEL:
 		return true
 	if cell.terrain_type == TerrainType.Type.OCEAN:
 		return true
