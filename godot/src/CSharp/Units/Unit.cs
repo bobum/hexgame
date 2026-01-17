@@ -1,3 +1,4 @@
+using HexGame.Core;
 using HexGame.Utilities;
 
 namespace HexGame.Units;
@@ -69,6 +70,51 @@ public class Unit : IPoolable
     /// Whether this unit has moved this turn.
     /// </summary>
     public bool HasMoved { get; set; }
+
+    /// <summary>
+    /// Reference to the cell this unit is on.
+    /// </summary>
+    public HexCell? Cell { get; set; }
+
+    #endregion
+
+    #region Alias Properties (for API consistency)
+
+    /// <summary>
+    /// Alias for Type property.
+    /// </summary>
+    public UnitType UnitType
+    {
+        get => Type;
+        set => Type = value;
+    }
+
+    /// <summary>
+    /// Alias for Health property.
+    /// </summary>
+    public int CurrentHealth
+    {
+        get => Health;
+        set => Health = value;
+    }
+
+    /// <summary>
+    /// Alias for Movement property.
+    /// </summary>
+    public float CurrentMovement
+    {
+        get => Movement;
+        set => Movement = (int)value;
+    }
+
+    /// <summary>
+    /// Alias for HasMoved property.
+    /// </summary>
+    public bool HasActed
+    {
+        get => HasMoved;
+        set => HasMoved = value;
+    }
 
     #endregion
 

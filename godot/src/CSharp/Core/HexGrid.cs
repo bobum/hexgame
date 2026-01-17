@@ -8,12 +8,12 @@ public class HexGrid
     /// <summary>
     /// Width of the grid in cells.
     /// </summary>
-    public int Width { get; }
+    public int Width { get; private set; }
 
     /// <summary>
     /// Height of the grid in cells.
     /// </summary>
-    public int Height { get; }
+    public int Height { get; private set; }
 
     /// <summary>
     /// Dictionary storing all cells keyed by their coordinates.
@@ -148,6 +148,18 @@ public class HexGrid
     public void Clear()
     {
         _cells.Clear();
+    }
+
+    /// <summary>
+    /// Resizes the grid to new dimensions and reinitializes.
+    /// </summary>
+    /// <param name="width">New width.</param>
+    /// <param name="height">New height.</param>
+    public void Resize(int width, int height)
+    {
+        Width = width;
+        Height = height;
+        Initialize();
     }
 
     /// <summary>
