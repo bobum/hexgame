@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <EnableWorkloadResolver>false</EnableWorkloadResolver>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
