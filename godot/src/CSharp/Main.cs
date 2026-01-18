@@ -59,6 +59,11 @@ public partial class Main : Node3D
 
     private int _currentSeed;
 
+    // Async generation
+    private bool _useAsyncGeneration = true;
+    private bool _asyncGenerationPending;
+    private bool _asyncNeedsNewUnits;
+
     #endregion
 
     public override void _Ready()
@@ -124,6 +129,7 @@ public partial class Main : Node3D
         _gameUI.Connect(GameUI.SignalName.LightingParamChanged, Callable.From<string, float>(OnLightingParamChanged));
         _gameUI.Connect(GameUI.SignalName.FogParamChanged, Callable.From<string, float>(OnFogParamChanged));
         _gameUI.Connect(GameUI.SignalName.WaterParamChanged, Callable.From<string, float>(OnWaterParamChanged));
+        _gameUI.Connect(GameUI.SignalName.AsyncToggleChanged, Callable.From<bool>(OnAsyncToggleChanged));
     }
 
     private void SetupPerformanceMonitor()
@@ -412,6 +418,12 @@ public partial class Main : Node3D
     {
         float dt = (float)delta;
 
+        // Check for async generation completion
+        if (_asyncGenerationPending && _mapGenerator != null && _mapGenerator.IsGenerationComplete())
+        {
+            FinishAsyncGeneration();
+        }
+
         // Update water animation and visibility
         _chunkedWater?.UpdateAnimation(dt);
         if (_camera != null)
@@ -632,6 +644,12 @@ public partial class Main : Node3D
         }
     }
 
+    private void OnAsyncToggleChanged(bool enabled)
+    {
+        _useAsyncGeneration = enabled;
+        GD.Print($"Async generation: {(enabled ? "enabled" : "disabled")}");
+    }
+
     #endregion
 
     #region Turn System
@@ -658,26 +676,77 @@ public partial class Main : Node3D
 
     public void RegenerateMap()
     {
+        CancelPendingGeneration();
         CleanupRenderers();
 
         // Clear units
         _unitManager?.Clear();
 
-        // Regenerate
+        // Regenerate - async or sync based on setting
         if (_mapGenerator != null && _grid != null)
         {
-            _mapGenerator.Generate(_grid, _currentSeed);
-            GD.Print($"Map generated with seed: {_currentSeed}");
-
-            BuildTerrain();
-            BuildFeatures();
-            SetupSystemsAfterBuild(false);
-            CenterCamera();
+            if (_useAsyncGeneration)
+            {
+                _asyncGenerationPending = true;
+                _asyncNeedsNewUnits = false; // Same grid, respawn units
+                _mapGenerator.GenerateAsync(_grid, _currentSeed);
+                GD.Print($"Async map generation started with seed: {_currentSeed}");
+                _gameUI?.ShowGenerationStatus("Generating terrain...");
+            }
+            else
+            {
+                _mapGenerator.Generate(_grid, _currentSeed);
+                GD.Print($"Map generated (sync) with seed: {_currentSeed}");
+                FinishMapBuild();
+            }
         }
+    }
+
+    private void CancelPendingGeneration()
+    {
+        if (_asyncGenerationPending && _mapGenerator != null)
+        {
+            _mapGenerator.CancelGeneration();
+            _asyncGenerationPending = false;
+        }
+    }
+
+    private void FinishAsyncGeneration()
+    {
+        _asyncGenerationPending = false;
+        var result = _mapGenerator!.FinishAsyncGeneration();
+        GD.Print($"Map generated (async): worker={result.WorkerTimeMs}ms, features={result.FeatureTimeMs}ms");
+        _gameUI?.HideGenerationStatus();
+
+        if (_asyncNeedsNewUnits)
+        {
+            FinishMapBuildWithNewUnits();
+        }
+        else
+        {
+            FinishMapBuild();
+        }
+    }
+
+    private void FinishMapBuild()
+    {
+        BuildTerrain();
+        BuildFeatures();
+        SetupSystemsAfterBuild(false); // Reuse existing unit manager
+        CenterCamera();
+    }
+
+    private void FinishMapBuildWithNewUnits()
+    {
+        BuildTerrain();
+        BuildFeatures();
+        SetupSystemsAfterBuild(true); // Create new unit manager
+        CenterCamera();
     }
 
     public void RegenerateWithSettings(int width, int height, int seedVal)
     {
+        CancelPendingGeneration();
         CleanupRenderers();
 
         MapWidth = width;
@@ -691,16 +760,23 @@ public partial class Main : Node3D
         _grid = new HexGrid(MapWidth, MapHeight);
         _grid.Initialize();
 
-        // Generate
+        // Generate - async or sync based on setting
         if (_mapGenerator != null)
         {
-            _mapGenerator.Generate(_grid, _currentSeed);
-            GD.Print($"Map generated with seed: {_currentSeed}");
-
-            BuildTerrain();
-            BuildFeatures();
-            SetupSystemsAfterBuild(true);
-            CenterCamera();
+            if (_useAsyncGeneration)
+            {
+                _asyncGenerationPending = true;
+                _asyncNeedsNewUnits = true; // New grid size, need new unit manager
+                _mapGenerator.GenerateAsync(_grid, _currentSeed);
+                GD.Print($"Async map generation started with seed: {_currentSeed} (size: {MapWidth}x{MapHeight})");
+                _gameUI?.ShowGenerationStatus("Generating terrain...");
+            }
+            else
+            {
+                _mapGenerator.Generate(_grid, _currentSeed);
+                GD.Print($"Map generated (sync) with seed: {_currentSeed}");
+                FinishMapBuildWithNewUnits();
+            }
         }
     }
 
