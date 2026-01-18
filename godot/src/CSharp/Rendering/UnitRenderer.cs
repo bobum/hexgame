@@ -151,8 +151,8 @@ public partial class UnitRenderer : RendererBase
         var node = visual.Node;
         if (node != null)
         {
+            AddChild(node);  // Must be in tree before setting GlobalPosition
             node.GlobalPosition = GetUnitWorldPosition(unit);
-            AddChild(node);
         }
 
         _unitVisuals[unit.Id] = visual;
