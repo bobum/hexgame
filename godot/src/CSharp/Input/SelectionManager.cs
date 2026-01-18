@@ -239,7 +239,7 @@ public class SelectionManager : IService
                     new PathOptions { UnitType = _selectedUnit.UnitType, IgnoreUnits = false }
                 );
 
-                if (pathResult.Reachable && pathResult != _currentPath)
+                if (pathResult.Reachable && (_currentPath == null || !pathResult.Equals(_currentPath.Value)))
                 {
                     _currentPath = pathResult;
                     PathPreviewChanged?.Invoke(pathResult);

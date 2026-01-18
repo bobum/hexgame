@@ -260,6 +260,7 @@ public partial class InputManager : Node, IService
             {
                 _isPanning = true;
                 _lastMousePosition = mouseButton.Position;
+                GD.Print("Pan started");
             }
             // Zoom
             else if (mouseButton.ButtonIndex == MouseButton.WheelUp)
@@ -277,6 +278,7 @@ public partial class InputManager : Node, IService
             if (mouseButton.ButtonIndex == MouseButton.Middle)
             {
                 _isPanning = false;
+                GD.Print("Pan ended");
             }
         }
     }
@@ -296,6 +298,10 @@ public partial class InputManager : Node, IService
         {
             var delta = mouseMotion.Position - _lastMousePosition;
             _lastMousePosition = mouseMotion.Position;
+            if (delta.LengthSquared() > 0.01f)
+            {
+                GD.Print($"Panning: {delta}");
+            }
             CameraPanInput?.Invoke(delta);
         }
     }
@@ -316,7 +322,7 @@ public partial class InputManager : Node, IService
 
     private void ProcessCameraInput(float delta)
     {
-        // Keyboard rotation
+        // Keyboard rotation (Q/E)
         if (Godot.Input.IsActionPressed(ActionRotateLeft))
         {
             CameraRotateInput?.Invoke(-1f);
@@ -326,30 +332,21 @@ public partial class InputManager : Node, IService
             CameraRotateInput?.Invoke(1f);
         }
 
-        // Edge panning (optional - when mouse near screen edge)
-        var viewport = GetViewport();
-        if (viewport != null)
+        // Keyboard panning (WASD/Arrow keys)
+        var panDirection = Vector2.Zero;
+        if (Godot.Input.IsKeyPressed(Key.W) || Godot.Input.IsKeyPressed(Key.Up))
+            panDirection.Y -= 1f;
+        if (Godot.Input.IsKeyPressed(Key.S) || Godot.Input.IsKeyPressed(Key.Down))
+            panDirection.Y += 1f;
+        if (Godot.Input.IsKeyPressed(Key.A) || Godot.Input.IsKeyPressed(Key.Left))
+            panDirection.X -= 1f;
+        if (Godot.Input.IsKeyPressed(Key.D) || Godot.Input.IsKeyPressed(Key.Right))
+            panDirection.X += 1f;
+
+        if (panDirection != Vector2.Zero)
         {
-            var mousePos = viewport.GetMousePosition();
-            var viewportSize = viewport.GetVisibleRect().Size;
-            var edgePan = Vector2.Zero;
-
-            float edgeThreshold = 20f;
-
-            if (mousePos.X < edgeThreshold)
-                edgePan.X = -1f;
-            else if (mousePos.X > viewportSize.X - edgeThreshold)
-                edgePan.X = 1f;
-
-            if (mousePos.Y < edgeThreshold)
-                edgePan.Y = -1f;
-            else if (mousePos.Y > viewportSize.Y - edgeThreshold)
-                edgePan.Y = 1f;
-
-            if (edgePan != Vector2.Zero)
-            {
-                CameraPanInput?.Invoke(edgePan * 10f);
-            }
+            // Scale by delta time for smooth, consistent movement
+            CameraPanInput?.Invoke(panDirection * delta * 200f);
         }
     }
 

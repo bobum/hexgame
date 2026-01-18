@@ -273,10 +273,9 @@ public partial class GDScriptBridge : Node
     /// </summary>
     public void FocusCamera(int q, int r)
     {
-        if (ServiceLocator.TryGet<Input.CameraController>(out var camera))
-        {
-            camera.FocusOnCoords(q, r);
-        }
+        // Find camera controller through scene tree
+        var camera = GetTree().Root.FindChild("CameraController", true, false) as Input.CameraController;
+        camera?.FocusOnCoords(q, r);
     }
 
     #endregion
@@ -342,7 +341,7 @@ public partial class GDScriptBridge : Node
     /// <summary>
     /// Shows a message to the user via GDScript UI.
     /// </summary>
-    public void ShowMessage(string message, string messageType = "info")
+    public void DisplayMessage(string message, string messageType = "info")
     {
         EmitSignal(SignalName.ShowMessage, message, messageType);
     }

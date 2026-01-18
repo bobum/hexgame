@@ -3,6 +3,7 @@ using HexGame.Core;
 using HexGame.Events;
 using HexGame.GameState;
 using HexGame.Units;
+using GodotFileAccess = Godot.FileAccess;
 
 namespace HexGame.Persistence;
 
@@ -78,7 +79,7 @@ public class SaveManager : IService
             var json = JsonSerializer.Serialize(saveData, JsonOptions);
 
             // Write to file using Godot's FileAccess
-            using var file = FileAccess.Open(filePath, FileAccess.ModeFlags.Write);
+            using var file = GodotFileAccess.Open(filePath, GodotFileAccess.ModeFlags.Write);
             if (file == null)
             {
                 GD.PrintErr($"SaveManager: Failed to open file for writing: {filePath}");
@@ -250,7 +251,7 @@ public class SaveManager : IService
 
         var json = JsonSerializer.Serialize(metadata, JsonOptions);
 
-        using var file = FileAccess.Open(metaPath, FileAccess.ModeFlags.Write);
+        using var file = GodotFileAccess.Open(metaPath, GodotFileAccess.ModeFlags.Write);
         file?.StoreString(json);
     }
 
@@ -265,14 +266,14 @@ public class SaveManager : IService
     {
         try
         {
-            if (!FileAccess.FileExists(filePath))
+            if (!GodotFileAccess.FileExists(filePath))
             {
                 GD.PrintErr($"SaveManager: Save file not found: {filePath}");
                 LoadCompleted?.Invoke(filePath, false);
                 return false;
             }
 
-            using var file = FileAccess.Open(filePath, FileAccess.ModeFlags.Read);
+            using var file = GodotFileAccess.Open(filePath, GodotFileAccess.ModeFlags.Read);
             if (file == null)
             {
                 GD.PrintErr($"SaveManager: Failed to open file: {filePath}");
@@ -475,12 +476,12 @@ public class SaveManager : IService
         {
             var metaPath = filePath.Replace(SaveExtension, MetadataExtension);
 
-            if (FileAccess.FileExists(filePath))
+            if (GodotFileAccess.FileExists(filePath))
             {
                 DirAccess.RemoveAbsolute(filePath);
             }
 
-            if (FileAccess.FileExists(metaPath))
+            if (GodotFileAccess.FileExists(metaPath))
             {
                 DirAccess.RemoveAbsolute(metaPath);
             }
@@ -514,7 +515,7 @@ public class SaveManager : IService
     {
         try
         {
-            using var file = FileAccess.Open(metaPath, FileAccess.ModeFlags.Read);
+            using var file = GodotFileAccess.Open(metaPath, GodotFileAccess.ModeFlags.Read);
             if (file == null) return null;
 
             var json = file.GetAsText();

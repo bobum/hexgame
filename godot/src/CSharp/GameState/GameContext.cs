@@ -129,7 +129,7 @@ public static class GameContext
     /// <summary>
     /// Gets a service from the DI container or ServiceLocator.
     /// </summary>
-    public static T? Get<T>() where T : class
+    public static T? Get<T>() where T : class, IService
     {
         if (GameServices.TryGet<T>(out var service))
             return service;
@@ -139,7 +139,7 @@ public static class GameContext
     /// <summary>
     /// Gets a required service, throwing if not found.
     /// </summary>
-    public static T GetRequired<T>() where T : class
+    public static T GetRequired<T>() where T : class, IService
     {
         if (GameServices.TryGet<T>(out var service))
             return service;
@@ -149,7 +149,7 @@ public static class GameContext
     /// <summary>
     /// Tries to get a service.
     /// </summary>
-    public static bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? service) where T : class
+    public static bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? service) where T : class, IService
     {
         if (GameServices.TryGet(out service))
             return true;

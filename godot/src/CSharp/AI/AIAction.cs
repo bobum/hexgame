@@ -66,7 +66,7 @@ public class MoveAction : AIAction
         if (unit.Id == 0 || unit.Movement <= 0) return false;
 
         var path = context.FindPath(unit.Q, unit.R, TargetQ, TargetR, unit.Type);
-        return path != null && path.TotalCost <= unit.Movement;
+        return path != null && path.Value.TotalCost <= unit.Movement;
     }
 }
 
@@ -183,7 +183,7 @@ public class MoveAndAttackAction : AIAction
 
         // Check if we can reach the move position
         var path = context.FindPath(unit.Q, unit.R, MoveQ, MoveR, unit.Type);
-        if (path == null || path.TotalCost > unit.Movement) return false;
+        if (path == null || path.Value.TotalCost > unit.Movement) return false;
 
         // Check if target is adjacent to move position
         int attackDistance = context.GetDistance(MoveQ, MoveR, target.Q, target.R);
@@ -225,22 +225,23 @@ public static class AIActionFactory
     public static MoveAction? CreateMoveToward(AIContext context, UnitSnapshot unit, int targetQ, int targetR)
     {
         var path = context.FindPath(unit.Q, unit.R, targetQ, targetR, unit.Type);
-        if (path == null || path.Steps.Count < 2) return null;
+        if (path == null || path.Value.Steps.Count < 2) return null;
+
+        var pathSteps = path.Value.Steps;
 
         // Find the furthest point we can reach
-        float costSoFar = 0;
         var reachable = context.GetReachableCells(unit);
         var reachableSet = reachable.ToDictionary(c => (c.Q, c.R));
 
-        for (int i = 1; i < path.Steps.Count; i++)
+        for (int i = 1; i < pathSteps.Count; i++)
         {
-            var step = path.Steps[i];
+            var step = pathSteps[i];
             if (!reachableSet.ContainsKey(step))
             {
                 // Can't reach this step, use previous
                 if (i > 1)
                 {
-                    var prev = path.Steps[i - 1];
+                    var prev = pathSteps[i - 1];
                     return new MoveAction(unit.Id, prev.Q, prev.R);
                 }
                 return null;
@@ -248,7 +249,7 @@ public static class AIActionFactory
         }
 
         // Can reach the destination
-        var dest = path.Steps[^1];
+        var dest = pathSteps[^1];
         return new MoveAction(unit.Id, dest.Q, dest.R);
     }
 

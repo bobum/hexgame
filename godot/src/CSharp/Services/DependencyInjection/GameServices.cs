@@ -116,21 +116,28 @@ public static class GameServices
     /// </summary>
     public static bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? service) where T : class
     {
-        return Container.TryResolve(out service);
+        if (_container == null)
+        {
+            service = null;
+            return false;
+        }
+        return _container.TryResolve(out service);
     }
 
     #region Service Registration
 
     private static void RegisterCoreServices(int gridWidth, int gridHeight)
     {
+        var container = _container!;
+
         // Event bus (singleton, fundamental to all communication)
-        _container!.AddSingleton<EventBus>();
+        container.AddSingleton<EventBus>();
 
         // Command history (singleton for undo/redo)
-        _container.AddSingleton<CommandHistory>();
+        container.AddSingleton<CommandHistory>();
 
         // Hex grid (singleton, core game state)
-        _container.RegisterFactory<HexGrid>(sp =>
+        container.RegisterFactory<HexGrid>(sp =>
         {
             var grid = new HexGrid(gridWidth, gridHeight);
             grid.Initialize();
@@ -140,11 +147,13 @@ public static class GameServices
 
     private static void RegisterGameSystems()
     {
+        var container = _container!;
+
         // Map generation
-        _container!.AddSingleton<IMapGenerator, MapGenerator>();
+        container.AddSingleton<IMapGenerator, MapGenerator>();
 
         // Unit management
-        _container.RegisterFactory<IUnitManager>(sp =>
+        container.RegisterFactory<IUnitManager>(sp =>
         {
             var grid = sp.GetService<HexGrid>();
             var manager = new UnitManager(grid);
@@ -153,7 +162,7 @@ public static class GameServices
         }, ServiceLifetime.Singleton);
 
         // Pathfinding
-        _container.RegisterFactory<IPathfinder>(sp =>
+        container.RegisterFactory<IPathfinder>(sp =>
         {
             var grid = sp.GetService<HexGrid>();
             var unitManager = sp.GetService<IUnitManager>();
@@ -161,72 +170,63 @@ public static class GameServices
         }, ServiceLifetime.Singleton);
 
         // Turn management
-        _container.RegisterFactory<TurnManager>(sp =>
+        container.RegisterFactory<TurnManager>(sp =>
         {
             var unitManager = sp.GetService<IUnitManager>();
             return new TurnManager(unitManager);
         }, ServiceLifetime.Singleton);
 
         // Game state machine
-        _container.AddSingleton<GameStateMachine>();
+        container.AddSingleton<GameStateMachine>();
     }
 
     private static void RegisterRendering()
     {
+        var container = _container!;
+
         // Rendering system (coordinates all renderers)
-        _container!.RegisterFactory<RenderingSystem>(sp =>
-        {
-            var grid = sp.GetService<HexGrid>();
-            return new RenderingSystem(grid);
-        }, ServiceLifetime.Singleton);
+        container.AddSingleton<RenderingSystem>();
 
         // Individual renderers registered as transient (created on demand)
-        _container.RegisterFactory<TerrainRenderer>(sp =>
+        container.RegisterFactory<TerrainRenderer>(sp =>
         {
             var grid = sp.GetService<HexGrid>();
             return new TerrainRenderer(grid);
         }, ServiceLifetime.Transient);
 
-        _container.RegisterFactory<UnitRenderer>(sp =>
+        container.RegisterFactory<UnitRenderer>(sp =>
         {
-            var grid = sp.GetService<HexGrid>();
             var unitManager = sp.GetService<IUnitManager>();
-            return new UnitRenderer(grid, unitManager);
+            return new UnitRenderer(unitManager);
         }, ServiceLifetime.Transient);
 
-        _container.RegisterFactory<HighlightRenderer>(sp =>
-        {
-            var grid = sp.GetService<HexGrid>();
-            return new HighlightRenderer(grid);
-        }, ServiceLifetime.Transient);
+        container.AddTransient<HighlightRenderer>();
     }
 
     private static void RegisterInputHandling()
     {
-        // Input manager
-        _container!.RegisterFactory<InputManager>(sp =>
-        {
-            var grid = sp.GetService<HexGrid>();
-            var eventBus = sp.GetService<EventBus>();
-            return new InputManager(grid, eventBus);
-        }, ServiceLifetime.Singleton);
+        var container = _container!;
+
+        // Input manager (Node-based, uses parameterless constructor)
+        container.AddSingleton<InputManager>();
 
         // Selection manager
-        _container.RegisterFactory<SelectionManager>(sp =>
+        container.RegisterFactory<SelectionManager>(sp =>
         {
             var unitManager = sp.GetService<IUnitManager>();
             var pathfinder = sp.GetService<IPathfinder>();
-            var turnManager = sp.GetService<TurnManager>();
-            var eventBus = sp.GetService<EventBus>();
             var commandHistory = sp.GetService<CommandHistory>();
-            return new SelectionManager(unitManager, pathfinder, turnManager, eventBus, commandHistory);
+            var eventBus = sp.GetService<EventBus>();
+            return new SelectionManager(unitManager, pathfinder, commandHistory, eventBus);
         }, ServiceLifetime.Singleton);
     }
 
     private static void RegisterAI()
     {
+        var container = _container!;
+
         // AI Manager
-        _container!.RegisterFactory<AIManager>(sp =>
+        container.RegisterFactory<AIManager>(sp =>
         {
             var grid = sp.GetService<HexGrid>();
             var unitManager = sp.GetService<IUnitManager>();
@@ -238,14 +238,16 @@ public static class GameServices
         }, ServiceLifetime.Singleton);
 
         // AI Controllers (transient - created per AI player)
-        _container.AddTransient<SimpleAIController>();
-        _container.AddTransient<DefensiveAIController>();
+        container.AddTransient<SimpleAIController>();
+        container.AddTransient<DefensiveAIController>();
     }
 
     private static void RegisterPersistence()
     {
+        var container = _container!;
+
         // Save manager
-        _container!.RegisterFactory<SaveManager>(sp =>
+        container.RegisterFactory<SaveManager>(sp =>
         {
             var eventBus = sp.GetService<EventBus>();
             return new SaveManager(eventBus);
@@ -254,11 +256,13 @@ public static class GameServices
 
     private static void RegisterBridge()
     {
+        var container = _container!;
+
         // GDScript bridge (singleton for signal emission)
-        _container!.AddSingleton<GDScriptBridge>();
+        container.AddSingleton<GDScriptBridge>();
 
         // Signal hub (connects C# events to GDScript)
-        _container.RegisterFactory<SignalHub>(sp =>
+        container.RegisterFactory<SignalHub>(sp =>
         {
             var eventBus = sp.GetService<EventBus>();
             var bridge = sp.GetService<GDScriptBridge>();

@@ -261,7 +261,7 @@ public class AIContext
         float value = 0;
 
         // Terrain value
-        value += cell.TerrainType switch
+        value += cell.Value.TerrainType switch
         {
             TerrainType.Mountains => 3f,  // Defensive bonus
             TerrainType.Hills => 2f,
@@ -274,7 +274,7 @@ public class AIContext
         };
 
         // Elevation value
-        value += cell.Elevation * 0.5f;
+        value += cell.Value.Elevation * 0.5f;
 
         // Threat penalty
         value -= CountThreats(q, r) * 2f;

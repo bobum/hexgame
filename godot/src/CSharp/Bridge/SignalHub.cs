@@ -108,7 +108,7 @@ public class SignalHub : IService
     private void OnUnitRemoved(UnitRemovedEvent evt)
     {
         // Notify UI that unit was destroyed
-        _bridge.ShowMessage($"Unit {evt.UnitId} was destroyed", "combat");
+        _bridge.DisplayMessage($"Unit {evt.UnitId} was destroyed", "combat");
     }
 
     private void OnTurnStarted(TurnStartedEvent evt)
@@ -118,11 +118,11 @@ public class SignalHub : IService
 
         if (evt.CurrentPlayerId == GameConstants.GameState.HumanPlayerId)
         {
-            _bridge.ShowMessage($"Turn {evt.TurnNumber} - Your turn!", "turn");
+            _bridge.DisplayMessage($"Turn {evt.TurnNumber} - Your turn!", "turn");
         }
         else
         {
-            _bridge.ShowMessage($"Turn {evt.TurnNumber} - AI Player {evt.CurrentPlayerId}'s turn", "turn");
+            _bridge.DisplayMessage($"Turn {evt.TurnNumber} - AI Player {evt.CurrentPlayerId}'s turn", "turn");
         }
     }
 

@@ -240,11 +240,11 @@ public partial class HighlightRenderer : RendererBase
     {
         ClearPath();
 
-        if (pathResult == null || !pathResult.Reachable || _pathContainer == null) return;
+        if (pathResult == null || !pathResult.Value.Reachable || _pathContainer == null) return;
 
         var hexMesh = CreateHexMesh();
 
-        foreach (var cell in pathResult.Path)
+        foreach (var cell in pathResult.Value.Path)
         {
             var highlight = new MeshInstance3D
             {
