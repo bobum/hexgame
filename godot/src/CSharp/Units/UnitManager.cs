@@ -1,3 +1,4 @@
+using Godot;
 using HexGame.Core;
 using HexGame.GameState;
 using HexGame.Utilities;
@@ -212,6 +213,7 @@ public class UnitManager : IUnitManager
 
             unit.Id = _nextId++;
             unit.InitWith(type, q, r, playerId);
+            unit.Cell = cell;  // Link unit to its cell for elevation
 
             // Add to tracking
             _units[unit.Id] = unit;
@@ -388,6 +390,7 @@ public class UnitManager : IUnitManager
 
     public int SpawnRandomUnits(int count, int playerId = 1)
     {
+        GD.Print($"SpawnRandomUnits: Trying to spawn {count} land units for player {playerId}");
         var landCells = new List<HexCell>();
         foreach (var cell in _grid.GetAllCells())
         {
@@ -396,9 +399,11 @@ public class UnitManager : IUnitManager
                 landCells.Add(cell);
             }
         }
+        GD.Print($"SpawnRandomUnits: Found {landCells.Count} valid land cells");
 
         int spawned = 0;
         var landTypes = UnitTypeExtensions.GetLandTypes();
+        GD.Print($"SpawnRandomUnits: Available land types: {string.Join(", ", landTypes)}");
 
         for (int i = 0; i < count && landCells.Count > 0; i++)
         {

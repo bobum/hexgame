@@ -26,6 +26,7 @@ public partial class ChunkedTerrainRenderer : Node3D
         public MeshInstance3D? MeshMedium;
         public MeshInstance3D? MeshLow;
         public MeshInstance3D? MeshSkirt;
+        public StaticBody3D? CollisionBody;
         public List<HexCell> Cells = new();
         public int ChunkX;
         public int ChunkZ;
@@ -111,6 +112,11 @@ public partial class ChunkedTerrainRenderer : Node3D
         chunk.MeshHigh.CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
         chunk.MeshHigh.Name = $"Chunk_{chunk.ChunkX}_{chunk.ChunkZ}_HIGH";
         AddChild(chunk.MeshHigh);
+
+        // Create collision shape for raycasting (like Three.js intersectObjects)
+        chunk.MeshHigh.CreateTrimeshCollision();
+        // The collision body is added as a child of MeshHigh
+        chunk.CollisionBody = chunk.MeshHigh.GetChildOrNull<StaticBody3D>(0);
 
         // MEDIUM detail - flat hexes
         var meshMedium = BuildFlatHexMesh(chunk.Cells);
@@ -361,6 +367,14 @@ public partial class ChunkedTerrainRenderer : Node3D
     }
 
     public int GetChunkCount() => _totalChunkCount;
+
+    /// <summary>
+    /// Set a shader parameter on the terrain material.
+    /// </summary>
+    public void SetShaderParameter(string name, Variant value)
+    {
+        _terrainMaterial?.SetShaderParameter(name, value);
+    }
 
     public new void Dispose()
     {

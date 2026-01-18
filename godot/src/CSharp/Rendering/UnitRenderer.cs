@@ -1,302 +1,384 @@
-using HexGame.Core;
-using HexGame.Units;
-using HexGame.Utilities;
-
 namespace HexGame.Rendering;
 
+using Godot;
+using HexGame.Core;
+using HexGame.Units;
+
 /// <summary>
-/// Renders units on the hex grid.
-/// Manages unit visual representations with player colors and selection highlighting.
+/// Renders units using instanced meshes for performance.
+/// Direct port of unit_renderer.gd
 /// </summary>
-public partial class UnitRenderer : RendererBase
+public partial class UnitRenderer : Node3D
 {
-    private readonly IUnitManager _unitManager;
-    private readonly Dictionary<int, UnitVisual> _unitVisuals = new();
-    private readonly ObjectPool<UnitVisual> _visualPool;
-    private int? _selectedUnitId;
+    // Player colors for land units
+    private static readonly Color[] PlayerColorsLand = {
+        new(0.267f, 0.533f, 1.0f),   // Player 1: Blue
+        new(1.0f, 0.267f, 0.267f),   // Player 2: Red
+        new(0.267f, 1.0f, 0.267f),   // Player 3: Green
+        new(1.0f, 0.533f, 0.267f),   // Player 4: Orange
+    };
 
-    /// <summary>
-    /// Height offset for units above terrain.
-    /// </summary>
-    public float UnitHeightOffset { get; set; } = 0.1f;
+    // Player colors for naval units (yellow tones)
+    private static readonly Color[] PlayerColorsNaval = {
+        new(1.0f, 1.0f, 0.267f),     // Player 1: Yellow
+        new(1.0f, 0.8f, 0.0f),       // Player 2: Gold
+        new(0.8f, 1.0f, 0.267f),     // Player 3: Lime Yellow
+        new(1.0f, 0.667f, 0.0f),     // Player 4: Amber
+    };
 
-    /// <summary>
-    /// Scale for unit models.
-    /// </summary>
-    public float UnitScale { get; set; } = 0.5f;
+    // Amphibious units (cyan tones)
+    private static readonly Color[] PlayerColorsAmphibious = {
+        new(0.267f, 1.0f, 1.0f),     // Player 1: Cyan
+        new(0.0f, 0.8f, 0.8f),       // Player 2: Teal
+        new(0.267f, 0.8f, 1.0f),     // Player 3: Sky Blue
+        new(0.0f, 1.0f, 0.8f),       // Player 4: Aqua
+    };
 
-    /// <summary>
-    /// Creates a new unit renderer.
-    /// </summary>
-    /// <param name="unitManager">The unit manager to render units from.</param>
+    private static readonly Color SelectedColor = new(1.0f, 1.0f, 1.0f);
+
+    private const float ChunkSize = 16.0f;
+    private const float MaxRenderDistance = 50.0f;
+
+    private IUnitManager _unitManager;
+    private HexGrid? _grid;
+
+    // Cached meshes
+    private Mesh? _infantryMesh;
+    private Mesh? _cavalryMesh;
+    private Mesh? _archerMesh;
+    private Mesh? _galleyMesh;
+    private Mesh? _warshipMesh;
+    private Mesh? _marineMesh;
+
+    // Chunk storage for units
+    private readonly Dictionary<string, Dictionary<UnitType, MultiMeshInstance3D>> _unitChunks = new();
+
+    // Unit ID maps for updating colors
+    private readonly Dictionary<string, Dictionary<UnitType, List<int>>> _unitIdMaps = new();
+
+    // Selected unit IDs
+    private readonly HashSet<int> _selectedUnitIds = new();
+
+    private bool _needsRebuild = true;
+
     public UnitRenderer(IUnitManager unitManager)
     {
         _unitManager = unitManager;
-        _visualPool = new ObjectPool<UnitVisual>(ResetVisual);
+        CreateMeshes();
     }
 
-    /// <summary>
-    /// Builds unit visuals for all existing units.
-    /// </summary>
-    protected override void DoBuild()
+    public void Setup(HexGrid grid)
     {
-        foreach (var unit in _unitManager.GetAllUnits())
+        _grid = grid;
+    }
+
+    private void CreateMeshes()
+    {
+        _infantryMesh = CreateInfantryMesh();
+        _cavalryMesh = CreateCavalryMesh();
+        _archerMesh = CreateArcherMesh();
+        _galleyMesh = CreateGalleyMesh();
+        _warshipMesh = CreateWarshipMesh();
+        _marineMesh = CreateMarineMesh();
+    }
+
+    /// <summary>Infantry: Simple cylinder shape</summary>
+    private static Mesh CreateInfantryMesh()
+    {
+        return new CylinderMesh
         {
-            CreateVisualForUnit(unit);
+            TopRadius = 0.15f,
+            BottomRadius = 0.18f,
+            Height = 0.5f,
+            RadialSegments = 8
+        };
+    }
+
+    /// <summary>Cavalry: Box shape (horse-like)</summary>
+    private static Mesh CreateCavalryMesh()
+    {
+        return new BoxMesh
+        {
+            Size = new Vector3(0.5f, 0.35f, 0.25f)
+        };
+    }
+
+    /// <summary>Archer: Cone shape (pointed)</summary>
+    private static Mesh CreateArcherMesh()
+    {
+        return new CylinderMesh
+        {
+            TopRadius = 0.0f,
+            BottomRadius = 0.15f,
+            Height = 0.5f,
+            RadialSegments = 6
+        };
+    }
+
+    /// <summary>Galley: Small boat (elongated box)</summary>
+    private static Mesh CreateGalleyMesh()
+    {
+        return new BoxMesh
+        {
+            Size = new Vector3(0.6f, 0.2f, 0.25f)
+        };
+    }
+
+    /// <summary>Warship: Larger boat</summary>
+    private static Mesh CreateWarshipMesh()
+    {
+        return new BoxMesh
+        {
+            Size = new Vector3(0.7f, 0.3f, 0.35f)
+        };
+    }
+
+    /// <summary>Marine: Similar to infantry but distinctive</summary>
+    private static Mesh CreateMarineMesh()
+    {
+        return new CylinderMesh
+        {
+            TopRadius = 0.12f,
+            BottomRadius = 0.2f,
+            Height = 0.45f,
+            RadialSegments = 6
+        };
+    }
+
+    private Mesh GetMeshForType(UnitType type) => type switch
+    {
+        UnitType.Infantry => _infantryMesh!,
+        UnitType.Cavalry => _cavalryMesh!,
+        UnitType.Archer => _archerMesh!,
+        UnitType.Galley => _galleyMesh!,
+        UnitType.Warship => _warshipMesh!,
+        UnitType.Marine => _marineMesh!,
+        _ => _infantryMesh!
+    };
+
+    private Color[] GetColorsForType(UnitType type)
+    {
+        if (type.IsNaval()) return PlayerColorsNaval;
+        if (type.IsAmphibious()) return PlayerColorsAmphibious;
+        return PlayerColorsLand;
+    }
+
+    public void Build()
+    {
+        ClearMeshes();
+
+        var units = _unitManager.GetAllUnits();
+
+        // Group units by chunk, then by type within chunk
+        var chunksByType = new Dictionary<string, Dictionary<UnitType, List<Unit>>>();
+
+        foreach (var unit in units)
+        {
+            var worldPos = unit.GetWorldPosition();
+            int cx = (int)Mathf.Floor(worldPos.X / ChunkSize);
+            int cz = (int)Mathf.Floor(worldPos.Z / ChunkSize);
+            string chunkKey = $"{cx},{cz}";
+
+            if (!chunksByType.ContainsKey(chunkKey))
+            {
+                chunksByType[chunkKey] = new Dictionary<UnitType, List<Unit>>();
+                foreach (UnitType unitType in Enum.GetValues(typeof(UnitType)))
+                {
+                    chunksByType[chunkKey][unitType] = new List<Unit>();
+                }
+            }
+
+            chunksByType[chunkKey][unit.UnitType].Add(unit);
         }
 
-        GD.Print($"UnitRenderer: Created {_unitVisuals.Count} unit visuals");
+        // Build MultiMesh for each chunk and type
+        foreach (var chunkKey in chunksByType.Keys)
+        {
+            _unitChunks[chunkKey] = new Dictionary<UnitType, MultiMeshInstance3D>();
+            _unitIdMaps[chunkKey] = new Dictionary<UnitType, List<int>>();
+            var chunkTypes = chunksByType[chunkKey];
+
+            CreateChunkTypeMultimesh(chunkKey, UnitType.Infantry, chunkTypes[UnitType.Infantry]);
+            CreateChunkTypeMultimesh(chunkKey, UnitType.Cavalry, chunkTypes[UnitType.Cavalry]);
+            CreateChunkTypeMultimesh(chunkKey, UnitType.Archer, chunkTypes[UnitType.Archer]);
+            CreateChunkTypeMultimesh(chunkKey, UnitType.Galley, chunkTypes[UnitType.Galley]);
+            CreateChunkTypeMultimesh(chunkKey, UnitType.Warship, chunkTypes[UnitType.Warship]);
+            CreateChunkTypeMultimesh(chunkKey, UnitType.Marine, chunkTypes[UnitType.Marine]);
+        }
+
+        _needsRebuild = false;
+        GD.Print($"UnitRenderer: Built {units.Count} unit instances");
     }
 
-    /// <summary>
-    /// Updates unit positions and animations.
-    /// </summary>
-    public override void Update(double delta)
+    private void CreateChunkTypeMultimesh(string chunkKey, UnitType unitType, List<Unit> units)
     {
-        // Update visual positions for any units that moved
-        foreach (var (unitId, visual) in _unitVisuals)
+        if (units.Count == 0)
+            return;
+
+        var mesh = GetMeshForType(unitType);
+        var colors = GetColorsForType(unitType);
+
+        var multimesh = new MultiMesh
         {
-            var unit = _unitManager.GetUnit(unitId);
-            if (unit != null && visual.Node != null)
+            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+            UseColors = true,
+            Mesh = mesh,
+            InstanceCount = units.Count
+        };
+
+        var unitIds = new List<int>();
+
+        for (int i = 0; i < units.Count; i++)
+        {
+            var unit = units[i];
+            unitIds.Add(unit.Id);
+
+            var cell = _grid?.GetCell(unit.Q, unit.R);
+            var worldPos = unit.GetWorldPosition();
+            int elevation = cell?.Elevation ?? 0;
+
+            // Naval units float on water surface, land units on terrain
+            bool isOnWater = cell != null && cell.Elevation < HexMetrics.SeaLevel;
+            if (unitType.IsNaval() || (unitType.IsAmphibious() && isOnWater))
             {
-                var targetPos = GetUnitWorldPosition(unit);
-                visual.Node.GlobalPosition = visual.Node.GlobalPosition.Lerp(targetPos, (float)(delta * 10.0));
+                worldPos.Y = HexMetrics.SeaLevel * HexMetrics.ElevationStep + 0.1f;
+            }
+            else
+            {
+                worldPos.Y = elevation * HexMetrics.ElevationStep + 0.25f;
+            }
+
+            var transform = Transform3D.Identity;
+            transform.Origin = worldPos;
+            multimesh.SetInstanceTransform(i, transform);
+
+            var color = colors[unit.PlayerId % colors.Length];
+            if (_selectedUnitIds.Contains(unit.Id))
+            {
+                color = SelectedColor;
+            }
+            multimesh.SetInstanceColor(i, color);
+        }
+
+        _unitIdMaps[chunkKey][unitType] = unitIds;
+
+        var instance = new MultiMeshInstance3D
+        {
+            Multimesh = multimesh
+        };
+
+        var material = new StandardMaterial3D
+        {
+            VertexColorUseAsAlbedo = true,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.PerVertex
+        };
+        instance.MaterialOverride = material;
+
+        AddChild(instance);
+        _unitChunks[chunkKey][unitType] = instance;
+    }
+
+    private void ClearMeshes()
+    {
+        foreach (var chunkMeshes in _unitChunks.Values)
+        {
+            foreach (var mm in chunkMeshes.Values)
+            {
+                mm?.QueueFree();
+            }
+        }
+        _unitChunks.Clear();
+        _unitIdMaps.Clear();
+    }
+
+    public void SetSelectedUnits(int[] ids)
+    {
+        _selectedUnitIds.Clear();
+        foreach (var id in ids)
+        {
+            _selectedUnitIds.Add(id);
+        }
+        ApplySelectionColors();
+    }
+
+    private void ApplySelectionColors()
+    {
+        foreach (var chunkKey in _unitChunks.Keys)
+        {
+            if (!_unitIdMaps.ContainsKey(chunkKey)) continue;
+
+            foreach (UnitType unitType in Enum.GetValues(typeof(UnitType)))
+            {
+                if (!_unitChunks[chunkKey].TryGetValue(unitType, out var instance)) continue;
+                if (!_unitIdMaps[chunkKey].TryGetValue(unitType, out var unitIds)) continue;
+                if (instance?.Multimesh == null) continue;
+
+                var colors = GetColorsForType(unitType);
+                var mm = instance.Multimesh;
+
+                for (int i = 0; i < unitIds.Count; i++)
+                {
+                    var unitId = unitIds[i];
+                    var unit = _unitManager.GetUnit(unitId);
+                    if (unit == null) continue;
+
+                    Color color;
+                    if (_selectedUnitIds.Contains(unitId))
+                    {
+                        color = SelectedColor;
+                    }
+                    else
+                    {
+                        color = colors[unit.PlayerId % colors.Length];
+                    }
+
+                    mm.SetInstanceColor(i, color);
+                }
             }
         }
     }
 
-    /// <summary>
-    /// Updates visibility based on camera distance.
-    /// </summary>
-    public override void UpdateVisibility(Camera3D camera)
+    public void Update()
     {
-        if (camera == null) return;
+        if (_needsRebuild)
+        {
+            Build();
+        }
+    }
+
+    public void UpdateVisibility(Camera3D camera)
+    {
+        if (camera == null)
+            return;
 
         var cameraPos = camera.GlobalPosition;
-        float maxDist = RenderingConfig.UnitRenderDistance;
+        var cameraXz = new Vector3(cameraPos.X, 0, cameraPos.Z);
+        float maxDistSq = MaxRenderDistance * MaxRenderDistance;
 
-        foreach (var visual in _unitVisuals.Values)
+        foreach (var chunkKey in _unitChunks.Keys)
         {
-            if (visual.Node != null)
+            var parts = chunkKey.Split(',');
+            int cx = int.Parse(parts[0]);
+            int cz = int.Parse(parts[1]);
+            float centerX = (cx + 0.5f) * ChunkSize;
+            float centerZ = (cz + 0.5f) * ChunkSize;
+
+            float dx = centerX - cameraXz.X;
+            float dz = centerZ - cameraXz.Z;
+            bool visible = (dx * dx + dz * dz) <= maxDistSq;
+
+            foreach (var mm in _unitChunks[chunkKey].Values)
             {
-                float distance = cameraPos.DistanceTo(visual.Node.GlobalPosition);
-                visual.Node.Visible = distance < maxDist;
+                if (mm != null)
+                {
+                    mm.Visible = visible;
+                }
             }
         }
     }
 
-    /// <summary>
-    /// Adds a visual for a newly created unit.
-    /// </summary>
-    public void AddUnit(Unit unit)
+    public void MarkDirty()
     {
-        if (!_unitVisuals.ContainsKey(unit.Id))
-        {
-            CreateVisualForUnit(unit);
-        }
-    }
-
-    /// <summary>
-    /// Removes a unit's visual.
-    /// </summary>
-    public void RemoveUnit(int unitId)
-    {
-        if (_unitVisuals.TryGetValue(unitId, out var visual))
-        {
-            if (visual.Node != null)
-            {
-                visual.Node.QueueFree();
-            }
-            _visualPool.Release(visual);
-            _unitVisuals.Remove(unitId);
-        }
-    }
-
-    /// <summary>
-    /// Updates a unit's visual after it moved.
-    /// </summary>
-    public void UpdateUnit(Unit unit)
-    {
-        if (_unitVisuals.TryGetValue(unit.Id, out var visual) && visual.Node != null)
-        {
-            visual.Node.GlobalPosition = GetUnitWorldPosition(unit);
-        }
-    }
-
-    /// <summary>
-    /// Sets the selected unit for highlighting.
-    /// </summary>
-    public void SetSelectedUnit(int? unitId)
-    {
-        // Deselect previous
-        if (_selectedUnitId.HasValue && _unitVisuals.TryGetValue(_selectedUnitId.Value, out var prevVisual))
-        {
-            prevVisual.SetHighlighted(false);
-        }
-
-        _selectedUnitId = unitId;
-
-        // Select new
-        if (unitId.HasValue && _unitVisuals.TryGetValue(unitId.Value, out var newVisual))
-        {
-            newVisual.SetHighlighted(true);
-        }
-    }
-
-    private void CreateVisualForUnit(Unit unit)
-    {
-        var visual = _visualPool.Acquire();
-        visual.Initialize(unit, UnitScale);
-
-        var node = visual.Node;
-        if (node != null)
-        {
-            AddChild(node);  // Must be in tree before setting GlobalPosition
-            node.GlobalPosition = GetUnitWorldPosition(unit);
-        }
-
-        _unitVisuals[unit.Id] = visual;
-    }
-
-    private Vector3 GetUnitWorldPosition(Unit unit)
-    {
-        float elevation = unit.Cell?.Elevation ?? 0;
-        float height = elevation * HexMetrics.ElevationStep + UnitHeightOffset;
-        return new HexCoordinates(unit.Q, unit.R).ToWorldPosition(height);
-    }
-
-    private void ResetVisual(UnitVisual visual)
-    {
-        visual.Reset();
-    }
-
-    public override void Cleanup()
-    {
-        foreach (var visual in _unitVisuals.Values)
-        {
-            visual.Node?.QueueFree();
-        }
-        _unitVisuals.Clear();
-        _visualPool.Clear();
-        base.Cleanup();
-    }
-}
-
-/// <summary>
-/// Visual representation of a single unit.
-/// </summary>
-public partial class UnitVisual : Node3D, IPoolable
-{
-    private MeshInstance3D? _mesh;
-    private MeshInstance3D? _selectionRing;
-    private StandardMaterial3D? _material;
-    private int _playerId;
-
-    /// <summary>
-    /// Gets the node for this visual.
-    /// </summary>
-    public Node3D? Node => this;
-
-    /// <summary>
-    /// Initializes the visual for a specific unit.
-    /// </summary>
-    public void Initialize(Unit unit, float scale)
-    {
-        _playerId = unit.PlayerId;
-
-        if (_mesh == null)
-        {
-            CreateMesh(scale);
-        }
-
-        UpdateAppearance(unit);
-    }
-
-    private void CreateMesh(float scale)
-    {
-        // Create unit mesh (simple cylinder for now)
-        var capsule = new CapsuleMesh
-        {
-            Radius = 0.3f * scale,
-            Height = 0.8f * scale
-        };
-
-        _material = new StandardMaterial3D
-        {
-            AlbedoColor = Colors.White
-        };
-
-        _mesh = new MeshInstance3D
-        {
-            Mesh = capsule,
-            MaterialOverride = _material
-        };
-        _mesh.Position = new Vector3(0, capsule.Height / 2, 0);
-        AddChild(_mesh);
-
-        // Create selection ring
-        var torusMesh = new TorusMesh
-        {
-            InnerRadius = 0.4f * scale,
-            OuterRadius = 0.5f * scale
-        };
-
-        var selectionMaterial = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(1f, 1f, 0f, 0.8f),
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded
-        };
-
-        _selectionRing = new MeshInstance3D
-        {
-            Mesh = torusMesh,
-            MaterialOverride = selectionMaterial,
-            Visible = false
-        };
-        _selectionRing.Position = new Vector3(0, 0.05f, 0);
-        _selectionRing.RotateX(Mathf.Pi / 2);
-        AddChild(_selectionRing);
-    }
-
-    private void UpdateAppearance(Unit unit)
-    {
-        if (_material != null)
-        {
-            _material.AlbedoColor = RenderingConfig.GetPlayerColor(unit.PlayerId);
-        }
-    }
-
-    /// <summary>
-    /// Sets the highlight state for selection.
-    /// </summary>
-    public void SetHighlighted(bool highlighted)
-    {
-        if (_selectionRing != null)
-        {
-            _selectionRing.Visible = highlighted;
-        }
-    }
-
-    /// <summary>
-    /// Resets the visual for pooling.
-    /// </summary>
-    public void Reset()
-    {
-        SetHighlighted(false);
-        _playerId = 0;
-    }
-
-    /// <summary>
-    /// Called when acquired from pool.
-    /// </summary>
-    public void OnGetFromPool() { }
-
-    /// <summary>
-    /// Called when released to pool.
-    /// </summary>
-    public void OnReturnToPool()
-    {
-        Reset();
+        _needsRebuild = true;
     }
 }

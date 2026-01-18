@@ -33,6 +33,11 @@ public partial class WaterRenderer : ChunkedRendererBase
     public float WaveAmplitude { get; set; } = 0.05f;
 
     /// <summary>
+    /// Water surface height offset above sea level.
+    /// </summary>
+    public float SurfaceOffset { get; set; } = 0.12f;
+
+    /// <summary>
     /// Creates a new water renderer.
     /// </summary>
     /// <param name="grid">The hex grid to render.</param>
@@ -109,7 +114,8 @@ public partial class WaterRenderer : ChunkedRendererBase
             for (int q = startQ; q < endQ; q++)
             {
                 var cell = _grid.GetCell(q, r);
-                if (cell != null && HexMetrics.IsWaterElevation(cell.Elevation))
+                // Include all underwater cells (elevation < LandMinElevation, i.e., 0-4)
+                if (cell != null && cell.Elevation < HexMetrics.LandMinElevation)
                 {
                     AddWaterCell(surfaceTool, cell);
                     hasWater = true;
@@ -138,8 +144,8 @@ public partial class WaterRenderer : ChunkedRendererBase
 
     private void AddWaterCell(SurfaceTool st, HexCell cell)
     {
-        // Water surface is always at sea level
-        float waterHeight = HexMetrics.SeaLevel * HexMetrics.ElevationStep;
+        // Water surface is at sea level plus offset
+        float waterHeight = HexMetrics.SeaLevel * HexMetrics.ElevationStep + SurfaceOffset;
         var center = cell.Coordinates.ToWorldPosition(waterHeight);
         var corners = HexMetrics.GetCorners();
 
@@ -179,6 +185,17 @@ public partial class WaterRenderer : ChunkedRendererBase
         }
     }
 
+    /// <summary>
+    /// Sets the water surface height offset (can be changed at runtime).
+    /// </summary>
+    public void SetHeightOffset(float offset)
+    {
+        if (_waterMaterial != null)
+        {
+            _waterMaterial.SetShaderParameter("height_offset", offset);
+        }
+    }
+
     private ShaderMaterial CreateWaterMaterial()
     {
         var shader = new Shader();
@@ -205,16 +222,17 @@ uniform vec4 shallow_color : source_color = vec4(0.2, 0.5, 0.7, 0.8);
 uniform vec4 deep_color : source_color = vec4(0.05, 0.15, 0.4, 0.9);
 uniform float wave_amplitude = 0.05;
 uniform float wave_time = 0.0;
+uniform float height_offset = 0.0;
 
 varying vec3 world_pos;
 
 void vertex() {
     world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 
-    // Simple wave animation
+    // Height offset plus wave animation
     float wave1 = sin(world_pos.x * 2.0 + wave_time * 2.0) * wave_amplitude;
     float wave2 = sin(world_pos.z * 3.0 + wave_time * 1.5) * wave_amplitude * 0.5;
-    VERTEX.y += wave1 + wave2;
+    VERTEX.y += height_offset + wave1 + wave2;
 }
 
 void fragment() {

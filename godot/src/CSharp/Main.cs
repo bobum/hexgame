@@ -1,15 +1,19 @@
 using HexGame.Camera;
 using HexGame.Core;
+using HexGame.Debug;
+using HexGame.GameState;
 using HexGame.Generation;
+using HexGame.Interaction;
 using HexGame.Pathfinding;
 using HexGame.Rendering;
+using HexGame.UI;
 using HexGame.Units;
 
 namespace HexGame;
 
 /// <summary>
 /// Main entry point for HexGame - C# version.
-/// Manages game initialization and main loop.
+/// Direct port of main.gd with full feature parity.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -26,13 +30,22 @@ public partial class Main : Node3D
 
     private HexGrid? _grid;
     private MapGenerator? _mapGenerator;
-    private TerrainRenderer? _terrainRenderer;
+    private ChunkedTerrainRenderer? _chunkedTerrain;
     private FeatureRenderer? _featureRenderer;
-    private WaterRenderer? _waterRenderer;
+    private WaterRenderer? _chunkedWater;
+    private ChunkedRiverRenderer? _chunkedRivers;
+    private MeshInstance3D? _groundPlane;
+    private HexHover? _hexHover;
+    private GameUI? _gameUI;
+
+    // Unit system
     private UnitManager? _unitManager;
     private UnitRenderer? _unitRenderer;
+    private SelectionManager? _selectionManager;
     private Pathfinder? _pathfinder;
-    private MeshInstance3D? _groundPlane;
+    private PathRenderer? _pathRenderer;
+    private TurnManager? _turnManager;
+    private PerformanceMonitor? _performanceMonitor;
 
     #endregion
 
@@ -62,8 +75,14 @@ public partial class Main : Node3D
         // Get node references
         SetupNodeReferences();
 
+        // Setup UI
+        SetupUI();
+
         // Initialize game
         InitializeGame();
+
+        // Setup performance monitor
+        SetupPerformanceMonitor();
 
         GD.Print("HexGame (C#) initialized successfully!");
     }
@@ -77,12 +96,40 @@ public partial class Main : Node3D
             AddChild(_hexGridNode);
         }
 
-        // Setup camera (direct port of map_camera.gd)
+        // Setup camera
         _camera = new MapCamera { Name = "MapCamera" };
         AddChild(_camera);
 
         _directionalLight = GetNodeOrNull<DirectionalLight3D>("DirectionalLight3D");
         _worldEnvironment = GetNodeOrNull<WorldEnvironment>("WorldEnvironment");
+    }
+
+    private void SetupUI()
+    {
+        _gameUI = new GameUI();
+        AddChild(_gameUI);
+        _gameUI.SetMainNode(this);
+        _gameUI.SetSeed(_currentSeed);
+
+        // Connect signals using Godot's Connect method for proper interop
+        _gameUI.Connect(GameUI.SignalName.RegenerateRequested, Callable.From<int, int, int>(OnUIRegenerate));
+        _gameUI.Connect(GameUI.SignalName.RandomSeedRequested, Callable.From(OnUIRandomSeed));
+        _gameUI.Connect(GameUI.SignalName.EndTurnRequested, Callable.From(OnEndTurn));
+        _gameUI.Connect(GameUI.SignalName.SpawnLandRequested, Callable.From<int>(OnSpawnLand));
+        _gameUI.Connect(GameUI.SignalName.SpawnNavalRequested, Callable.From<int>(OnSpawnNaval));
+        _gameUI.Connect(GameUI.SignalName.SpawnAiRequested, Callable.From<int, int>(OnSpawnAi));
+        _gameUI.Connect(GameUI.SignalName.ClearUnitsRequested, Callable.From(OnClearUnits));
+        _gameUI.Connect(GameUI.SignalName.NoiseParamChanged, Callable.From<string, float>(OnNoiseParamChanged));
+        _gameUI.Connect(GameUI.SignalName.ShaderParamChanged, Callable.From<string, float>(OnShaderParamChanged));
+        _gameUI.Connect(GameUI.SignalName.LightingParamChanged, Callable.From<string, float>(OnLightingParamChanged));
+        _gameUI.Connect(GameUI.SignalName.FogParamChanged, Callable.From<string, float>(OnFogParamChanged));
+        _gameUI.Connect(GameUI.SignalName.WaterParamChanged, Callable.From<string, float>(OnWaterParamChanged));
+    }
+
+    private void SetupPerformanceMonitor()
+    {
+        _performanceMonitor = new PerformanceMonitor();
+        AddChild(_performanceMonitor);
     }
 
     private void InitializeGame()
@@ -103,6 +150,9 @@ public partial class Main : Node3D
         // Build features
         BuildFeatures();
 
+        // Setup hover system
+        SetupHover();
+
         // Setup unit system
         SetupUnits();
 
@@ -116,23 +166,25 @@ public partial class Main : Node3D
     {
         if (_hexGridNode == null || _grid == null) return;
 
-        // Create terrain renderer
-        _terrainRenderer = new TerrainRenderer(_grid);
-        _hexGridNode.AddChild(_terrainRenderer);
-        _terrainRenderer.Build();
+        // Create chunked terrain renderer
+        _chunkedTerrain = new ChunkedTerrainRenderer();
+        _hexGridNode.AddChild(_chunkedTerrain);
+        _chunkedTerrain.Build(_grid);
 
         // Build ground plane
         BuildGroundPlane();
 
         // Build water
         BuildWater();
+
+        // Build rivers
+        BuildRivers();
     }
 
     private void BuildGroundPlane()
     {
         if (_hexGridNode == null || _grid == null) return;
 
-        // Remove existing ground plane
         _groundPlane?.QueueFree();
         _groundPlane = null;
 
@@ -147,7 +199,6 @@ public partial class Main : Node3D
         float centerZ = (minCoords.Z + maxCoords.Z) / 2f;
         float planeY = HexMetrics.MinElevation * HexMetrics.ElevationStep - 0.5f;
 
-        // Create mesh
         _groundPlane = new MeshInstance3D();
         var planeMesh = new PlaneMesh
         {
@@ -155,7 +206,6 @@ public partial class Main : Node3D
         };
         _groundPlane.Mesh = planeMesh;
 
-        // Create material
         var material = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.102f, 0.298f, 0.431f),
@@ -163,8 +213,6 @@ public partial class Main : Node3D
             Roughness = 1f
         };
         _groundPlane.MaterialOverride = material;
-
-        // Position
         _groundPlane.Position = new Vector3(centerX, planeY, centerZ);
 
         _hexGridNode.AddChild(_groundPlane);
@@ -174,20 +222,36 @@ public partial class Main : Node3D
     {
         if (_hexGridNode == null || _grid == null) return;
 
-        _waterRenderer?.QueueFree();
-        _waterRenderer = null;
+        _chunkedWater?.Dispose();
+        _chunkedWater?.QueueFree();
+        _chunkedWater = null;
 
-        _waterRenderer = new WaterRenderer(_grid);
-        _hexGridNode.AddChild(_waterRenderer);
-        _waterRenderer.Build();
+        _chunkedWater = new WaterRenderer(_grid);
+        _hexGridNode.AddChild(_chunkedWater);
+        _chunkedWater.Build();
 
         GD.Print("Water mesh added to scene");
+    }
+
+    private void BuildRivers()
+    {
+        if (_hexGridNode == null || _grid == null) return;
+
+        _chunkedRivers?.Dispose();
+        _chunkedRivers?.QueueFree();
+        _chunkedRivers = null;
+
+        _chunkedRivers = new ChunkedRiverRenderer();
+        _hexGridNode.AddChild(_chunkedRivers);
+        _chunkedRivers.Setup(_grid);
+        _chunkedRivers.Build();
     }
 
     private void BuildFeatures()
     {
         if (_hexGridNode == null || _grid == null) return;
 
+        _featureRenderer?.Dispose();
         _featureRenderer?.QueueFree();
         _featureRenderer = null;
 
@@ -198,38 +262,130 @@ public partial class Main : Node3D
 
     #endregion
 
+    #region Hover System
+
+    private void SetupHover()
+    {
+        if (_grid == null || _camera == null) return;
+
+        _hexHover = new HexHover();
+        AddChild(_hexHover);
+        _hexHover.Setup(_grid, _camera);
+
+        // Connect hover signals
+        _hexHover.CellHovered += OnCellHovered;
+        _hexHover.CellUnhovered += OnCellUnhovered;
+    }
+
+    private void OnCellHovered(HexCell cell)
+    {
+        if (_gameUI != null)
+        {
+            var terrainName = cell.TerrainType.GetDisplayName();
+            _gameUI.SetHoveredHex(cell.Q, cell.R, terrainName);
+        }
+
+        // Update path preview
+        _selectionManager?.UpdatePathPreview(cell);
+    }
+
+    private void OnCellUnhovered()
+    {
+        _gameUI?.ClearHoveredHex();
+        _selectionManager?.ClearPathPreview();
+    }
+
+    #endregion
+
     #region Unit System
 
     private void SetupUnits()
     {
-        if (_hexGridNode == null || _grid == null) return;
+        if (_hexGridNode == null || _grid == null)
+        {
+            GD.Print("SetupUnits: _hexGridNode or _grid is null!");
+            return;
+        }
 
+        GD.Print("SetupUnits: Creating UnitManager...");
         // Create unit manager
         _unitManager = new UnitManager(_grid);
 
+        GD.Print("SetupUnits: Creating UnitRenderer...");
         // Create unit renderer
         _unitRenderer = new UnitRenderer(_unitManager);
+        _unitRenderer.Setup(_grid);
         _hexGridNode.AddChild(_unitRenderer);
 
-        // Spawn test units
-        for (int i = 0; i < 10; i++)
-        {
-            int q = (int)(GD.Randi() % (uint)MapWidth);
-            int r = (int)(GD.Randi() % (uint)MapHeight);
-            var cell = _grid.GetCell(q, r);
-            if (cell != null && !cell.IsWater)
-            {
-                _unitManager.CreateUnit(UnitType.Infantry, q, r, 1);
-            }
-        }
-
-        GD.Print($"Created {_unitManager.UnitCount} units");
+        GD.Print("SetupUnits: Spawning units using UnitManager.SpawnMixedUnits...");
+        // Use UnitManager's spawn method instead of our own
+        var spawned = _unitManager.SpawnMixedUnits(10, 5, 1);
+        GD.Print($"Created {spawned.Land} land, {spawned.Naval} naval units (total in manager: {_unitManager.UnitCount})");
 
         // Build unit meshes
         _unitRenderer.Build();
 
         // Setup pathfinder
         _pathfinder = new Pathfinder(_grid, _unitManager);
+
+        // Setup path renderer
+        _pathRenderer = new PathRenderer();
+        _hexGridNode.AddChild(_pathRenderer);
+        _pathRenderer.Setup(_grid);
+
+        // Setup turn manager
+        _turnManager = new TurnManager(_unitManager);
+        _turnManager.StartGame();
+
+        // Setup selection manager
+        _selectionManager = new SelectionManager();
+        AddChild(_selectionManager);
+        _selectionManager.Setup(_unitManager, _unitRenderer, _grid, _camera!, _pathfinder, _pathRenderer, _turnManager);
+        _selectionManager.SelectionChanged += OnSelectionChanged;
+
+        UpdateTurnDisplay();
+        UpdateUnitCounts();
+    }
+
+    private (int Land, int Naval) SpawnMixedUnits(int landCount, int navalCount, int playerId)
+    {
+        if (_unitManager == null || _grid == null) return (0, 0);
+
+        int landSpawned = 0;
+        int navalSpawned = 0;
+
+        // Spawn land units
+        for (int i = 0; i < landCount; i++)
+        {
+            int q = (int)(GD.Randi() % (uint)MapWidth);
+            int r = (int)(GD.Randi() % (uint)MapHeight);
+            var cell = _grid.GetCell(q, r);
+            if (cell != null && !cell.IsWater)
+            {
+                _unitManager.CreateUnit(UnitType.Infantry, q, r, playerId);
+                landSpawned++;
+            }
+        }
+
+        // Spawn naval units
+        for (int i = 0; i < navalCount; i++)
+        {
+            int q = (int)(GD.Randi() % (uint)MapWidth);
+            int r = (int)(GD.Randi() % (uint)MapHeight);
+            var cell = _grid.GetCell(q, r);
+            if (cell != null && cell.IsWater)
+            {
+                _unitManager.CreateUnit(UnitType.Galley, q, r, playerId);
+                navalSpawned++;
+            }
+        }
+
+        return (landSpawned, navalSpawned);
+    }
+
+    private void OnSelectionChanged(int[] selectedIds)
+    {
+        GD.Print($"Selection changed: {selectedIds.Length} units selected");
     }
 
     #endregion
@@ -256,24 +412,31 @@ public partial class Main : Node3D
     {
         float dt = (float)delta;
 
-        // Update water animation
-        _waterRenderer?.UpdateAnimation(dt);
+        // Update water animation and visibility
+        _chunkedWater?.UpdateAnimation(dt);
         if (_camera != null)
         {
-            _waterRenderer?.UpdateVisibility(_camera);
+            _chunkedWater?.UpdateVisibility(_camera);
+        }
+
+        // Update river animation and visibility
+        _chunkedRivers?.UpdateAnimation(dt);
+        if (_camera != null)
+        {
+            _chunkedRivers?.Update(_camera);
         }
 
         // Update unit renderer
-        _unitRenderer?.Update(delta);
+        _unitRenderer?.Update();
         if (_camera != null)
         {
             _unitRenderer?.UpdateVisibility(_camera);
         }
 
-        // Update terrain visibility
+        // Update terrain visibility and LOD
         if (_camera != null)
         {
-            _terrainRenderer?.UpdateVisibility(_camera);
+            _chunkedTerrain?.Update(_camera);
         }
 
         // Update feature visibility
@@ -303,8 +466,190 @@ public partial class Main : Node3D
                     GD.Print("Regenerating map with same seed...");
                     RegenerateMap();
                     break;
+
+                case Key.P:
+                    _performanceMonitor?.ToggleGraph();
+                    break;
             }
         }
+    }
+
+    #endregion
+
+    #region UI Signal Handlers
+
+    private void OnUIRegenerate(int width, int height, int seedVal)
+    {
+        RegenerateWithSettings(width, height, seedVal);
+        _gameUI?.SetSeed(_currentSeed);
+    }
+
+    private void OnUIRandomSeed()
+    {
+        _currentSeed = (int)GD.Randi();
+        _gameUI?.SetSeed(_currentSeed);
+        RegenerateMap();
+    }
+
+    private void OnEndTurn()
+    {
+        if (_turnManager != null)
+        {
+            _turnManager.EndTurn();
+            UpdateTurnDisplay();
+            GD.Print(_turnManager.GetStatus());
+        }
+    }
+
+    private void OnSpawnLand(int count)
+    {
+        GD.Print($"OnSpawnLand received with count={count}");
+        if (_unitManager == null) { GD.Print("OnSpawnLand: _unitManager is null!"); return; }
+        var spawned = _unitManager.SpawnMixedUnits(count, 0, 1);
+        GD.Print($"Spawned {spawned.Land} land units");
+        _unitRenderer?.Build();
+        UpdateUnitCounts();
+    }
+
+    private void OnSpawnNaval(int count)
+    {
+        GD.Print($"OnSpawnNaval received with count={count}");
+        if (_unitManager == null) { GD.Print("OnSpawnNaval: _unitManager is null!"); return; }
+        var spawned = _unitManager.SpawnMixedUnits(0, count, 1);
+        GD.Print($"Spawned {spawned.Naval} naval units");
+        _unitRenderer?.Build();
+        UpdateUnitCounts();
+    }
+
+    private void OnSpawnAi(int land, int naval)
+    {
+        if (_unitManager == null) return;
+        var spawned = _unitManager.SpawnMixedUnits(land, naval, 2);
+        GD.Print($"Spawned {spawned.Land} land, {spawned.Naval} naval AI units");
+        _unitRenderer?.Build();
+        UpdateUnitCounts();
+    }
+
+    private void OnClearUnits()
+    {
+        _unitManager?.Clear();
+        GD.Print("Cleared all units");
+        _unitRenderer?.Build();
+        _selectionManager?.ClearSelection();
+        UpdateUnitCounts();
+    }
+
+    private void OnNoiseParamChanged(string param, float value)
+    {
+        if (_mapGenerator == null) return;
+
+        // Handle flow_speed separately
+        if (param == "flow_speed")
+        {
+            // TODO: Update river material flow speed
+            return;
+        }
+
+        switch (param)
+        {
+            case "noise_scale":
+                _mapGenerator.NoiseScale = value;
+                break;
+            case "octaves":
+                _mapGenerator.Octaves = (int)value;
+                break;
+            case "persistence":
+                _mapGenerator.Persistence = value;
+                break;
+            case "lacunarity":
+                _mapGenerator.Lacunarity = value;
+                break;
+            case "sea_level":
+                _mapGenerator.SeaLevel = value;
+                break;
+            case "mountain_level":
+                _mapGenerator.MountainLevel = value;
+                break;
+            case "river_percentage":
+                _mapGenerator.RiverPercentage = value;
+                break;
+        }
+
+        RegenerateMap();
+    }
+
+    private void OnShaderParamChanged(string param, float value)
+    {
+        _chunkedTerrain?.SetShaderParameter(param, value);
+    }
+
+    private void OnLightingParamChanged(string param, float value)
+    {
+        switch (param)
+        {
+            case "ambient_energy":
+                if (_worldEnvironment?.Environment != null)
+                {
+                    _worldEnvironment.Environment.AmbientLightEnergy = value;
+                }
+                break;
+            case "light_energy":
+                if (_directionalLight != null)
+                {
+                    _directionalLight.LightEnergy = value;
+                }
+                break;
+        }
+    }
+
+    private void OnFogParamChanged(string param, float value)
+    {
+        if (_worldEnvironment?.Environment == null) return;
+
+        switch (param)
+        {
+            case "fog_near":
+                _worldEnvironment.Environment.FogDepthBegin = value;
+                break;
+            case "fog_far":
+                _worldEnvironment.Environment.FogDepthEnd = value;
+                break;
+            case "fog_density":
+                _worldEnvironment.Environment.FogLightEnergy = value;
+                break;
+        }
+    }
+
+    private void OnWaterParamChanged(string param, float value)
+    {
+        if (_chunkedWater == null) return;
+
+        switch (param)
+        {
+            case "height_offset":
+                _chunkedWater.SetHeightOffset(value);
+                break;
+        }
+    }
+
+    #endregion
+
+    #region Turn System
+
+    private void UpdateTurnDisplay()
+    {
+        if (_gameUI != null && _turnManager != null)
+        {
+            _gameUI.SetTurnStatus(_turnManager.GetStatus());
+        }
+    }
+
+    private void UpdateUnitCounts()
+    {
+        if (_gameUI == null || _unitManager == null) return;
+
+        var counts = _unitManager.GetUnitCounts();
+        _gameUI.SetUnitCounts(counts.Land, counts.Naval);
     }
 
     #endregion
@@ -326,20 +671,87 @@ public partial class Main : Node3D
 
             BuildTerrain();
             BuildFeatures();
-            SetupUnits();
+            SetupSystemsAfterBuild(false);
             CenterCamera();
         }
     }
 
+    public void RegenerateWithSettings(int width, int height, int seedVal)
+    {
+        CleanupRenderers();
+
+        MapWidth = width;
+        MapHeight = height;
+        _currentSeed = seedVal;
+
+        // Clear units
+        _unitManager?.Clear();
+
+        // Reinitialize grid with new size
+        _grid = new HexGrid(MapWidth, MapHeight);
+        _grid.Initialize();
+
+        // Generate
+        if (_mapGenerator != null)
+        {
+            _mapGenerator.Generate(_grid, _currentSeed);
+            GD.Print($"Map generated with seed: {_currentSeed}");
+
+            BuildTerrain();
+            BuildFeatures();
+            SetupSystemsAfterBuild(true);
+            CenterCamera();
+        }
+    }
+
+    private void SetupSystemsAfterBuild(bool createNewUnitManager)
+    {
+        if (_grid == null || _camera == null) return;
+
+        // Update hover with new grid
+        _hexHover?.Setup(_grid, _camera);
+
+        // Create or reuse unit manager
+        if (createNewUnitManager)
+        {
+            _unitManager = new UnitManager(_grid);
+        }
+
+        // Spawn units
+        var spawned = SpawnMixedUnits(10, 5, 1);
+        GD.Print($"Spawned {spawned.Land} land, {spawned.Naval} naval units");
+
+        // Setup unit renderer
+        _unitRenderer?.Build();
+
+        // Update pathfinder
+        _pathfinder = new Pathfinder(_grid, _unitManager!);
+
+        // Update turn manager
+        _turnManager = new TurnManager(_unitManager!);
+        _turnManager.StartGame();
+
+        // Update selection manager
+        _selectionManager?.ClearSelection();
+        _selectionManager?.Setup(_unitManager!, _unitRenderer!, _grid, _camera, _pathfinder, _pathRenderer, _turnManager);
+
+        UpdateTurnDisplay();
+        UpdateUnitCounts();
+    }
+
     private void CleanupRenderers()
     {
-        _terrainRenderer?.Dispose();
-        _terrainRenderer?.QueueFree();
-        _terrainRenderer = null;
+        _chunkedTerrain?.Dispose();
+        _chunkedTerrain?.QueueFree();
+        _chunkedTerrain = null;
 
-        _waterRenderer?.Dispose();
-        _waterRenderer?.QueueFree();
-        _waterRenderer = null;
+        _chunkedWater?.Dispose();
+        _chunkedWater?.QueueFree();
+        _chunkedWater = null;
+
+        _chunkedRivers?.Dispose();
+        _chunkedRivers?.QueueFree();
+        _chunkedRivers = null;
 
         _featureRenderer?.Dispose();
         _featureRenderer?.QueueFree();
@@ -347,10 +759,6 @@ public partial class Main : Node3D
 
         _groundPlane?.QueueFree();
         _groundPlane = null;
-
-        _unitRenderer?.Dispose();
-        _unitRenderer?.QueueFree();
-        _unitRenderer = null;
     }
 
     #endregion

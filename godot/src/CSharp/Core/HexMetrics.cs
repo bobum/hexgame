@@ -52,11 +52,12 @@ public static class HexMetrics
     public const int MaxElevation = 13;
 
     /// <summary>
-    /// Checks if an elevation value represents water (below land minimum).
+    /// Checks if an elevation value represents water (below sea level).
+    /// Water is elevations 0-3, sea level (4) is the surface.
     /// </summary>
     /// <param name="elevation">The elevation to check.</param>
     /// <returns>True if the elevation is underwater.</returns>
-    public static bool IsWaterElevation(int elevation) => elevation < LandMinElevation;
+    public static bool IsWaterElevation(int elevation) => elevation < SeaLevel;
 
     /// <summary>
     /// Checks if an elevation value represents land (at or above land minimum).
