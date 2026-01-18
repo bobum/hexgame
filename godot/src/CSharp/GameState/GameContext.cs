@@ -1,8 +1,10 @@
+using HexGame.Services.DependencyInjection;
+
 namespace HexGame.GameState;
 
 /// <summary>
 /// Convenience wrapper providing shortcuts to commonly used services.
-/// Simplifies access to ServiceLocator-registered services.
+/// Supports both the new DI container and legacy ServiceLocator for backwards compatibility.
 /// </summary>
 public static class GameContext
 {
@@ -10,65 +12,82 @@ public static class GameContext
     /// Gets the EventBus service for publishing and subscribing to game events.
     /// Returns null if EventBus is not registered.
     /// </summary>
-    /// <remarks>
-    /// Prefer using <see cref="TryGetEvents"/> or <see cref="PublishEvent{T}"/> for null-safe access.
-    /// </remarks>
-    public static EventBus? Events => ServiceLocator.TryGet<EventBus>(out var eventBus) ? eventBus : null;
+    public static EventBus? Events
+    {
+        get
+        {
+            // Try new DI container first
+            if (GameServices.TryGet<EventBus>(out var eventBus))
+                return eventBus;
+            // Fall back to legacy ServiceLocator
+            return ServiceLocator.TryGet<EventBus>(out eventBus) ? eventBus : null;
+        }
+    }
 
     /// <summary>
     /// Gets the CommandHistory service for undo/redo operations.
     /// Returns null if CommandHistory is not registered.
     /// </summary>
-    /// <remarks>
-    /// Prefer using <see cref="TryGetCommands"/> or <see cref="ExecuteCommand"/> for null-safe access.
-    /// </remarks>
-    public static CommandHistory? Commands => ServiceLocator.TryGet<CommandHistory>(out var commands) ? commands : null;
+    public static CommandHistory? Commands
+    {
+        get
+        {
+            if (GameServices.TryGet<CommandHistory>(out var commands))
+                return commands;
+            return ServiceLocator.TryGet<CommandHistory>(out commands) ? commands : null;
+        }
+    }
 
     /// <summary>
     /// Gets the EventBus service, throwing if not registered.
-    /// Use this only when you're certain the service is registered.
     /// </summary>
     /// <exception cref="InvalidOperationException">If EventBus is not registered.</exception>
-    public static EventBus GetEventsRequired() => ServiceLocator.Get<EventBus>();
+    public static EventBus GetEventsRequired()
+    {
+        if (GameServices.TryGet<EventBus>(out var eventBus))
+            return eventBus;
+        return ServiceLocator.Get<EventBus>();
+    }
 
     /// <summary>
     /// Gets the CommandHistory service, throwing if not registered.
-    /// Use this only when you're certain the service is registered.
     /// </summary>
     /// <exception cref="InvalidOperationException">If CommandHistory is not registered.</exception>
-    public static CommandHistory GetCommandsRequired() => ServiceLocator.Get<CommandHistory>();
+    public static CommandHistory GetCommandsRequired()
+    {
+        if (GameServices.TryGet<CommandHistory>(out var commands))
+            return commands;
+        return ServiceLocator.Get<CommandHistory>();
+    }
 
     /// <summary>
     /// Attempts to get the EventBus service.
     /// </summary>
-    /// <param name="eventBus">The EventBus if found.</param>
-    /// <returns>True if the service was found.</returns>
     public static bool TryGetEvents([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out EventBus? eventBus)
     {
+        if (GameServices.TryGet(out eventBus))
+            return true;
         return ServiceLocator.TryGet(out eventBus);
     }
 
     /// <summary>
     /// Attempts to get the CommandHistory service.
     /// </summary>
-    /// <param name="commands">The CommandHistory if found.</param>
-    /// <returns>True if the service was found.</returns>
     public static bool TryGetCommands([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out CommandHistory? commands)
     {
+        if (GameServices.TryGet(out commands))
+            return true;
         return ServiceLocator.TryGet(out commands);
     }
 
     /// <summary>
-    /// Checks if the game context is fully initialized (all core services registered).
+    /// Checks if the game context is fully initialized.
     /// </summary>
     public static bool IsInitialized => ServiceLocator.IsInitialized;
 
     /// <summary>
     /// Publishes an event through the EventBus if available.
-    /// Safe to call even if EventBus is not registered (no-op).
     /// </summary>
-    /// <typeparam name="T">Event type.</typeparam>
-    /// <param name="gameEvent">The event to publish.</param>
     public static void PublishEvent<T>(T gameEvent) where T : IGameEvent
     {
         if (TryGetEvents(out var eventBus))
@@ -80,22 +99,18 @@ public static class GameContext
     /// <summary>
     /// Executes a command through the CommandHistory if available.
     /// </summary>
-    /// <param name="command">The command to execute.</param>
-    /// <returns>True if command was executed, false if failed or CommandHistory unavailable.</returns>
     public static bool ExecuteCommand(ICommand command)
     {
         if (TryGetCommands(out var commands))
         {
             return commands.Execute(command);
         }
-        // Fallback: execute directly without history
         return command.CanExecute() && command.Execute();
     }
 
     /// <summary>
     /// Undoes the last command if possible.
     /// </summary>
-    /// <returns>True if a command was undone.</returns>
     public static bool Undo()
     {
         return TryGetCommands(out var commands) && commands.Undo();
@@ -104,9 +119,42 @@ public static class GameContext
     /// <summary>
     /// Redoes the last undone command if possible.
     /// </summary>
-    /// <returns>True if a command was redone.</returns>
     public static bool Redo()
     {
         return TryGetCommands(out var commands) && commands.Redo();
     }
+
+    #region Convenience Accessors for Common Services
+
+    /// <summary>
+    /// Gets a service from the DI container or ServiceLocator.
+    /// </summary>
+    public static T? Get<T>() where T : class
+    {
+        if (GameServices.TryGet<T>(out var service))
+            return service;
+        return ServiceLocator.TryGet<T>(out service) ? service : null;
+    }
+
+    /// <summary>
+    /// Gets a required service, throwing if not found.
+    /// </summary>
+    public static T GetRequired<T>() where T : class
+    {
+        if (GameServices.TryGet<T>(out var service))
+            return service;
+        return ServiceLocator.Get<T>();
+    }
+
+    /// <summary>
+    /// Tries to get a service.
+    /// </summary>
+    public static bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? service) where T : class
+    {
+        if (GameServices.TryGet(out service))
+            return true;
+        return ServiceLocator.TryGet(out service);
+    }
+
+    #endregion
 }

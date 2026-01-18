@@ -1,4 +1,5 @@
 using HexGame.Units;
+using System.Threading;
 
 namespace HexGame.Pathfinding;
 
@@ -233,6 +234,188 @@ public class Pathfinder : IPathfinder
         var result = FindPath(start, end, new PathOptions { IgnoreUnits = ignoreUnits });
         return result.Reachable;
     }
+
+    #region Async Methods
+
+    /// <summary>
+    /// Finds the optimal path between two cells asynchronously.
+    /// Useful for large maps where pathfinding might take significant time.
+    /// </summary>
+    /// <param name="start">Starting cell.</param>
+    /// <param name="end">Destination cell.</param>
+    /// <param name="options">Pathfinding options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Task containing the path result.</returns>
+    public Task<PathResult> FindPathAsync(HexCell start, HexCell end, PathOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return FindPathWithCancellation(start, end, options, cancellationToken);
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets all reachable cells from a starting cell asynchronously.
+    /// Useful for large movement ranges where calculation might take significant time.
+    /// </summary>
+    /// <param name="start">Starting cell.</param>
+    /// <param name="movementPoints">Available movement points.</param>
+    /// <param name="options">Pathfinding options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Task containing the dictionary of reachable cells.</returns>
+    public Task<Dictionary<HexCell, float>> GetReachableCellsAsync(HexCell start, float movementPoints, PathOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return GetReachableCellsWithCancellation(start, movementPoints, options, cancellationToken);
+        }, cancellationToken);
+    }
+
+    private PathResult FindPathWithCancellation(HexCell start, HexCell end, PathOptions? options, CancellationToken cancellationToken)
+    {
+        options ??= new PathOptions();
+
+        IMovementStrategy strategy = options.UnitType.HasValue
+            ? MovementStrategyFactory.Create(options.UnitType.Value)
+            : LandMovementStrategy.Instance;
+
+        // Quick checks
+        if (!strategy.IsPassable(end))
+            return PathResult.NotReachable;
+
+        if (!options.IgnoreUnits && _unitManager != null && _unitManager.GetUnitAt(end.Q, end.R) != null)
+            return PathResult.NotReachable;
+
+        if (start.Q == end.Q && start.R == end.R)
+            return new PathResult(new List<HexCell> { start }, 0, true);
+
+        var frontier = new PriorityQueue<HexCell, float>();
+        var cameFrom = new Dictionary<string, HexCell?>();
+        var costSoFar = new Dictionary<string, float>();
+
+        string startKey = CellKey(start);
+        string endKey = CellKey(end);
+
+        frontier.Enqueue(start, 0);
+        cameFrom[startKey] = null;
+        costSoFar[startKey] = 0;
+
+        int iterationCount = 0;
+        const int CheckInterval = 100; // Check for cancellation every N iterations
+
+        while (frontier.Count > 0)
+        {
+            // Periodically check for cancellation
+            if (++iterationCount % CheckInterval == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            var current = frontier.Dequeue();
+            string currentKey = CellKey(current);
+
+            if (currentKey == endKey)
+            {
+                return new PathResult(
+                    ReconstructPath(cameFrom, start, end),
+                    costSoFar[endKey],
+                    true
+                );
+            }
+
+            foreach (var neighbor in _grid.GetNeighbors(current))
+            {
+                if (!options.IgnoreUnits && _unitManager != null)
+                {
+                    var unitAtNeighbor = _unitManager.GetUnitAt(neighbor.Q, neighbor.R);
+                    if (unitAtNeighbor != null && CellKey(neighbor) != endKey)
+                        continue;
+                }
+
+                float moveCost = strategy.GetMovementCost(current, neighbor);
+                if (float.IsPositiveInfinity(moveCost))
+                    continue;
+
+                float newCost = costSoFar[currentKey] + moveCost;
+                if (newCost > options.MaxCost)
+                    continue;
+
+                string neighborKey = CellKey(neighbor);
+
+                if (!costSoFar.TryGetValue(neighborKey, out var existingCost) || newCost < existingCost)
+                {
+                    costSoFar[neighborKey] = newCost;
+                    float priority = newCost + Heuristic(neighbor, end);
+                    frontier.Enqueue(neighbor, priority);
+                    cameFrom[neighborKey] = current;
+                }
+            }
+        }
+
+        return PathResult.NotReachable;
+    }
+
+    private Dictionary<HexCell, float> GetReachableCellsWithCancellation(HexCell start, float movementPoints, PathOptions? options, CancellationToken cancellationToken)
+    {
+        options ??= new PathOptions();
+
+        IMovementStrategy strategy = options.UnitType.HasValue
+            ? MovementStrategyFactory.Create(options.UnitType.Value)
+            : LandMovementStrategy.Instance;
+
+        var reachable = new Dictionary<HexCell, float>();
+        var frontier = new PriorityQueue<HexCell, float>();
+        var costSoFar = new Dictionary<string, float>();
+
+        string startKey = CellKey(start);
+        frontier.Enqueue(start, 0);
+        costSoFar[startKey] = 0;
+        reachable[start] = 0;
+
+        int iterationCount = 0;
+        const int CheckInterval = 100;
+
+        while (frontier.Count > 0)
+        {
+            if (++iterationCount % CheckInterval == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            var current = frontier.Dequeue();
+            string currentKey = CellKey(current);
+            float currentCost = costSoFar.GetValueOrDefault(currentKey, 0);
+
+            foreach (var neighbor in _grid.GetNeighbors(current))
+            {
+                if (!options.IgnoreUnits && _unitManager != null && _unitManager.GetUnitAt(neighbor.Q, neighbor.R) != null)
+                    continue;
+
+                float moveCost = strategy.GetMovementCost(current, neighbor);
+                if (float.IsPositiveInfinity(moveCost))
+                    continue;
+
+                float newCost = currentCost + moveCost;
+                if (newCost > movementPoints)
+                    continue;
+
+                string neighborKey = CellKey(neighbor);
+
+                if (!costSoFar.TryGetValue(neighborKey, out var existingCost) || newCost < existingCost)
+                {
+                    costSoFar[neighborKey] = newCost;
+                    frontier.Enqueue(neighbor, newCost);
+                    reachable[neighbor] = newCost;
+                }
+            }
+        }
+
+        return reachable;
+    }
+
+    #endregion
 
     /// <summary>
     /// Gets the movement cost between two adjacent cells.

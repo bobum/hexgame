@@ -1,4 +1,5 @@
 using HexGame.Units;
+using System.Threading;
 
 namespace HexGame.Pathfinding;
 
@@ -43,4 +44,26 @@ public interface IPathfinder : IService
     /// <param name="unitType">Optional unit type for domain-aware cost calculation.</param>
     /// <returns>Movement cost, or infinity if not adjacent or impassable.</returns>
     float GetStepCost(HexCell from, HexCell to, UnitType? unitType = null);
+
+    /// <summary>
+    /// Finds the optimal path between two cells asynchronously.
+    /// Useful for large maps where pathfinding might take significant time.
+    /// </summary>
+    /// <param name="start">Starting cell.</param>
+    /// <param name="end">Destination cell.</param>
+    /// <param name="options">Pathfinding options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Task containing the path result.</returns>
+    Task<PathResult> FindPathAsync(HexCell start, HexCell end, PathOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets all reachable cells from a starting cell asynchronously.
+    /// Useful for large movement ranges where calculation might take significant time.
+    /// </summary>
+    /// <param name="start">Starting cell.</param>
+    /// <param name="movementPoints">Available movement points.</param>
+    /// <param name="options">Pathfinding options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Task containing the dictionary of reachable cells.</returns>
+    Task<Dictionary<HexCell, float>> GetReachableCellsAsync(HexCell start, float movementPoints, PathOptions? options = null, CancellationToken cancellationToken = default);
 }

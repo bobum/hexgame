@@ -4,6 +4,7 @@ using HexGame.Events;
 using HexGame.GameState;
 using HexGame.Pathfinding;
 using HexGame.Units;
+using System.Threading;
 
 namespace HexGame.AI;
 
@@ -22,6 +23,7 @@ public class AIManager : IService
 
     private readonly Dictionary<int, IAIController> _controllers = new();
     private bool _isProcessingTurn;
+    private CancellationTokenSource? _currentTurnCts;
 
     /// <summary>
     /// Default delay between AI actions in milliseconds.
@@ -48,6 +50,11 @@ public class AIManager : IService
     /// Fired when AI finishes processing a turn.
     /// </summary>
     public event Action<int>? AITurnEnded;
+
+    /// <summary>
+    /// Fired when AI turn is cancelled.
+    /// </summary>
+    public event Action<int>? AITurnCancelled;
 
     /// <summary>
     /// Creates a new AI manager.
@@ -79,13 +86,26 @@ public class AIManager : IService
 
     public void Shutdown()
     {
+        CancelCurrentTurn();
+
         _turnManager.TurnStarted -= OnTurnStarted;
         _eventBus.Unsubscribe<TurnStartedEvent>(OnTurnStartedEvent);
 
         AITurnStarted = null;
         AIActionPerformed = null;
         AITurnEnded = null;
+        AITurnCancelled = null;
         _controllers.Clear();
+    }
+
+    /// <summary>
+    /// Cancels the current AI turn if one is in progress.
+    /// </summary>
+    public void CancelCurrentTurn()
+    {
+        _currentTurnCts?.Cancel();
+        _currentTurnCts?.Dispose();
+        _currentTurnCts = null;
     }
 
     #endregion
@@ -142,7 +162,8 @@ public class AIManager : IService
         // Check if it's an AI player's turn
         if (_turnManager.IsAiTurn && HasController(_turnManager.CurrentPlayer))
         {
-            ProcessAITurn(_turnManager.CurrentPlayer);
+            // Start async turn processing (non-blocking)
+            StartAITurnAsync(_turnManager.CurrentPlayer);
         }
     }
 
@@ -151,15 +172,29 @@ public class AIManager : IService
         // Alternative event-based trigger
         if (evt.CurrentPlayerId >= TurnManager.PlayerAiStart && HasController(evt.CurrentPlayerId))
         {
-            ProcessAITurn(evt.CurrentPlayerId);
+            // Start async turn processing (non-blocking)
+            StartAITurnAsync(evt.CurrentPlayerId);
         }
     }
 
     /// <summary>
-    /// Manually triggers AI turn processing.
+    /// Manually triggers AI turn processing (synchronous).
     /// Useful for testing or custom turn flows.
     /// </summary>
     public void ProcessAITurn(int playerId)
+    {
+        // Run synchronously by waiting on the async version
+        ProcessAITurnAsync(playerId, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Manually triggers AI turn processing asynchronously.
+    /// Allows the game to remain responsive during AI processing.
+    /// </summary>
+    /// <param name="playerId">The AI player ID.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Task that completes when the turn is finished.</returns>
+    public async Task ProcessAITurnAsync(int playerId, CancellationToken cancellationToken = default)
     {
         if (_isProcessingTurn)
         {
@@ -173,49 +208,96 @@ public class AIManager : IService
             return;
         }
 
+        // Create linked cancellation token so we can cancel internally
+        _currentTurnCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var token = _currentTurnCts.Token;
+
         _isProcessingTurn = true;
         AITurnStarted?.Invoke(playerId);
 
-        var context = CreateContext(playerId);
-        controller.OnTurnStart(playerId, context);
-
-        // Process actions
-        int actionCount = 0;
-        while (actionCount < MaxActionsPerTurn)
+        try
         {
-            context = CreateContext(playerId); // Refresh context
-            var action = controller.DecideAction(context);
+            var context = CreateContext(playerId);
+            controller.OnTurnStart(playerId, context);
 
-            if (action == null || action is EndTurnAction)
+            // Process actions
+            int actionCount = 0;
+            while (actionCount < MaxActionsPerTurn)
             {
-                break;
+                // Check for cancellation
+                if (token.IsCancellationRequested)
+                {
+                    AITurnCancelled?.Invoke(playerId);
+                    GD.Print($"AIManager: Turn cancelled for player {playerId}");
+                    return;
+                }
+
+                context = CreateContext(playerId); // Refresh context
+                var action = controller.DecideAction(context);
+
+                if (action == null || action is EndTurnAction)
+                {
+                    break;
+                }
+
+                bool success = ExecuteAction(action, context);
+                controller.OnActionComplete(action, success, CreateContext(playerId));
+
+                AIActionPerformed?.Invoke(playerId, action);
+                actionCount++;
+
+                // Check if we should continue
+                if (!success && action is not SkipAction)
+                {
+                    GD.Print($"AIManager: Action failed - {action.Description}");
+                }
+
+                // Add delay between actions if configured (allows UI to update)
+                if (ActionDelayMs > 0)
+                {
+                    await Task.Delay(ActionDelayMs, token).ConfigureAwait(false);
+                }
             }
 
-            bool success = ExecuteAction(action, context);
-            controller.OnActionComplete(action, success, CreateContext(playerId));
-
-            AIActionPerformed?.Invoke(playerId, action);
-            actionCount++;
-
-            // Check if we should continue
-            if (!success && action is not SkipAction)
+            if (actionCount >= MaxActionsPerTurn)
             {
-                GD.Print($"AIManager: Action failed - {action.Description}");
+                GD.PrintErr($"AIManager: Hit max action limit ({MaxActionsPerTurn}) for player {playerId}");
             }
-        }
 
-        if (actionCount >= MaxActionsPerTurn)
+            controller.OnTurnEnd(CreateContext(playerId));
+            AITurnEnded?.Invoke(playerId);
+        }
+        catch (OperationCanceledException)
         {
-            GD.PrintErr($"AIManager: Hit max action limit ({MaxActionsPerTurn}) for player {playerId}");
+            AITurnCancelled?.Invoke(playerId);
+            GD.Print($"AIManager: Turn cancelled for player {playerId}");
+            return;
         }
-
-        controller.OnTurnEnd(CreateContext(playerId));
-        AITurnEnded?.Invoke(playerId);
-
-        _isProcessingTurn = false;
+        finally
+        {
+            _isProcessingTurn = false;
+            _currentTurnCts?.Dispose();
+            _currentTurnCts = null;
+        }
 
         // End the turn
         _turnManager.EndTurn();
+    }
+
+    /// <summary>
+    /// Starts AI turn processing in the background.
+    /// Returns immediately and processes the turn asynchronously.
+    /// </summary>
+    /// <param name="playerId">The AI player ID.</param>
+    public void StartAITurnAsync(int playerId)
+    {
+        _ = ProcessAITurnAsync(playerId).ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception != null)
+            {
+                GD.PrintErr($"AIManager: Error processing turn - {t.Exception.InnerException?.Message}");
+            }
+        });
     }
 
     /// <summary>
