@@ -135,7 +135,7 @@ public partial class HexMesh : MeshInstance3D
         }
 
         Vector3 bridge = HexMetrics.GetBridge(direction);
-        bridge.Y = neighbor.Elevation * HexMetrics.ElevationStep - cell.Elevation * HexMetrics.ElevationStep;
+        bridge.Y = neighbor.Position.Y - cell.Position.Y;
 
         EdgeVertices e2 = new EdgeVertices(
             e1.V1 + bridge,
@@ -156,7 +156,7 @@ public partial class HexMesh : MeshInstance3D
         if (direction <= HexDirection.E && nextNeighbor != null)
         {
             Vector3 v5 = e1.V4 + HexMetrics.GetBridge(direction.Next());
-            v5.Y = nextNeighbor.Elevation * HexMetrics.ElevationStep;
+            v5.Y = nextNeighbor.Position.Y;
 
             // Sort by elevation to determine bottom, left, right
             if (cell.Elevation <= neighbor.Elevation)
