@@ -1,3 +1,5 @@
+using System;
+
 namespace HexGame.Camera;
 
 /// <summary>
@@ -271,5 +273,109 @@ public partial class MapCamera : Camera3D
         {
             _targetDistance = Mathf.Clamp(newDistance, MinZoom, MaxZoom);
         }
+    }
+
+    #region Camera State (for debug capture/restore)
+
+    /// <summary>Current distance from target.</summary>
+    public float Distance
+    {
+        get => _distance;
+        set
+        {
+            _distance = value;
+            _targetDistance = value;
+        }
+    }
+
+    /// <summary>Current pitch angle in degrees.</summary>
+    public float Pitch
+    {
+        get => _pitch;
+        set
+        {
+            _pitch = Mathf.Clamp(value, MinPitch, MaxPitch);
+            _targetPitch = _pitch;
+        }
+    }
+
+    /// <summary>Current yaw angle in degrees.</summary>
+    public float Yaw
+    {
+        get => _yaw;
+        set
+        {
+            _yaw = value;
+            _targetYaw = value;
+        }
+    }
+
+    /// <summary>Current target position.</summary>
+    public Vector3 Target
+    {
+        get => _target;
+        set
+        {
+            _target = value;
+            _targetPosition = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets the full camera state for serialization.
+    /// </summary>
+    public CameraState GetState()
+    {
+        return new CameraState(_target, _distance, _pitch, _yaw);
+    }
+
+    /// <summary>
+    /// Sets the full camera state (immediate, no smoothing).
+    /// </summary>
+    public void SetState(CameraState state)
+    {
+        _target = state.Target;
+        _targetPosition = state.Target;
+        _distance = state.Distance;
+        _targetDistance = state.Distance;
+        _pitch = state.Pitch;
+        _targetPitch = state.Pitch;
+        _yaw = state.Yaw;
+        _targetYaw = state.Yaw;
+        UpdateCameraPosition();
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// Serializable camera state for debug capture/restore.
+/// </summary>
+public record struct CameraState(Vector3 Target, float Distance, float Pitch, float Yaw)
+{
+    /// <summary>Convert to dictionary for JSON serialization.</summary>
+    public readonly Dictionary<string, object> ToDictionary() => new()
+    {
+        ["target_x"] = Target.X,
+        ["target_y"] = Target.Y,
+        ["target_z"] = Target.Z,
+        ["distance"] = Distance,
+        ["pitch"] = Pitch,
+        ["yaw"] = Yaw
+    };
+
+    /// <summary>Create from dictionary (JSON deserialization).</summary>
+    public static CameraState FromDictionary(Dictionary<string, object> dict)
+    {
+        return new CameraState(
+            new Vector3(
+                Convert.ToSingle(dict["target_x"]),
+                Convert.ToSingle(dict["target_y"]),
+                Convert.ToSingle(dict["target_z"])
+            ),
+            Convert.ToSingle(dict["distance"]),
+            Convert.ToSingle(dict["pitch"]),
+            Convert.ToSingle(dict["yaw"])
+        );
     }
 }

@@ -8,6 +8,7 @@ using HexGame.Pathfinding;
 using HexGame.Rendering;
 using HexGame.UI;
 using HexGame.Units;
+using ScreenshotCaptureClass = HexGame.Debug.ScreenshotCapture;
 
 namespace HexGame;
 
@@ -46,6 +47,7 @@ public partial class Main : Node3D
     private PathRenderer? _pathRenderer;
     private TurnManager? _turnManager;
     private PerformanceMonitor? _performanceMonitor;
+    private ScreenshotCaptureClass? _screenshotCapture;
 
     #endregion
 
@@ -59,10 +61,18 @@ public partial class Main : Node3D
 
     private int _currentSeed;
 
+    /// <summary>Current map seed (read-only for external access).</summary>
+    public int CurrentSeed => _currentSeed;
+
     // Async generation
     private bool _useAsyncGeneration = true;
     private bool _asyncGenerationPending;
     private bool _asyncNeedsNewUnits;
+
+    /// <summary>
+    /// When true, skip CenterCamera after next map generation (used by debug state loading).
+    /// </summary>
+    public bool SkipNextCenterCamera { get; set; }
 
     #endregion
 
@@ -88,6 +98,9 @@ public partial class Main : Node3D
 
         // Setup performance monitor
         SetupPerformanceMonitor();
+
+        // Setup screenshot capture
+        SetupScreenshotCapture();
 
         GD.Print("HexGame (C#) initialized successfully!");
     }
@@ -136,6 +149,14 @@ public partial class Main : Node3D
     {
         _performanceMonitor = new PerformanceMonitor();
         AddChild(_performanceMonitor);
+    }
+
+    private void SetupScreenshotCapture()
+    {
+        _screenshotCapture = new ScreenshotCaptureClass();
+        AddChild(_screenshotCapture);
+        _screenshotCapture.Setup(_camera!, this);
+        GD.Print("Screenshot capture ready - F12=screenshot, F11=debug view, F10=save state, F9=load state");
     }
 
     private void InitializeGame()
@@ -733,7 +754,15 @@ public partial class Main : Node3D
         BuildTerrain();
         BuildFeatures();
         SetupSystemsAfterBuild(false); // Reuse existing unit manager
-        CenterCamera();
+        if (SkipNextCenterCamera)
+        {
+            SkipNextCenterCamera = false;
+            GD.Print("Skipping CenterCamera (debug state load)");
+        }
+        else
+        {
+            CenterCamera();
+        }
     }
 
     private void FinishMapBuildWithNewUnits()
@@ -741,7 +770,15 @@ public partial class Main : Node3D
         BuildTerrain();
         BuildFeatures();
         SetupSystemsAfterBuild(true); // Create new unit manager
-        CenterCamera();
+        if (SkipNextCenterCamera)
+        {
+            SkipNextCenterCamera = false;
+            GD.Print("Skipping CenterCamera (debug state load)");
+        }
+        else
+        {
+            CenterCamera();
+        }
     }
 
     public void RegenerateWithSettings(int width, int height, int seedVal)
