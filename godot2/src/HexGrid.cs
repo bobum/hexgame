@@ -2,7 +2,7 @@ using Godot;
 
 /// <summary>
 /// Creates and manages a hexagonal grid.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-2.
+/// Ported exactly from Catlike Coding Hex Map Tutorials 1-3.
 /// </summary>
 public partial class HexGrid : Node3D
 {
@@ -53,6 +53,7 @@ public partial class HexGrid : Node3D
         cell.Position = position;
         cell.Coordinates = HexCoordinates.FromOffsetCoordinates(x, z);
         cell.Color = _colors[(x + z) % _colors.Length];
+        cell.Elevation = (x + z) % 4;
 
         // Establish neighbor connections
         if (x > 0)
@@ -79,12 +80,13 @@ public partial class HexGrid : Node3D
             }
         }
 
-        // Create coordinate label
+        // Create coordinate label - position at cell elevation + small offset
         if (CellLabelPrefab != null)
         {
             var label = CellLabelPrefab.Instantiate<Label3D>();
             AddChild(label);
-            label.Position = new Vector3(position.X, 0.5f, position.Z);
+            float labelY = cell.Elevation * HexMetrics.ElevationStep + 0.1f;
+            label.Position = new Vector3(position.X, labelY, position.Z);
             label.Text = cell.Coordinates.ToStringOnSeparateLines();
             label.RotationDegrees = new Vector3(-90, 0, 0);
         }
@@ -113,5 +115,10 @@ public partial class HexGrid : Node3D
             return _cells[index];
         }
         return null;
+    }
+
+    public void Refresh()
+    {
+        _hexMesh.Triangulate(_cells);
     }
 }
