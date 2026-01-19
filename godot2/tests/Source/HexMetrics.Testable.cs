@@ -2,7 +2,7 @@ using Godot;
 
 /// <summary>
 /// Defines hexagon geometry constants.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-2.
+/// Testable version - identical to main HexMetrics.cs
 /// </summary>
 public static class HexMetrics
 {
@@ -14,10 +14,6 @@ public static class HexMetrics
 
     public const float BlendFactor = 1f - SolidFactor;
 
-    /// <summary>
-    /// Corner positions for pointy-top hexagons.
-    /// 7 elements: index 6 duplicates index 0 for easy wraparound when triangulating.
-    /// </summary>
     public static Vector3[] Corners =
     {
         new Vector3(0f, 0f, OuterRadius),
