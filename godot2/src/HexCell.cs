@@ -2,7 +2,7 @@ using Godot;
 
 /// <summary>
 /// Represents a single hexagonal cell.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-3.
+/// Ported exactly from Catlike Coding Hex Map Tutorials 1-4.
 /// </summary>
 public partial class HexCell : Node3D
 {
@@ -19,6 +19,8 @@ public partial class HexCell : Node3D
             _elevation = value;
             Vector3 position = Position;
             position.Y = value * HexMetrics.ElevationStep;
+            position.Y += (HexMetrics.SampleNoise(position).Y * 2f - 1f) *
+                          HexMetrics.ElevationPerturbStrength;
             Position = position;
         }
     }

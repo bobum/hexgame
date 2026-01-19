@@ -2,7 +2,7 @@ using Godot;
 
 /// <summary>
 /// Defines hexagon geometry constants.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-3.
+/// Ported exactly from Catlike Coding Hex Map Tutorials 1-4.
 /// </summary>
 public static class HexMetrics
 {
@@ -10,11 +10,31 @@ public static class HexMetrics
 
     public const float InnerRadius = OuterRadius * 0.866025404f;
 
-    public const float SolidFactor = 0.75f;
+    public const float SolidFactor = 0.8f;
 
     public const float BlendFactor = 1f - SolidFactor;
 
-    public const float ElevationStep = 5f;
+    public const float ElevationStep = 3f;
+
+    // Tutorial 4: Irregularity constants
+    public const float CellPerturbStrength = 4f;
+
+    public const float NoiseScale = 0.003f;
+
+    public const float ElevationPerturbStrength = 1.5f;
+
+    // Procedural noise generation constants
+    public const int NoiseTextureSize = 256;
+
+    public const float NoiseFrequency = 0.05f;
+
+    public const int NoiseChannelOffsetR = 0;
+    public const int NoiseChannelOffsetG = 100;
+    public const int NoiseChannelOffsetB = 200;
+    public const int NoiseChannelOffsetA = 300;
+
+    // Noise texture for perturbation - must be initialized before use
+    public static Image? NoiseSource;
 
     public const int TerracesPerSlope = 2;
 
@@ -105,5 +125,66 @@ public static class HexMetrics
     public static Vector3 GetBridge(HexDirection direction)
     {
         return (Corners[(int)direction] + Corners[(int)direction + 1]) * BlendFactor;
+    }
+
+    /// <summary>
+    /// Samples the noise texture at a world position using bilinear interpolation.
+    /// Returns RGBA values as Vector4.
+    /// </summary>
+    public static Vector4 SampleNoise(Vector3 position)
+    {
+        if (NoiseSource == null)
+        {
+            return new Vector4(0.5f, 0.5f, 0.5f, 0.5f);
+        }
+
+        int width = NoiseSource.GetWidth();
+        int height = NoiseSource.GetHeight();
+
+        // Scale position by NoiseScale and wrap to texture coordinates
+        float u = position.X * NoiseScale;
+        float v = position.Z * NoiseScale;
+
+        // Wrap to 0-1 range (handle negative values)
+        u = ((u % 1f) + 1f) % 1f;
+        v = ((v % 1f) + 1f) % 1f;
+
+        // Scale to texture size
+        float x = u * width;
+        float y = v * height;
+
+        // Get integer coordinates and fractional parts for bilinear interpolation
+        int x0 = (int)x;
+        int y0 = (int)y;
+        int x1 = (x0 + 1) % width;
+        int y1 = (y0 + 1) % height;
+
+        float fx = x - x0;
+        float fy = y - y0;
+
+        // Sample four neighboring pixels
+        Color c00 = NoiseSource.GetPixel(x0, y0);
+        Color c10 = NoiseSource.GetPixel(x1, y0);
+        Color c01 = NoiseSource.GetPixel(x0, y1);
+        Color c11 = NoiseSource.GetPixel(x1, y1);
+
+        // Bilinear interpolation
+        Color c0 = c00.Lerp(c10, fx);
+        Color c1 = c01.Lerp(c11, fx);
+        Color result = c0.Lerp(c1, fy);
+
+        return new Vector4(result.R, result.G, result.B, result.A);
+    }
+
+    /// <summary>
+    /// Perturbs a position using noise-based displacement.
+    /// Only X and Z are perturbed; Y is not modified by this method.
+    /// </summary>
+    public static Vector3 Perturb(Vector3 position)
+    {
+        Vector4 sample = SampleNoise(position);
+        position.X += (sample.X * 2f - 1f) * CellPerturbStrength;
+        position.Z += (sample.Z * 2f - 1f) * CellPerturbStrength;
+        return position;
     }
 }

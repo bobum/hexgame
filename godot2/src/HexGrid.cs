@@ -2,7 +2,7 @@ using Godot;
 
 /// <summary>
 /// Creates and manages a hexagonal grid.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-3.
+/// Ported exactly from Catlike Coding Hex Map Tutorials 1-4.
 /// </summary>
 public partial class HexGrid : Node3D
 {
@@ -10,6 +10,7 @@ public partial class HexGrid : Node3D
     [Export] public int Height = 6;
     [Export] public PackedScene? CellPrefab;
     [Export] public PackedScene? CellLabelPrefab;
+    [Export] public Texture2D? NoiseSource;
     [Export] public Color DefaultColor = Colors.White;
     [Export] public Color TouchedColor = Colors.Magenta;
 
@@ -26,6 +27,9 @@ public partial class HexGrid : Node3D
 
     public override void _Ready()
     {
+        // Initialize noise texture for perturbation
+        InitializeNoiseSource();
+
         _hexMesh = GetNode<HexMesh>("HexMesh");
         _cells = new HexCell[Height * Width];
 
@@ -120,5 +124,34 @@ public partial class HexGrid : Node3D
     public void Refresh()
     {
         _hexMesh.Triangulate(_cells);
+    }
+
+    private void InitializeNoiseSource()
+    {
+        if (NoiseSource != null)
+        {
+            HexMetrics.NoiseSource = NoiseSource.GetImage();
+            GD.Print($"Noise texture from export: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
+        }
+        else
+        {
+            // Load noise texture (same texture used in Catlike Coding tutorial)
+            var texture = GD.Load<Texture2D>("res://assets/noise.png");
+            if (texture != null)
+            {
+                HexMetrics.NoiseSource = texture.GetImage();
+                GD.Print($"Noise texture loaded: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
+            }
+            else
+            {
+                GD.PrintErr("CRITICAL: Failed to load noise texture - perturbation will NOT work!");
+            }
+        }
+
+        // Verify noise is working
+        if (HexMetrics.NoiseSource == null)
+        {
+            GD.PrintErr("CRITICAL: NoiseSource is null after initialization!");
+        }
     }
 }
