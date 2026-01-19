@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://cell001" path="res://scenes/HexCell.tscn" id="4_cellprefab"]
 [ext_resource type="PackedScene" uid="uid://label001" path="res://scenes/CellLabel.tscn" id="5_labelprefab"]
 [ext_resource type="Shader" path="res://shaders/vertex_color.gdshader" id="6_shader"]
-[ext_resource type="Script" path="res://src/ScreenshotCamera.cs" id="7_camera"]
+[ext_resource type="Script" path="res://src/MapCamera.cs" id="7_camera"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_1"]
 shader = ExtResource("6_shader")
@@ -28,8 +28,6 @@ script = ExtResource("2_hexmesh")
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 50, 80, 80)
 current = true
 script = ExtResource("7_camera")
-SnapshotPath = "C:/projects/hexgame/godot2/snapshot.json"
-ScreenshotPath = "C:/projects/hexgame/godot2/screenshot.png"
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 50, 0)

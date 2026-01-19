@@ -7,4 +7,4 @@ modulate = Color(0, 0, 0, 1)
 outline_size = 4
 horizontal_alignment = 1
 vertical_alignment = 1
-no_depth_test = true
+no_depth_test = false

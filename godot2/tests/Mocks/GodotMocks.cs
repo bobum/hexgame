@@ -44,6 +44,13 @@ public struct Vector3
         Math.Abs(X - other.X) < tolerance &&
         Math.Abs(Y - other.Y) < tolerance &&
         Math.Abs(Z - other.Z) < tolerance;
+
+    public Vector3 Lerp(Vector3 to, float weight) =>
+        new Vector3(
+            X + (to.X - X) * weight,
+            Y + (to.Y - Y) * weight,
+            Z + (to.Z - Z) * weight
+        );
 }
 
 /// <summary>
@@ -65,4 +72,12 @@ public struct Color
     }
 
     public override string ToString() => $"Color({R}, {G}, {B}, {A})";
+
+    public Color Lerp(Color to, float weight) =>
+        new Color(
+            R + (to.R - R) * weight,
+            G + (to.G - G) * weight,
+            B + (to.B - B) * weight,
+            A + (to.A - A) * weight
+        );
 }

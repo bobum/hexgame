@@ -6,7 +6,7 @@ namespace HexMapTutorial.Tests;
 
 /// <summary>
 /// Unit tests for HexMetrics geometry calculations.
-/// Verifies Tutorial 1-2 math.
+/// Verifies Tutorial 1-3 math.
 /// </summary>
 public class HexMetricsTests
 {
@@ -160,6 +160,164 @@ public class HexMetricsTests
 
             // Y component should be 0 (flat hex grid)
             bridge.Y.Should().Be(0);
+        }
+    }
+
+    // Tutorial 3: Elevation Tests
+
+    [Fact]
+    public void ElevationStep_IsCorrect()
+    {
+        HexMetrics.ElevationStep.Should().Be(5f);
+    }
+
+    [Fact]
+    public void TerracesPerSlope_IsCorrect()
+    {
+        HexMetrics.TerracesPerSlope.Should().Be(2);
+    }
+
+    [Fact]
+    public void TerraceSteps_IsCorrect()
+    {
+        // TerraceSteps = TerracesPerSlope * 2 + 1 = 5
+        HexMetrics.TerraceSteps.Should().Be(5);
+    }
+
+    [Fact]
+    public void HorizontalTerraceStepSize_IsCorrect()
+    {
+        // 1 / 5 = 0.2
+        HexMetrics.HorizontalTerraceStepSize.Should().BeApproximately(0.2f, Tolerance);
+    }
+
+    [Fact]
+    public void VerticalTerraceStepSize_IsCorrect()
+    {
+        // 1 / 3 = 0.333...
+        HexMetrics.VerticalTerraceStepSize.Should().BeApproximately(0.3333f, 0.001f);
+    }
+
+    [Theory]
+    [InlineData(0, 0, HexEdgeType.Flat)]
+    [InlineData(5, 5, HexEdgeType.Flat)]
+    [InlineData(-3, -3, HexEdgeType.Flat)]
+    public void GetEdgeType_SameElevation_ReturnsFlat(int e1, int e2, HexEdgeType expected)
+    {
+        HexMetrics.GetEdgeType(e1, e2).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, 1, HexEdgeType.Slope)]
+    [InlineData(1, 0, HexEdgeType.Slope)]
+    [InlineData(5, 6, HexEdgeType.Slope)]
+    [InlineData(6, 5, HexEdgeType.Slope)]
+    [InlineData(-1, 0, HexEdgeType.Slope)]
+    [InlineData(0, -1, HexEdgeType.Slope)]
+    public void GetEdgeType_OneLevelDifference_ReturnsSlope(int e1, int e2, HexEdgeType expected)
+    {
+        HexMetrics.GetEdgeType(e1, e2).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, 2, HexEdgeType.Cliff)]
+    [InlineData(2, 0, HexEdgeType.Cliff)]
+    [InlineData(0, 5, HexEdgeType.Cliff)]
+    [InlineData(5, 0, HexEdgeType.Cliff)]
+    [InlineData(-2, 0, HexEdgeType.Cliff)]
+    [InlineData(0, -2, HexEdgeType.Cliff)]
+    [InlineData(1, 10, HexEdgeType.Cliff)]
+    public void GetEdgeType_TwoOrMoreLevelDifference_ReturnsCliff(int e1, int e2, HexEdgeType expected)
+    {
+        HexMetrics.GetEdgeType(e1, e2).Should().Be(expected);
+    }
+
+    [Fact]
+    public void TerraceLerp_Vector3_Step0_ReturnsStart()
+    {
+        var a = new Vector3(0f, 0f, 0f);
+        var b = new Vector3(10f, 5f, 10f);
+
+        var result = HexMetrics.TerraceLerp(a, b, 0);
+
+        result.X.Should().BeApproximately(0f, Tolerance);
+        result.Y.Should().BeApproximately(0f, Tolerance);
+        result.Z.Should().BeApproximately(0f, Tolerance);
+    }
+
+    [Fact]
+    public void TerraceLerp_Vector3_Step5_ReturnsEnd()
+    {
+        var a = new Vector3(0f, 0f, 0f);
+        var b = new Vector3(10f, 5f, 10f);
+
+        var result = HexMetrics.TerraceLerp(a, b, 5);
+
+        result.X.Should().BeApproximately(10f, Tolerance);
+        result.Y.Should().BeApproximately(5f, Tolerance);
+        result.Z.Should().BeApproximately(10f, Tolerance);
+    }
+
+    [Fact]
+    public void TerraceLerp_Vector3_VerticalStaircasePattern()
+    {
+        // Vertical steps follow pattern: steps 1,2 -> same Y; steps 3,4 -> same Y; step 5 -> end
+        var a = new Vector3(0f, 0f, 0f);
+        var b = new Vector3(10f, 9f, 10f);  // 9 units height difference for clean math
+
+        var y1 = HexMetrics.TerraceLerp(a, b, 1).Y;
+        var y2 = HexMetrics.TerraceLerp(a, b, 2).Y;
+        var y3 = HexMetrics.TerraceLerp(a, b, 3).Y;
+        var y4 = HexMetrics.TerraceLerp(a, b, 4).Y;
+        var y5 = HexMetrics.TerraceLerp(a, b, 5).Y;
+
+        // Steps 1 and 2 should have the same Y (first terrace flat)
+        y1.Should().BeApproximately(y2, Tolerance);
+
+        // Steps 3 and 4 should have the same Y (second terrace flat)
+        y3.Should().BeApproximately(y4, Tolerance);
+
+        // Step 5 reaches the end
+        y5.Should().BeApproximately(9f, Tolerance);
+
+        // Each terrace level should be higher than the previous
+        y3.Should().BeGreaterThan(y1);
+        y5.Should().BeGreaterThan(y3);
+    }
+
+    [Fact]
+    public void TerraceLerp_Vector3_HorizontalIsLinear()
+    {
+        var a = new Vector3(0f, 0f, 0f);
+        var b = new Vector3(10f, 5f, 10f);
+
+        // Horizontal interpolation is linear: step * 0.2
+        for (int step = 0; step <= 5; step++)
+        {
+            var result = HexMetrics.TerraceLerp(a, b, step);
+            var expectedX = step * 0.2f * 10f;
+            var expectedZ = step * 0.2f * 10f;
+
+            result.X.Should().BeApproximately(expectedX, Tolerance);
+            result.Z.Should().BeApproximately(expectedZ, Tolerance);
+        }
+    }
+
+    [Fact]
+    public void TerraceLerp_Color_IsLinear()
+    {
+        var a = new Color(0f, 0f, 0f);
+        var b = new Color(1f, 1f, 1f);
+
+        // Color interpolation is linear based on horizontal step
+        for (int step = 0; step <= 5; step++)
+        {
+            var result = HexMetrics.TerraceLerp(a, b, step);
+            var expected = step * 0.2f;
+
+            result.R.Should().BeApproximately(expected, Tolerance);
+            result.G.Should().BeApproximately(expected, Tolerance);
+            result.B.Should().BeApproximately(expected, Tolerance);
         }
     }
 }
