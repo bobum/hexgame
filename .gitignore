@@ -41,6 +41,49 @@ data_*/
 mono_crash.*.json
 
 # ===================
+# .NET/C# Specific
+# ===================
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+nuget.exe
+NuGetPackages/
+packages/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.suo
+*.cache
+*.vspscc
+*.vssscc
+
+# Godot .NET specific
+*.generated.cs
+
+# ===================
 # Editor/IDE
 # ===================
 
@@ -71,3 +114,9 @@ Thumbs.db
 # ===================
 
 .claude/
+
+# ===================
+# Local Tools
+# ===================
+
+tools/godot/

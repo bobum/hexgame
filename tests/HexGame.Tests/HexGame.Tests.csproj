@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>HexGame.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.4" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.6">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NSubstitute" Version="5.1.0" />
+    <PackageReference Include="FluentAssertions" Version="6.12.0" />
+  </ItemGroup>
+
+  <!-- Reference the main game project's source files directly for testing -->
+  <!-- We compile the same source files but without Godot dependencies -->
+  <ItemGroup>
+    <!-- Core types that don't depend on Godot -->
+    <Compile Include="..\..\godot\src\CSharp\Core\HexCoordinates.cs" Link="Core\HexCoordinates.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Core\HexMetrics.cs" Link="Core\HexMetrics.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Core\HexDirection.cs" Link="Core\HexDirection.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Core\GameConstants.cs" Link="Core\GameConstants.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Services\IService.cs" Link="Services\IService.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Services\DependencyInjection\IServiceContainer.cs" Link="Services\DependencyInjection\IServiceContainer.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Services\DependencyInjection\ServiceContainer.cs" Link="Services\DependencyInjection\ServiceContainer.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Commands\ICommand.cs" Link="Commands\ICommand.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Commands\CommandHistory.cs" Link="Commands\CommandHistory.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Events\GameEvent.cs" Link="Events\GameEvent.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Events\EventBus.cs" Link="Events\EventBus.cs" />
+    <Compile Include="..\..\godot\src\CSharp\Utilities\IPoolable.cs" Link="Utilities\IPoolable.cs" />
+  </ItemGroup>
+
+  <!-- Test-specific mock types are included by default via EnableDefaultCompileItems -->
+
+</Project>
