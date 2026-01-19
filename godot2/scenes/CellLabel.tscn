@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://label001"]
+
+[node name="CellLabel" type="Label3D"]
+pixel_size = 0.1
+font_size = 64
+modulate = Color(0, 0, 0, 1)
+outline_size = 4
+horizontal_alignment = 1
+vertical_alignment = 1
+no_depth_test = true
