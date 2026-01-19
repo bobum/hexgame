@@ -5,4 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+
+  <!-- Exclude test project from Godot build -->
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+  </ItemGroup>
 </Project>

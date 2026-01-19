@@ -71,8 +71,11 @@ public partial class HexMesh : MeshInstance3D
         AddTriangle(center, v1, v2);
         AddTriangleColor(cell.Color);
 
-        // Edge connection (bridge + corners)
-        TriangulateConnection(direction, cell, v1, v2);
+        // Edge connection (bridge + corners) - only for NE, E, SE to avoid duplicates
+        if (direction <= HexDirection.SE)
+        {
+            TriangulateConnection(direction, cell, v1, v2);
+        }
     }
 
     private void TriangulateConnection(HexDirection direction, HexCell cell, Vector3 v1, Vector3 v2)
