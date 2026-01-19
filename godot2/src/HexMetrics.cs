@@ -17,7 +17,7 @@ public static class HexMetrics
     public const float ElevationStep = 3f;
 
     // Tutorial 4: Irregularity constants
-    public const float CellPerturbStrength = 8f;  // Tutorial value is 4f, temporarily doubled for testing
+    public const float CellPerturbStrength = 4f;
 
     public const float NoiseScale = 0.003f;
 

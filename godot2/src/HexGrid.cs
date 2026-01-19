@@ -131,6 +131,7 @@ public partial class HexGrid : Node3D
         if (NoiseSource != null)
         {
             HexMetrics.NoiseSource = NoiseSource.GetImage();
+            GD.Print($"Noise texture from export: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
         }
         else
         {
@@ -139,11 +140,18 @@ public partial class HexGrid : Node3D
             if (texture != null)
             {
                 HexMetrics.NoiseSource = texture.GetImage();
+                GD.Print($"Noise texture loaded: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
             }
             else
             {
-                GD.PrintErr("Failed to load noise texture from res://assets/noise.png");
+                GD.PrintErr("CRITICAL: Failed to load noise texture - perturbation will NOT work!");
             }
+        }
+
+        // Verify noise is working
+        if (HexMetrics.NoiseSource == null)
+        {
+            GD.PrintErr("CRITICAL: NoiseSource is null after initialization!");
         }
     }
 }
