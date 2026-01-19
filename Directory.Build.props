@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Disable VS BuildTools workload resolver to prevent conflicts -->
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <EnableWorkloadResolver>false</EnableWorkloadResolver>
+  </PropertyGroup>
+</Project>

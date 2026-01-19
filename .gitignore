@@ -26,6 +26,9 @@ dist-ssr
 # Godot 4+ specific ignores
 .godot/
 
+# Godot UID files (auto-generated)
+*.uid
+
 # Godot-specific ignores
 *.translation
 
@@ -120,3 +123,15 @@ Thumbs.db
 # ===================
 
 tools/godot/
+
+# ===================
+# Debug Artifacts
+# ===================
+
+# Debug state and screenshots (used for autonomous debugging)
+debug_screenshot.png
+debug_state.json
+godot_output.txt
+
+# Backup files
+*.old

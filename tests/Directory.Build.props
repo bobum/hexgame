@@ -1,6 +1,10 @@
 <Project>
   <PropertyGroup>
     <EnableWorkloadResolver>false</EnableWorkloadResolver>
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <!-- Disable VS BuildTools NuGet integration that's broken -->
+    <ImportNuGetBuildTasksPackTargetsFromSdk>true</ImportNuGetBuildTasksPackTargetsFromSdk>
+    <NuGetRestoreTargets>$(MSBuildToolsPath)\NuGet.targets</NuGetRestoreTargets>
   </PropertyGroup>
 </Project>
