@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cell001"]
+
+[ext_resource type="Script" path="res://src/HexCell.cs" id="1_hexcell"]
+
+[node name="HexCell" type="Node3D"]
+script = ExtResource("1_hexcell")
