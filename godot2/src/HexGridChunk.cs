@@ -57,13 +57,11 @@ public partial class HexGridChunk : Node3D
         _roadsMesh.Name = "RoadsMesh";
         _roadsMesh.UseColors = false;
         _roadsMesh.UseUVCoordinates = true;
-        // Use simple solid color material for debugging - brown roads
-        var roadMat = new StandardMaterial3D();
-        roadMat.AlbedoColor = new Color(0.6f, 0.4f, 0.2f);  // Brown
-        roadMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
-        roadMat.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
-        _roadsMesh.MaterialOverride = roadMat;
-        GD.Print("[ROAD] Using simple brown StandardMaterial3D for roads");
+        LoadRoadMaterial();
+        if (_roadMaterial != null)
+        {
+            _roadsMesh.MaterialOverride = _roadMaterial;
+        }
         AddChild(_roadsMesh);
         _roadsMesh.EnsureInitialized();
 

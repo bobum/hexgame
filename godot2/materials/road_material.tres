@@ -8,3 +8,6 @@ render_priority = 1
 shader = ExtResource("1")
 shader_parameter/road_color = Color(0.6, 0.3, 0.1, 1.0)
 shader_parameter/noise_texture = ExtResource("2")
+shader_parameter/noise_scale = 0.025
+shader_parameter/edge_start = 0.4
+shader_parameter/edge_end = 0.7
