@@ -1,21 +1,24 @@
 using Godot;
 
 /// <summary>
-/// Creates and manages a hexagonal grid.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-4.
+/// Creates and manages a hexagonal grid using chunks.
+/// Ported from Catlike Coding Hex Map Tutorial 5.
 /// </summary>
 public partial class HexGrid : Node3D
 {
-    [Export] public int Width = 6;
-    [Export] public int Height = 6;
+    [Export] public int ChunkCountX = 4;
+    [Export] public int ChunkCountZ = 3;
     [Export] public PackedScene? CellPrefab;
     [Export] public PackedScene? CellLabelPrefab;
     [Export] public Texture2D? NoiseSource;
+    [Export] public Material? HexMaterial;
     [Export] public Color DefaultColor = Colors.White;
     [Export] public Color TouchedColor = Colors.Magenta;
 
+    private int _cellCountX;
+    private int _cellCountZ;
     private HexCell[] _cells = null!;
-    private HexMesh _hexMesh = null!;
+    private HexGridChunk[] _chunks = null!;
 
     // Colors from Catlike Coding tutorial palette
     private static readonly Color[] _colors = {
@@ -30,18 +33,41 @@ public partial class HexGrid : Node3D
         // Initialize noise texture for perturbation
         InitializeNoiseSource();
 
-        _hexMesh = GetNode<HexMesh>("HexMesh");
-        _cells = new HexCell[Height * Width];
+        _cellCountX = ChunkCountX * HexMetrics.ChunkSizeX;
+        _cellCountZ = ChunkCountZ * HexMetrics.ChunkSizeZ;
 
-        for (int z = 0, i = 0; z < Height; z++)
+        CreateChunks();
+        CreateCells();
+    }
+
+    private void CreateChunks()
+    {
+        _chunks = new HexGridChunk[ChunkCountX * ChunkCountZ];
+
+        for (int z = 0, i = 0; z < ChunkCountZ; z++)
         {
-            for (int x = 0; x < Width; x++)
+            for (int x = 0; x < ChunkCountX; x++)
+            {
+                HexGridChunk chunk = new HexGridChunk();
+                chunk.Name = $"Chunk_{x}_{z}";
+                _chunks[i++] = chunk;
+                AddChild(chunk);
+                chunk.Initialize(HexMaterial);
+            }
+        }
+    }
+
+    private void CreateCells()
+    {
+        _cells = new HexCell[_cellCountZ * _cellCountX];
+
+        for (int z = 0, i = 0; z < _cellCountZ; z++)
+        {
+            for (int x = 0; x < _cellCountX; x++)
             {
                 CreateCell(x, z, i++);
             }
         }
-
-        _hexMesh.Triangulate(_cells);
     }
 
     private void CreateCell(int x, int z, int i)
@@ -53,11 +79,8 @@ public partial class HexGrid : Node3D
 
         HexCell cell = CellPrefab!.Instantiate<HexCell>();
         _cells[i] = cell;
-        AddChild(cell);
         cell.Position = position;
         cell.Coordinates = HexCoordinates.FromOffsetCoordinates(x, z);
-        cell.Color = _colors[(x + z) % _colors.Length];
-        cell.Elevation = (x + z) % 4;
 
         // Establish neighbor connections
         if (x > 0)
@@ -68,62 +91,83 @@ public partial class HexGrid : Node3D
         {
             if ((z & 1) == 0) // Even row
             {
-                cell.SetNeighbor(HexDirection.SE, _cells[i - Width]);
+                cell.SetNeighbor(HexDirection.SE, _cells[i - _cellCountX]);
                 if (x > 0)
                 {
-                    cell.SetNeighbor(HexDirection.SW, _cells[i - Width - 1]);
+                    cell.SetNeighbor(HexDirection.SW, _cells[i - _cellCountX - 1]);
                 }
             }
             else // Odd row
             {
-                cell.SetNeighbor(HexDirection.SW, _cells[i - Width]);
-                if (x < Width - 1)
+                cell.SetNeighbor(HexDirection.SW, _cells[i - _cellCountX]);
+                if (x < _cellCountX - 1)
                 {
-                    cell.SetNeighbor(HexDirection.SE, _cells[i - Width + 1]);
+                    cell.SetNeighbor(HexDirection.SE, _cells[i - _cellCountX + 1]);
                 }
             }
         }
 
-        // Create coordinate label - position at cell elevation + small offset
+        // Create coordinate label
+        Label3D? label = null;
         if (CellLabelPrefab != null)
         {
-            var label = CellLabelPrefab.Instantiate<Label3D>();
-            AddChild(label);
-            float labelY = cell.Elevation * HexMetrics.ElevationStep + 0.1f;
-            label.Position = new Vector3(position.X, labelY, position.Z);
+            label = CellLabelPrefab.Instantiate<Label3D>();
+            label.Position = new Vector3(position.X, 0.1f, position.Z);
             label.Text = cell.Coordinates.ToStringOnSeparateLines();
             label.RotationDegrees = new Vector3(-90, 0, 0);
+            cell.UiLabel = label;
         }
+
+        AddCellToChunk(x, z, cell);
+
+        // Set initial values AFTER adding to chunk so Refresh works
+        // Color by chunk to visualize chunk boundaries
+        int chunkX = x / HexMetrics.ChunkSizeX;
+        int chunkZ = z / HexMetrics.ChunkSizeZ;
+        int chunkIndex = chunkX + chunkZ * ChunkCountX;
+        cell.Color = _colors[chunkIndex % _colors.Length];
+        cell.Elevation = (x + z) % 4;
     }
 
-    public void ColorCell(Vector3 position, Color color)
+    private void AddCellToChunk(int x, int z, HexCell cell)
     {
-        position = ToLocal(position);
-        HexCoordinates coordinates = HexCoordinates.FromPosition(position);
-        int index = coordinates.X + coordinates.Z * Width + coordinates.Z / 2;
-        if (index >= 0 && index < _cells.Length)
-        {
-            HexCell cell = _cells[index];
-            cell.Color = color;
-            _hexMesh.Triangulate(_cells);
-        }
+        int chunkX = x / HexMetrics.ChunkSizeX;
+        int chunkZ = z / HexMetrics.ChunkSizeZ;
+        HexGridChunk chunk = _chunks[chunkX + chunkZ * ChunkCountX];
+
+        int localX = x - chunkX * HexMetrics.ChunkSizeX;
+        int localZ = z - chunkZ * HexMetrics.ChunkSizeZ;
+        chunk.AddCell(localX + localZ * HexMetrics.ChunkSizeX, cell);
     }
 
     public HexCell? GetCell(Vector3 position)
     {
         position = ToLocal(position);
         HexCoordinates coordinates = HexCoordinates.FromPosition(position);
-        int index = coordinates.X + coordinates.Z * Width + coordinates.Z / 2;
-        if (index >= 0 && index < _cells.Length)
-        {
-            return _cells[index];
-        }
-        return null;
+        return GetCell(coordinates);
     }
 
-    public void Refresh()
+    public HexCell? GetCell(HexCoordinates coordinates)
     {
-        _hexMesh.Triangulate(_cells);
+        int z = coordinates.Z;
+        if (z < 0 || z >= _cellCountZ)
+        {
+            return null;
+        }
+        int x = coordinates.X + z / 2;
+        if (x < 0 || x >= _cellCountX)
+        {
+            return null;
+        }
+        return _cells[x + z * _cellCountX];
+    }
+
+    public void ShowUI(bool visible)
+    {
+        for (int i = 0; i < _chunks.Length; i++)
+        {
+            _chunks[i].ShowUI(visible);
+        }
     }
 
     private void InitializeNoiseSource()

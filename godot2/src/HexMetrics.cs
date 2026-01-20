@@ -2,13 +2,20 @@ using Godot;
 
 /// <summary>
 /// Defines hexagon geometry constants.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-4.
+/// Ported from Catlike Coding Hex Map Tutorials 1-5.
 /// </summary>
 public static class HexMetrics
 {
     public const float OuterRadius = 10f;
 
-    public const float InnerRadius = OuterRadius * 0.866025404f;
+    // Tutorial 5: Chunk system constants
+    public const int ChunkSizeX = 5;
+    public const int ChunkSizeZ = 5;
+
+    public const float OuterToInner = 0.866025404f; // sqrt(3)/2
+    public const float InnerToOuter = 1f / OuterToInner;
+
+    public const float InnerRadius = OuterRadius * OuterToInner;
 
     public const float SolidFactor = 0.8f;
 

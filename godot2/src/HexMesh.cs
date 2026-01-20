@@ -3,41 +3,56 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Generates mesh geometry for hexagonal cells.
-/// Ported exactly from Catlike Coding Hex Map Tutorials 1-4.
+/// Ported from Catlike Coding Hex Map Tutorials 1-5.
 /// </summary>
 public partial class HexMesh : MeshInstance3D
 {
     private ArrayMesh _hexMesh = null!;
-    private List<Vector3> _vertices = null!;
-    private List<Color> _colors = null!;
-    private List<int> _triangles = null!;
+
+    // Tutorial 5: Static shared lists reduce memory when using multiple chunks.
+    // Each chunk has its own HexMesh, but they share temporary lists.
+    // Thread-safe because chunks triangulate sequentially in _Process().
+    private static List<Vector3> _vertices = new List<Vector3>();
+    private static List<Color> _colors = new List<Color>();
+    private static List<int> _triangles = new List<int>();
 
     public override void _Ready()
     {
-        _hexMesh = new ArrayMesh();
-        Mesh = _hexMesh;
-        _vertices = new List<Vector3>();
-        _colors = new List<Color>();
-        _triangles = new List<int>();
+        // Initialize mesh if not already done
+        EnsureInitialized();
     }
 
-    public void Triangulate(HexCell[] cells)
+    /// <summary>
+    /// Ensures the mesh is initialized. Safe to call multiple times.
+    /// Called automatically by _Ready() or can be called explicitly for
+    /// programmatically created HexMesh instances.
+    /// </summary>
+    public void EnsureInitialized()
+    {
+        if (_hexMesh == null)
+        {
+            _hexMesh = new ArrayMesh();
+            Mesh = _hexMesh;
+        }
+    }
+
+    /// <summary>
+    /// Clears the mesh and shared lists for new triangulation.
+    /// </summary>
+    public void Clear()
     {
         _hexMesh.ClearSurfaces();
         _vertices.Clear();
         _colors.Clear();
         _triangles.Clear();
+    }
 
-        for (int i = 0; i < cells.Length; i++)
-        {
-            Triangulate(cells[i]);
-        }
-
-        GD.Print($"HexMesh: Generated {_vertices.Count} vertices, {_colors.Count} colors, {_triangles.Count} indices for {cells.Length} cells");
-        if (_vertices.Count != _colors.Count)
-        {
-            GD.PrintErr($"ERROR: Vertex/color count mismatch! {_vertices.Count} vertices vs {_colors.Count} colors");
-        }
+    /// <summary>
+    /// Applies the accumulated geometry to create the final mesh.
+    /// </summary>
+    public void Apply()
+    {
+        if (_vertices.Count == 0) return;
 
         // Build the mesh using SurfaceTool with flat normals per-triangle
         var st = new SurfaceTool();
@@ -75,8 +90,22 @@ public partial class HexMesh : MeshInstance3D
 
         _hexMesh = st.Commit();
         Mesh = _hexMesh;
+    }
 
-        GD.Print($"HexMesh: Mesh created with {_hexMesh.GetSurfaceCount()} surfaces");
+    public void Triangulate(HexCell[] cells)
+    {
+        EnsureInitialized();
+        Clear();
+
+        for (int i = 0; i < cells.Length; i++)
+        {
+            if (cells[i] != null)
+            {
+                Triangulate(cells[i]);
+            }
+        }
+
+        Apply();
     }
 
     private void Triangulate(HexCell cell)

@@ -2,19 +2,34 @@ using Godot;
 
 /// <summary>
 /// Defines hexagon geometry constants.
-/// Testable version - identical to main HexMetrics.cs
+/// Testable version - must stay in sync with main HexMetrics.cs
+/// Ported from Catlike Coding Hex Map Tutorials 1-5.
 /// </summary>
 public static class HexMetrics
 {
     public const float OuterRadius = 10f;
 
-    public const float InnerRadius = OuterRadius * 0.866025404f;
+    // Tutorial 5: Chunk system constants
+    public const int ChunkSizeX = 5;
+    public const int ChunkSizeZ = 5;
 
-    public const float SolidFactor = 0.75f;
+    public const float OuterToInner = 0.866025404f; // sqrt(3)/2
+    public const float InnerToOuter = 1f / OuterToInner;
+
+    public const float InnerRadius = OuterRadius * OuterToInner;
+
+    public const float SolidFactor = 0.8f;
 
     public const float BlendFactor = 1f - SolidFactor;
 
-    public const float ElevationStep = 5f;
+    public const float ElevationStep = 3f;
+
+    // Tutorial 4: Irregularity constants
+    public const float CellPerturbStrength = 4f;
+
+    public const float NoiseScale = 0.003f;
+
+    public const float ElevationPerturbStrength = 1.5f;
 
     public const int TerracesPerSlope = 2;
 
@@ -38,6 +53,15 @@ public static class HexMetrics
         return HexEdgeType.Cliff;
     }
 
+    /// <summary>
+    /// Interpolates between two positions using terrace-style stepping.
+    /// Horizontal movement is linear, vertical only changes on odd steps.
+    /// </summary>
+    /// <remarks>
+    /// IMPORTANT: The division (step + 1) / 2 MUST use integer division.
+    /// This creates the staircase pattern: steps 1,2 -> v=1, steps 3,4 -> v=2, step 5 -> v=3
+    /// Do not "fix" this to (step + 1) / 2f as it would break the terrace effect.
+    /// </remarks>
     public static Vector3 TerraceLerp(Vector3 a, Vector3 b, int step)
     {
         float h = step * HorizontalTerraceStepSize;
@@ -48,12 +72,20 @@ public static class HexMetrics
         return a;
     }
 
+    /// <summary>
+    /// Interpolates between two colors using horizontal terrace step size.
+    /// Color blending is linear across all steps (no staircase effect).
+    /// </summary>
     public static Color TerraceLerp(Color a, Color b, int step)
     {
         float h = step * HorizontalTerraceStepSize;
         return a.Lerp(b, h);
     }
 
+    /// <summary>
+    /// Corner positions for pointy-top hexagons.
+    /// 7 elements: index 6 duplicates index 0 for easy wraparound when triangulating.
+    /// </summary>
     public static Vector3[] Corners =
     {
         new Vector3(0f, 0f, OuterRadius),
