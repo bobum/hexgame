@@ -2,14 +2,18 @@ using Godot;
 
 /// <summary>
 /// Manages a chunk of cells and their mesh.
-/// Ported from Catlike Coding Hex Map Tutorial 5.
+/// Ported from Catlike Coding Hex Map Tutorial 5-6.
 /// </summary>
 public partial class HexGridChunk : Node3D
 {
     HexCell[] _cells = null!;
     HexMesh _hexMesh = null!;
+    HexMesh _riversMesh = null!;
     Node3D _labelContainer = null!;
     bool _needsRefresh;
+
+    // Tutorial 6: River material loaded once
+    private static Material? _riverMaterial;
 
     /// <summary>
     /// Initializes the chunk with its mesh and label container.
@@ -19,21 +23,46 @@ public partial class HexGridChunk : Node3D
     {
         _cells = new HexCell[HexMetrics.ChunkSizeX * HexMetrics.ChunkSizeZ];
 
-        // Create HexMesh child
+        // Create terrain HexMesh child
         _hexMesh = new HexMesh();
         _hexMesh.Name = "HexMesh";
+        _hexMesh.UseColors = true;
+        _hexMesh.UseUVCoordinates = false;
         if (material != null)
         {
             _hexMesh.MaterialOverride = material;
         }
         AddChild(_hexMesh);
-        // Explicitly initialize - don't rely on deferred _Ready() timing
         _hexMesh.EnsureInitialized();
+
+        // Tutorial 6: Create rivers HexMesh child
+        _riversMesh = new HexMesh();
+        _riversMesh.Name = "RiversMesh";
+        _riversMesh.UseColors = false;
+        _riversMesh.UseUVCoordinates = true;
+        LoadRiverMaterial();
+        if (_riverMaterial != null)
+        {
+            _riversMesh.MaterialOverride = _riverMaterial;
+        }
+        AddChild(_riversMesh);
+        _riversMesh.EnsureInitialized();
 
         // Create label container
         _labelContainer = new Node3D();
         _labelContainer.Name = "Labels";
         AddChild(_labelContainer);
+    }
+
+    /// <summary>
+    /// Loads the river material if not already loaded.
+    /// </summary>
+    private static void LoadRiverMaterial()
+    {
+        if (_riverMaterial == null)
+        {
+            _riverMaterial = GD.Load<Material>("res://materials/river_material.tres");
+        }
     }
 
     /// <summary>
@@ -74,7 +103,7 @@ public partial class HexGridChunk : Node3D
         if (_needsRefresh)
         {
             GD.Print($"CHUNK REFRESH: {Name} retriangulating {_cells.Length} cells");
-            _hexMesh.Triangulate(_cells);
+            _hexMesh.Triangulate(_cells, _riversMesh);
             _needsRefresh = false;
             SetProcess(false);
         }

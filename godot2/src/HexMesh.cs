@@ -9,12 +9,18 @@ public partial class HexMesh : MeshInstance3D
 {
     private ArrayMesh _hexMesh = null!;
 
-    // Tutorial 5: Static shared lists reduce memory when using multiple chunks.
-    // Each chunk has its own HexMesh, but they share temporary lists.
-    // Thread-safe because chunks triangulate sequentially in _Process().
-    private static List<Vector3> _vertices = new List<Vector3>();
-    private static List<Color> _colors = new List<Color>();
-    private static List<int> _triangles = new List<int>();
+    // Tutorial 6: Instance-based lists - terrain and rivers need separate data
+    private List<Vector3> _vertices = new List<Vector3>();
+    private List<Color> _colors = new List<Color>();
+    private List<int> _triangles = new List<int>();
+    private List<Vector2> _uvs = new List<Vector2>();
+
+    // Tutorial 6: Configuration flags
+    public bool UseColors = true;
+    public bool UseUVCoordinates = false;
+
+    // Tutorial 6: Reference to rivers mesh for water surface triangulation
+    private HexMesh? _rivers;
 
     public override void _Ready()
     {
@@ -37,14 +43,21 @@ public partial class HexMesh : MeshInstance3D
     }
 
     /// <summary>
-    /// Clears the mesh and shared lists for new triangulation.
+    /// Clears the mesh and lists for new triangulation.
     /// </summary>
     public void Clear()
     {
         _hexMesh.ClearSurfaces();
         _vertices.Clear();
-        _colors.Clear();
         _triangles.Clear();
+        if (UseColors)
+        {
+            _colors.Clear();
+        }
+        if (UseUVCoordinates)
+        {
+            _uvs.Clear();
+        }
     }
 
     /// <summary>
@@ -76,15 +89,36 @@ public partial class HexMesh : MeshInstance3D
 
             // Add all 3 vertices with the SAME flat normal
             st.SetNormal(normal);
-            st.SetColor(_colors[idx0]);
+            if (UseColors)
+            {
+                st.SetColor(_colors[idx0]);
+            }
+            if (UseUVCoordinates)
+            {
+                st.SetUV(_uvs[idx0]);
+            }
             st.AddVertex(v0);
 
             st.SetNormal(normal);
-            st.SetColor(_colors[idx1]);
+            if (UseColors)
+            {
+                st.SetColor(_colors[idx1]);
+            }
+            if (UseUVCoordinates)
+            {
+                st.SetUV(_uvs[idx1]);
+            }
             st.AddVertex(v1);
 
             st.SetNormal(normal);
-            st.SetColor(_colors[idx2]);
+            if (UseColors)
+            {
+                st.SetColor(_colors[idx2]);
+            }
+            if (UseUVCoordinates)
+            {
+                st.SetUV(_uvs[idx2]);
+            }
             st.AddVertex(v2);
         }
 
@@ -92,10 +126,21 @@ public partial class HexMesh : MeshInstance3D
         Mesh = _hexMesh;
     }
 
-    public void Triangulate(HexCell[] cells)
+    /// <summary>
+    /// Triangulates all cells in the array.
+    /// </summary>
+    /// <param name="cells">Array of cells to triangulate</param>
+    /// <param name="rivers">Optional rivers mesh for water surface triangulation</param>
+    public void Triangulate(HexCell[] cells, HexMesh? rivers = null)
     {
         EnsureInitialized();
         Clear();
+
+        _rivers = rivers;
+        if (_rivers != null)
+        {
+            _rivers.Clear();
+        }
 
         for (int i = 0; i < cells.Length; i++)
         {
@@ -106,6 +151,10 @@ public partial class HexMesh : MeshInstance3D
         }
 
         Apply();
+        if (_rivers != null)
+        {
+            _rivers.Apply();
+        }
     }
 
     private void Triangulate(HexCell cell)
@@ -124,6 +173,8 @@ public partial class HexMesh : MeshInstance3D
         AddTriangleColor(color);
         AddTriangle(center, edge.V3, edge.V4);
         AddTriangleColor(color);
+        AddTriangle(center, edge.V4, edge.V5);
+        AddTriangleColor(color);
     }
 
     private void TriangulateEdgeStrip(
@@ -136,6 +187,8 @@ public partial class HexMesh : MeshInstance3D
         AddQuadColor(c1, c2);
         AddQuad(e1.V3, e1.V4, e2.V3, e2.V4);
         AddQuadColor(c1, c2);
+        AddQuad(e1.V4, e1.V5, e2.V4, e2.V5);
+        AddQuadColor(c1, c2);
     }
 
     private void Triangulate(HexDirection direction, HexCell cell)
@@ -146,13 +199,199 @@ public partial class HexMesh : MeshInstance3D
             center + HexMetrics.GetSecondSolidCorner(direction)
         );
 
-        TriangulateEdgeFan(center, e, cell.Color);
+        // Tutorial 6: Check for rivers and route to appropriate triangulation
+        if (cell.HasRiver)
+        {
+            if (cell.HasRiverThroughEdge(direction))
+            {
+                e.V3.Y = cell.StreamBedY;
+                if (cell.HasRiverBeginOrEnd)
+                {
+                    TriangulateWithRiverBeginOrEnd(direction, cell, center, e);
+                }
+                else
+                {
+                    TriangulateWithRiver(direction, cell, center, e);
+                }
+            }
+            else
+            {
+                TriangulateAdjacentToRiver(direction, cell, center, e);
+            }
+        }
+        else
+        {
+            TriangulateEdgeFan(center, e, cell.Color);
+        }
 
         // Edge connection (bridge + corners) - only for NE, E, SE to avoid duplicates
         if (direction <= HexDirection.SE)
         {
             TriangulateConnection(direction, cell, e);
         }
+    }
+
+    /// <summary>
+    /// Triangulates a cell section where a river begins or ends.
+    /// Creates a terminating triangle for the water surface.
+    /// </summary>
+    private void TriangulateWithRiverBeginOrEnd(
+        HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        EdgeVertices m = new EdgeVertices(
+            center.Lerp(e.V1, 0.5f),
+            center.Lerp(e.V5, 0.5f)
+        );
+        m.V3.Y = e.V3.Y;
+
+        TriangulateEdgeStrip(m, cell.Color, e, cell.Color);
+        TriangulateEdgeFan(center, m, cell.Color);
+
+        // Tutorial 6: Add water surface if rivers mesh available
+        if (_rivers != null)
+        {
+            bool reversed = cell.HasIncomingRiver;
+            TriangulateRiverQuad(m.V2, m.V4, e.V2, e.V4, cell.RiverSurfaceY, 0.6f, reversed);
+            Vector3 waterCenter = center;
+            waterCenter.Y = cell.RiverSurfaceY;
+            Vector3 wm2 = m.V2;
+            wm2.Y = cell.RiverSurfaceY;
+            Vector3 wm4 = m.V4;
+            wm4.Y = cell.RiverSurfaceY;
+            _rivers.AddTriangleUnperturbed(waterCenter, wm2, wm4);
+            if (reversed)
+            {
+                _rivers.AddTriangleUV(
+                    new Vector2(0.5f, 0.4f),
+                    new Vector2(1f, 0.2f),
+                    new Vector2(0f, 0.2f)
+                );
+            }
+            else
+            {
+                _rivers.AddTriangleUV(
+                    new Vector2(0.5f, 0.4f),
+                    new Vector2(0f, 0.6f),
+                    new Vector2(1f, 0.6f)
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Triangulates a cell section where a river flows through.
+    /// Handles straight, zigzag, and curved river configurations.
+    /// </summary>
+    private void TriangulateWithRiver(
+        HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        Vector3 centerL, centerR;
+
+        // Determine center vertices based on river flow configuration
+        if (cell.HasRiverThroughEdge(direction.Opposite()))
+        {
+            // Straight river: stretch center into a line
+            centerL = center +
+                HexMetrics.GetFirstSolidCorner(direction.Previous()) * 0.25f;
+            centerR = center +
+                HexMetrics.GetSecondSolidCorner(direction.Next()) * 0.25f;
+        }
+        else if (cell.HasRiverThroughEdge(direction.Next()))
+        {
+            // Sharp right turn (zigzag)
+            centerL = center;
+            centerR = center.Lerp(e.V5, 2f / 3f);
+        }
+        else if (cell.HasRiverThroughEdge(direction.Previous()))
+        {
+            // Sharp left turn (zigzag)
+            centerL = center.Lerp(e.V1, 2f / 3f);
+            centerR = center;
+        }
+        else if (cell.HasRiverThroughEdge(direction.Next2()))
+        {
+            // Gentle right curve
+            centerL = center;
+            centerR = center +
+                HexMetrics.GetSolidEdgeMiddle(direction.Next()) *
+                (0.5f * HexMetrics.InnerToOuter);
+        }
+        else
+        {
+            // Gentle left curve (direction.Previous2())
+            centerL = center +
+                HexMetrics.GetSolidEdgeMiddle(direction.Previous()) *
+                (0.5f * HexMetrics.InnerToOuter);
+            centerR = center;
+        }
+        center = (centerL + centerR) * 0.5f;
+
+        // Middle edge with narrower channel (1/6 outer step)
+        EdgeVertices m = new EdgeVertices(
+            centerL.Lerp(e.V1, 0.5f),
+            centerR.Lerp(e.V5, 0.5f),
+            1f / 6f
+        );
+        m.V3.Y = center.Y = e.V3.Y;
+
+        // Terrain triangulation (channel banks)
+        TriangulateEdgeStrip(m, cell.Color, e, cell.Color);
+
+        AddTriangle(centerL, m.V1, m.V2);
+        AddTriangleColor(cell.Color);
+        AddQuad(centerL, center, m.V2, m.V3);
+        AddQuadColor(cell.Color, cell.Color);
+        AddQuad(center, centerR, m.V3, m.V4);
+        AddQuadColor(cell.Color, cell.Color);
+        AddTriangle(centerR, m.V4, m.V5);
+        AddTriangleColor(cell.Color);
+
+        // Tutorial 6: Add water surface if rivers mesh available
+        if (_rivers != null)
+        {
+            bool reversed = cell.IncomingRiver == direction;
+            TriangulateRiverQuad(centerL, centerR, m.V2, m.V4, cell.RiverSurfaceY, 0.4f, reversed);
+            TriangulateRiverQuad(m.V2, m.V4, e.V2, e.V4, cell.RiverSurfaceY, 0.6f, reversed);
+        }
+    }
+
+    /// <summary>
+    /// Triangulates a cell section that is adjacent to (but not crossed by) a river.
+    /// Adjusts center position to align with river channel geometry.
+    /// </summary>
+    private void TriangulateAdjacentToRiver(
+        HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        // Offset center based on river position to maintain smooth geometry
+        if (cell.HasRiverThroughEdge(direction.Next()))
+        {
+            if (cell.HasRiverThroughEdge(direction.Previous()))
+            {
+                // River on both adjacent sides - center offset toward edge middle
+                center += HexMetrics.GetSolidEdgeMiddle(direction) *
+                    (HexMetrics.InnerToOuter * 0.5f);
+            }
+            else if (cell.HasRiverThroughEdge(direction.Previous2()))
+            {
+                // River one side adjacent, other side two steps away
+                center += HexMetrics.GetFirstSolidCorner(direction) * 0.25f;
+            }
+        }
+        else if (cell.HasRiverThroughEdge(direction.Previous()))
+        {
+            if (cell.HasRiverThroughEdge(direction.Next2()))
+            {
+                center += HexMetrics.GetSecondSolidCorner(direction) * 0.25f;
+            }
+        }
+
+        EdgeVertices m = new EdgeVertices(
+            center.Lerp(e.V1, 0.5f),
+            center.Lerp(e.V5, 0.5f)
+        );
+
+        TriangulateEdgeStrip(m, cell.Color, e, cell.Color);
+        TriangulateEdgeFan(center, m, cell.Color);
     }
 
     private void TriangulateConnection(HexDirection direction, HexCell cell, EdgeVertices e1)
@@ -168,8 +407,26 @@ public partial class HexMesh : MeshInstance3D
 
         EdgeVertices e2 = new EdgeVertices(
             e1.V1 + bridge,
-            e1.V4 + bridge
+            e1.V5 + bridge
         );
+
+        // Tutorial 6: Handle rivers through the edge
+        bool hasRiver = cell.HasRiverThroughEdge(direction);
+        if (hasRiver)
+        {
+            e2.V3.Y = neighbor.StreamBedY;
+
+            // Add water surface across connection (waterfall if elevation differs)
+            if (_rivers != null)
+            {
+                bool reversed = cell.HasIncomingRiver && cell.IncomingRiver == direction;
+                TriangulateRiverQuad(
+                    e1.V2, e1.V4, e2.V2, e2.V4,
+                    cell.RiverSurfaceY, neighbor.RiverSurfaceY,
+                    0.8f, reversed
+                );
+            }
+        }
 
         if (cell.GetEdgeType(direction) == HexEdgeType.Slope)
         {
@@ -184,7 +441,7 @@ public partial class HexMesh : MeshInstance3D
         HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
         if (direction <= HexDirection.E && nextNeighbor != null)
         {
-            Vector3 v5 = e1.V4 + HexMetrics.GetBridge(direction.Next());
+            Vector3 v5 = e1.V5 + HexMetrics.GetBridge(direction.Next());
             v5.Y = nextNeighbor.Position.Y;
 
             // Sort by elevation to determine bottom, left, right
@@ -192,20 +449,20 @@ public partial class HexMesh : MeshInstance3D
             {
                 if (cell.Elevation <= nextNeighbor.Elevation)
                 {
-                    TriangulateCorner(e1.V4, cell, e2.V4, neighbor, v5, nextNeighbor);
+                    TriangulateCorner(e1.V5, cell, e2.V5, neighbor, v5, nextNeighbor);
                 }
                 else
                 {
-                    TriangulateCorner(v5, nextNeighbor, e1.V4, cell, e2.V4, neighbor);
+                    TriangulateCorner(v5, nextNeighbor, e1.V5, cell, e2.V5, neighbor);
                 }
             }
             else if (neighbor.Elevation <= nextNeighbor.Elevation)
             {
-                TriangulateCorner(e2.V4, neighbor, v5, nextNeighbor, e1.V4, cell);
+                TriangulateCorner(e2.V5, neighbor, v5, nextNeighbor, e1.V5, cell);
             }
             else
             {
-                TriangulateCorner(v5, nextNeighbor, e1.V4, cell, e2.V4, neighbor);
+                TriangulateCorner(v5, nextNeighbor, e1.V5, cell, e2.V5, neighbor);
             }
         }
     }
@@ -402,7 +659,7 @@ public partial class HexMesh : MeshInstance3D
         _triangles.Add(vertexIndex + 2);
     }
 
-    private void AddTriangleUnperturbed(Vector3 v1, Vector3 v2, Vector3 v3)
+    public void AddTriangleUnperturbed(Vector3 v1, Vector3 v2, Vector3 v3)
     {
         int vertexIndex = _vertices.Count;
         _vertices.Add(v1);
@@ -456,5 +713,96 @@ public partial class HexMesh : MeshInstance3D
         _colors.Add(c1);
         _colors.Add(c2);
         _colors.Add(c2);
+    }
+
+    // Tutorial 6: UV coordinate methods for river flow animation
+
+    public void AddTriangleUV(Vector2 uv1, Vector2 uv2, Vector2 uv3)
+    {
+        _uvs.Add(uv1);
+        _uvs.Add(uv2);
+        _uvs.Add(uv3);
+    }
+
+    public void AddQuadUV(Vector2 uv1, Vector2 uv2, Vector2 uv3, Vector2 uv4)
+    {
+        _uvs.Add(uv1);
+        _uvs.Add(uv2);
+        _uvs.Add(uv3);
+        _uvs.Add(uv4);
+    }
+
+    /// <summary>
+    /// Adds UV coordinates for a quad using min/max U and V values.
+    /// Convenient for river quads where UVs are based on flow position.
+    /// </summary>
+    public void AddQuadUV(float uMin, float uMax, float vMin, float vMax)
+    {
+        _uvs.Add(new Vector2(uMin, vMin));
+        _uvs.Add(new Vector2(uMax, vMin));
+        _uvs.Add(new Vector2(uMin, vMax));
+        _uvs.Add(new Vector2(uMax, vMax));
+    }
+
+    // Tutorial 6: River water surface triangulation
+
+    /// <summary>
+    /// Triangulates a river water surface quad.
+    /// Vertices are set to the water surface height and UVs are set for flow animation.
+    /// </summary>
+    /// <param name="v1">First vertex (left, near)</param>
+    /// <param name="v2">Second vertex (right, near)</param>
+    /// <param name="v3">Third vertex (left, far)</param>
+    /// <param name="v4">Fourth vertex (right, far)</param>
+    /// <param name="y">Water surface Y height</param>
+    /// <param name="v">V coordinate for UV mapping (flow position)</param>
+    /// <param name="reversed">True if flow is reversed (incoming river)</param>
+    private void TriangulateRiverQuad(
+        Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        float y, float v, bool reversed)
+    {
+        TriangulateRiverQuad(v1, v2, v3, v4, y, y, v, reversed);
+    }
+
+    /// <summary>
+    /// Triangulates a river water surface quad with different heights for near and far edges.
+    /// Used for waterfalls where elevation changes between cells.
+    /// </summary>
+    private void TriangulateRiverQuad(
+        Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        float y1, float y2, float v, bool reversed)
+    {
+        if (_rivers == null) return;
+
+        v1.Y = v2.Y = y1;
+        v3.Y = v4.Y = y2;
+
+        _rivers.AddQuadUnperturbed(v1, v2, v3, v4);
+        if (reversed)
+        {
+            _rivers.AddQuadUV(1f, 0f, 0.8f - v, 0.6f - v);
+        }
+        else
+        {
+            _rivers.AddQuadUV(0f, 1f, v, v + 0.2f);
+        }
+    }
+
+    /// <summary>
+    /// Adds a quad without perturbation - for water surface triangulation.
+    /// </summary>
+    public void AddQuadUnperturbed(Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4)
+    {
+        int vertexIndex = _vertices.Count;
+        _vertices.Add(v1);
+        _vertices.Add(v2);
+        _vertices.Add(v3);
+        _vertices.Add(v4);
+        _triangles.Add(vertexIndex);
+        _triangles.Add(vertexIndex + 2);
+        _triangles.Add(vertexIndex + 1);
+        _triangles.Add(vertexIndex + 1);
+        _triangles.Add(vertexIndex + 2);
+        _triangles.Add(vertexIndex + 3);
     }
 }

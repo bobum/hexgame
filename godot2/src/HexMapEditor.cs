@@ -51,13 +51,15 @@ public partial class HexMapEditor : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (@event is InputEventMouseButton mb && mb.Pressed)
-        {
-            if (mb.ButtonIndex == MouseButton.Left)
-            {
-                HandleInput();
-            }
-        }
+        // Tutorial 6: Disabled mouse interaction for programmatic-only testing
+        // Uncomment to re-enable editing:
+        // if (@event is InputEventMouseButton mb && mb.Pressed)
+        // {
+        //     if (mb.ButtonIndex == MouseButton.Left)
+        //     {
+        //         HandleInput();
+        //     }
+        // }
     }
 
     private void HandleInput()
