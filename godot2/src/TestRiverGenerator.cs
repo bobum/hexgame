@@ -24,34 +24,160 @@ public static class TestRiverGenerator
     {
         GD.Print("Generating test river patterns...");
 
-        // Pattern 1: Straight river (NE-SW) at column 2
-        GenerateStraightRiver(getCell, 2, 1, 6);
-
-        // Pattern 2: Sharp right turn at (6, 4)
-        GenerateSharpRightTurn(getCell, 6, 4);
-
-        // Pattern 3: Sharp left turn at (6, 8)
-        GenerateSharpLeftTurn(getCell, 6, 8);
-
-        // Pattern 4: Gentle right curve at (10, 4)
-        GenerateGentleRightCurve(getCell, 10, 4);
-
-        // Pattern 5: Gentle left curve at (10, 8)
-        GenerateGentleLeftCurve(getCell, 10, 8);
-
-        // Pattern 6: River source (begin) at (14, 2)
-        GenerateRiverSource(getCell, 14, 2);
-
-        // Pattern 7: River terminus (end) at (14, 6)
-        GenerateRiverTerminus(getCell, 14, 6);
-
-        // Pattern 8: Waterfall (elevation change) at column 17
-        GenerateWaterfall(getCell, 17, 3, 7);
-
-        // Pattern 9: River merge at (3, 10)
-        GenerateRiverMerge(getCell, 3, 10);
+        // Generate one long showcase river demonstrating all 5 configurations + waterfall
+        GenerateShowcaseRiver(getCell);
 
         GD.Print("Test river patterns generated.");
+    }
+
+    /// <summary>
+    /// Generates a single long river demonstrating all 5 river configurations:
+    /// - Straight sections
+    /// - Sharp right turn (zigzag)
+    /// - Sharp left turn (zigzag)
+    /// - Gentle right curve (Next2)
+    /// - Gentle left curve (Previous2)
+    /// Plus a waterfall with elevation change.
+    /// </summary>
+    private static void GenerateShowcaseRiver(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating showcase river: Mountain -> Waterfall -> All turn types");
+
+        // Path design:
+        // 1. Mountain SOURCE at high elevation
+        // 2. WATERFALL descending to flat area
+        // 3. S-curve demonstrating all turn types on flat terrain
+        // 4. TERMINUS
+        //
+        // Hex adjacency (offset coords):
+        // Even row z: SE=(x,z+1), SW=(x-1,z+1), E=(x+1,z), W=(x-1,z)
+        // Odd row z:  SE=(x+1,z+1), SW=(x,z+1), E=(x+1,z), W=(x-1,z)
+
+        var path = new (int x, int z, int elevation)[]
+        {
+            // === MOUNTAIN SOURCE ===
+            (5, 2, 6),    // Start at elevation 6 (mountain peak)
+
+            // === WATERFALL (elevation 6 -> 1) ===
+            (5, 3, 5),    // z=2 even: SE to (5,3)
+            (5, 4, 4),    // z=3 odd: SW to (5,4)
+            (5, 5, 3),    // z=4 even: SE to (5,5)
+            (5, 6, 2),    // z=5 odd: SW to (5,6)
+            (5, 7, 1),    // z=6 even: SE to (5,7) - reached flat area
+
+            // === FLAT AREA - TURN EAST (demonstrates turn from SE to E) ===
+            (6, 7, 1),    // same row z=7: E to (6,7)
+            (7, 7, 1),    // same row z=7: E to (7,7)
+
+            // === TURN SOUTH (demonstrates turn from E to SW) ===
+            (7, 8, 1),    // z=7 odd: SW to (7,8)
+
+            // === TURN WEST (demonstrates turn from SW to W) ===
+            (6, 8, 1),    // same row z=8: W to (6,8)
+            (5, 8, 1),    // same row z=8: W to (5,8)
+
+            // === TURN SOUTH-EAST (demonstrates turn from W to SE) ===
+            (5, 9, 1),    // z=8 even: SE to (5,9)
+
+            // === TERMINUS ===
+            (5, 10, 0),   // z=9 odd: SW to (5,10) - end at elevation 0
+        };
+
+        // First pass: set all elevations
+        GD.Print("  Pass 1: Setting elevations...");
+        foreach (var (x, z, elevation) in path)
+        {
+            var cell = getCell(x, z);
+            if (cell != null)
+            {
+                cell.Elevation = elevation;
+                cell.Color = new Color(0.3f, 0.6f, 0.3f); // Green for river path visibility
+                GD.Print($"    Cell ({x},{z}) elevation set to {elevation}");
+            }
+            else
+            {
+                GD.PrintErr($"    Cell ({x},{z}) is NULL!");
+            }
+        }
+
+        // Second pass: create river connections
+        GD.Print("  Pass 2: Creating river connections...");
+        int successCount = 0;
+        for (int i = 0; i < path.Length - 1; i++)
+        {
+            var (x1, z1, e1) = path[i];
+            var (x2, z2, e2) = path[i + 1];
+
+            var cell = getCell(x1, z1);
+            if (cell == null)
+            {
+                GD.PrintErr($"    Source cell ({x1},{z1}) is NULL!");
+                continue;
+            }
+
+            var nextCell = getCell(x2, z2);
+            if (nextCell == null)
+            {
+                GD.PrintErr($"    Target cell ({x2},{z2}) is NULL!");
+                continue;
+            }
+
+            // Determine direction to next cell by checking actual neighbors
+            HexDirection? dir = GetDirectionBetweenCells(getCell, x1, z1, x2, z2);
+            if (dir.HasValue)
+            {
+                GD.Print($"    ({x1},{z1}) e={cell.Elevation} -> ({x2},{z2}) e={nextCell.Elevation} dir={dir.Value}");
+                cell.SetOutgoingRiver(dir.Value);
+
+                // Verify the river was set
+                if (cell.HasOutgoingRiver && cell.OutgoingRiver == dir.Value)
+                {
+                    GD.Print($"      SUCCESS: River set!");
+                    successCount++;
+                }
+                else
+                {
+                    GD.PrintErr($"      FAILED: River NOT set! (maybe elevation issue?)");
+                }
+            }
+            else
+            {
+                GD.PrintErr($"    No direction found from ({x1},{z1}) to ({x2},{z2})!");
+            }
+        }
+
+        GD.Print($"  Showcase river: {successCount}/{path.Length - 1} segments created");
+    }
+
+    /// <summary>
+    /// Determines the hex direction from one cell to an adjacent cell.
+    /// Instead of computing from coordinates, we check actual neighbors.
+    /// </summary>
+    private static HexDirection? GetDirectionBetweenCells(
+        Func<int, int, HexCell?> getCell, int x1, int z1, int x2, int z2)
+    {
+        var sourceCell = getCell(x1, z1);
+        var targetCell = getCell(x2, z2);
+
+        if (sourceCell == null || targetCell == null)
+        {
+            GD.PrintErr($"  Null cell: source=({x1},{z1}) target=({x2},{z2})");
+            return null;
+        }
+
+        // Check all 6 directions to find which neighbor matches target
+        for (int d = 0; d < 6; d++)
+        {
+            var dir = (HexDirection)d;
+            var neighbor = sourceCell.GetNeighbor(dir);
+            if (neighbor == targetCell)
+            {
+                return dir;
+            }
+        }
+
+        GD.PrintErr($"  Cells not adjacent: ({x1},{z1}) to ({x2},{z2})");
+        return null;
     }
 
     /// <summary>
