@@ -1147,6 +1147,13 @@ public partial class HexMesh : MeshInstance3D
         v1.Y = v2.Y = y1;
         v3.Y = v4.Y = y2;
 
+        // Perturb vertices BEFORE interpolation (matches tutorial)
+        // This ensures waterfall edges align with surrounding perturbed terrain
+        v1 = HexMetrics.Perturb(v1);
+        v2 = HexMetrics.Perturb(v2);
+        v3 = HexMetrics.Perturb(v3);
+        v4 = HexMetrics.Perturb(v4);
+
         // Interpolation factor: how far from near to far does water surface intersect
         float t = (waterY - y2) / (y1 - y2);
 
@@ -1154,14 +1161,15 @@ public partial class HexMesh : MeshInstance3D
         v3 = v3.Lerp(v1, t);
         v4 = v4.Lerp(v2, t);
 
+        // Add quad with fixed UVs (matches tutorial)
         _rivers.AddQuadUnperturbed(v1, v2, v3, v4);
         if (reversed)
         {
-            _rivers.AddQuadUV(1f, 0f, 0.8f, 0.8f - 0.2f * t);
+            _rivers.AddQuadUV(1f, 0f, 0.8f, 1f);
         }
         else
         {
-            _rivers.AddQuadUV(0f, 1f, 0.8f, 0.8f + 0.2f * t);
+            _rivers.AddQuadUV(0f, 1f, 0.8f, 1f);
         }
     }
 
@@ -1394,11 +1402,14 @@ public partial class HexMesh : MeshInstance3D
             center + HexMetrics.GetSecondWaterCorner(direction)
         );
 
-        // Shore edge (outer, at land level - use solid corners for land)
-        Vector3 bridge = HexMetrics.GetBridge(direction);
+        // Shore edge (outer, at land level)
+        // Calculate from neighbor's center using solid corners (Tutorial 8)
+        // This ensures shore edges align with the land cell's actual boundary
+        Vector3 center2 = neighbor.Position;
+        center2.Y = center.Y;  // Keep at water surface height
         EdgeVertices e2 = new EdgeVertices(
-            e1.V1 + bridge,
-            e1.V5 + bridge
+            center2 + HexMetrics.GetSecondSolidCorner(direction.Opposite()),
+            center2 + HexMetrics.GetFirstSolidCorner(direction.Opposite())
         );
 
         // Check for river through this edge (estuary case)
@@ -1421,42 +1432,33 @@ public partial class HexMesh : MeshInstance3D
             _waterShore.AddQuadUV(0f, 0f, 0f, 1f);
         }
 
-        // Water center section (still need the water hexagon fan)
+        // Water center section - proper triangle fan using all 5 edge vertices
         if (_water != null)
         {
-            _water.AddTriangleUnperturbed(center, e1.V1, e1.V5);
+            _water.AddTriangleUnperturbed(center, e1.V1, e1.V2);
+            _water.AddTriangleUnperturbed(center, e1.V2, e1.V3);
+            _water.AddTriangleUnperturbed(center, e1.V3, e1.V4);
+            _water.AddTriangleUnperturbed(center, e1.V4, e1.V5);
         }
 
-        // Shore corners (only NE and E to avoid duplicates)
-        if (direction <= HexDirection.E)
+        // Shore corners - triangulate the corner between this cell (water),
+        // the current neighbor (land), and the next neighbor (water or land)
+        HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
+        if (nextNeighbor != null)
         {
-            HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
-            if (nextNeighbor != null)
-            {
-                // Get corner vertex position
-                Vector3 v3 = e1.V5 + HexMetrics.GetBridge(direction.Next());
+            // Calculate corner vertex position from nextNeighbor's center
+            // Use water corner if underwater, solid corner if land (Tutorial 8)
+            Vector3 v3 = nextNeighbor.Position + (nextNeighbor.IsUnderwater ?
+                HexMetrics.GetFirstWaterCorner(direction.Previous()) :
+                HexMetrics.GetFirstSolidCorner(direction.Previous()));
+            v3.Y = center.Y;  // Keep at water surface height
 
-                if (nextNeighbor.IsUnderwater)
-                {
-                    // Water-water-land corner
-                    _waterShore.AddTriangleUnperturbed(e1.V5, e2.V5, v3);
-                    _waterShore.AddTriangleUV(
-                        new Vector2(0f, 0f),
-                        new Vector2(0f, 1f),
-                        new Vector2(0f, nextNeighbor.IsUnderwater ? 0f : 1f)
-                    );
-                }
-                else
-                {
-                    // Water-land-land corner
-                    _waterShore.AddTriangleUnperturbed(e1.V5, e2.V5, v3);
-                    _waterShore.AddTriangleUV(
-                        new Vector2(0f, 0f),
-                        new Vector2(0f, 1f),
-                        new Vector2(0f, 1f)
-                    );
-                }
-            }
+            _waterShore.AddTriangleUnperturbed(e1.V5, e2.V5, v3);
+            _waterShore.AddTriangleUV(
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(0f, nextNeighbor.IsUnderwater ? 0f : 1f)
+            );
         }
     }
 
