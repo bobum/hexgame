@@ -77,4 +77,54 @@ public class HexDirectionTests
             current.Should().Be(dir);
         }
     }
+
+    // Tutorial 6: Previous2 and Next2 tests
+
+    [Theory]
+    [InlineData(HexDirection.NE, HexDirection.W)]   // NE - 2 = W (wraps)
+    [InlineData(HexDirection.E, HexDirection.NW)]   // E - 2 = NW (wraps)
+    [InlineData(HexDirection.SE, HexDirection.NE)]  // SE - 2 = NE
+    [InlineData(HexDirection.SW, HexDirection.E)]   // SW - 2 = E
+    [InlineData(HexDirection.W, HexDirection.SE)]   // W - 2 = SE
+    [InlineData(HexDirection.NW, HexDirection.SW)]  // NW - 2 = SW
+    public void Previous2_ReturnsCorrectDirection(HexDirection input, HexDirection expected)
+    {
+        input.Previous2().Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(HexDirection.NE, HexDirection.SE)]  // NE + 2 = SE
+    [InlineData(HexDirection.E, HexDirection.SW)]   // E + 2 = SW
+    [InlineData(HexDirection.SE, HexDirection.W)]   // SE + 2 = W
+    [InlineData(HexDirection.SW, HexDirection.NW)]  // SW + 2 = NW
+    [InlineData(HexDirection.W, HexDirection.NE)]   // W + 2 = NE (wraps)
+    [InlineData(HexDirection.NW, HexDirection.E)]   // NW + 2 = E (wraps)
+    public void Next2_ReturnsCorrectDirection(HexDirection input, HexDirection expected)
+    {
+        input.Next2().Should().Be(expected);
+    }
+
+    [Fact]
+    public void Previous2_And_Next2_AreInverses()
+    {
+        foreach (HexDirection dir in Enum.GetValues<HexDirection>())
+        {
+            dir.Previous2().Next2().Should().Be(dir);
+            dir.Next2().Previous2().Should().Be(dir);
+        }
+    }
+
+    [Fact]
+    public void ThreeNext2s_ReturnToOriginal()
+    {
+        foreach (HexDirection dir in Enum.GetValues<HexDirection>())
+        {
+            var current = dir;
+            for (int i = 0; i < 3; i++)
+            {
+                current = current.Next2();
+            }
+            current.Should().Be(dir);
+        }
+    }
 }

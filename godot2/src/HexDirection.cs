@@ -27,4 +27,24 @@ public static class HexDirectionExtensions
     {
         return direction == HexDirection.NW ? HexDirection.NE : (direction + 1);
     }
+
+    /// <summary>
+    /// Returns the direction two steps counterclockwise.
+    /// Used for gentle river curves. Tutorial 6.
+    /// </summary>
+    public static HexDirection Previous2(this HexDirection direction)
+    {
+        direction -= 2;
+        return direction >= HexDirection.NE ? direction : (direction + 6);
+    }
+
+    /// <summary>
+    /// Returns the direction two steps clockwise.
+    /// Used for gentle river curves. Tutorial 6.
+    /// </summary>
+    public static HexDirection Next2(this HexDirection direction)
+    {
+        direction += 2;
+        return direction <= HexDirection.NW ? direction : (direction - 6);
+    }
 }

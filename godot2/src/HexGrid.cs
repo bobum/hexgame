@@ -38,6 +38,9 @@ public partial class HexGrid : Node3D
 
         CreateChunks();
         CreateCells();
+
+        // Tutorial 6: Generate test rivers for visual verification
+        GenerateTestRivers();
     }
 
     private void CreateChunks()
@@ -168,6 +171,28 @@ public partial class HexGrid : Node3D
         {
             _chunks[i].ShowUI(visible);
         }
+    }
+
+    /// <summary>
+    /// Gets a cell by offset coordinates (x, z).
+    /// Returns null if coordinates are out of bounds.
+    /// </summary>
+    public HexCell? GetCellByOffset(int x, int z)
+    {
+        if (x < 0 || x >= _cellCountX || z < 0 || z >= _cellCountZ)
+        {
+            return null;
+        }
+        return _cells[x + z * _cellCountX];
+    }
+
+    /// <summary>
+    /// Generates test rivers for visual verification.
+    /// Call this after the grid is created.
+    /// </summary>
+    public void GenerateTestRivers()
+    {
+        TestRiverGenerator.GenerateTestPatterns(GetCellByOffset);
     }
 
     private void InitializeNoiseSource()

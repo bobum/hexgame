@@ -30,6 +30,10 @@ public static class HexMetrics
 
     public const float ElevationPerturbStrength = 1.5f;
 
+    // Tutorial 6: River constants
+    public const float StreamBedElevationOffset = -1.75f;
+    public const float RiverSurfaceElevationOffset = -0.5f;
+
     // Procedural noise generation constants
     public const int NoiseTextureSize = 256;
 
@@ -132,6 +136,15 @@ public static class HexMetrics
     public static Vector3 GetBridge(HexDirection direction)
     {
         return (Corners[(int)direction] + Corners[(int)direction + 1]) * BlendFactor;
+    }
+
+    /// <summary>
+    /// Returns the middle point of a solid edge. Tutorial 6.
+    /// Used for gentle river curve calculations.
+    /// </summary>
+    public static Vector3 GetSolidEdgeMiddle(HexDirection direction)
+    {
+        return (Corners[(int)direction] + Corners[(int)direction + 1]) * (0.5f * SolidFactor);
     }
 
     /// <summary>

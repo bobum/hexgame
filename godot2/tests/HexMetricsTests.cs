@@ -323,4 +323,62 @@ public class HexMetricsTests
             result.B.Should().BeApproximately(expected, Tolerance);
         }
     }
+
+    // Tutorial 6: River Constants Tests
+
+    [Fact]
+    public void StreamBedElevationOffset_IsNegative175()
+    {
+        HexMetrics.StreamBedElevationOffset.Should().Be(-1.75f);
+    }
+
+    [Fact]
+    public void RiverSurfaceElevationOffset_IsNegative05()
+    {
+        HexMetrics.RiverSurfaceElevationOffset.Should().Be(-0.5f);
+    }
+
+    [Fact]
+    public void StreamBedOffset_IsLowerThanRiverSurface()
+    {
+        // Stream bed is at the bottom of the channel, river surface is on top
+        HexMetrics.StreamBedElevationOffset.Should().BeLessThan(HexMetrics.RiverSurfaceElevationOffset);
+    }
+
+    [Fact]
+    public void GetSolidEdgeMiddle_AllDirections_ReturnNonZeroVectors()
+    {
+        foreach (HexDirection dir in Enum.GetValues<HexDirection>())
+        {
+            var middle = HexMetrics.GetSolidEdgeMiddle(dir);
+            var length = MathF.Sqrt(middle.X * middle.X + middle.Z * middle.Z);
+            length.Should().BeGreaterThan(0);
+        }
+    }
+
+    [Fact]
+    public void GetSolidEdgeMiddle_IsAverageOfSolidCorners()
+    {
+        foreach (HexDirection dir in Enum.GetValues<HexDirection>())
+        {
+            var middle = HexMetrics.GetSolidEdgeMiddle(dir);
+            var c1 = HexMetrics.GetFirstSolidCorner(dir);
+            var c2 = HexMetrics.GetSecondSolidCorner(dir);
+            var expected = (c1 + c2) * 0.5f;
+
+            middle.X.Should().BeApproximately(expected.X, Tolerance);
+            middle.Y.Should().BeApproximately(expected.Y, Tolerance);
+            middle.Z.Should().BeApproximately(expected.Z, Tolerance);
+        }
+    }
+
+    [Fact]
+    public void GetSolidEdgeMiddle_YIsZero()
+    {
+        foreach (HexDirection dir in Enum.GetValues<HexDirection>())
+        {
+            var middle = HexMetrics.GetSolidEdgeMiddle(dir);
+            middle.Y.Should().Be(0f);
+        }
+    }
 }
