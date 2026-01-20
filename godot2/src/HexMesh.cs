@@ -19,8 +19,14 @@ public partial class HexMesh : MeshInstance3D
     public bool UseColors = true;
     public bool UseUVCoordinates = false;
 
+    // Debug: expose vertex count for debugging
+    public int VertexCount => _vertices.Count;
+
     // Tutorial 6: Reference to rivers mesh for water surface triangulation
     private HexMesh? _rivers;
+
+    // Tutorial 7: Reference to roads mesh for road surface triangulation
+    private HexMesh? _roads;
 
     public override void _Ready()
     {
@@ -65,7 +71,13 @@ public partial class HexMesh : MeshInstance3D
     /// </summary>
     public void Apply()
     {
-        if (_vertices.Count == 0) return;
+        if (_vertices.Count == 0)
+        {
+            GD.Print($"[Apply] {Name}: No vertices, skipping");
+            return;
+        }
+
+        GD.Print($"[Apply] {Name}: Building mesh with {_vertices.Count} vertices, {_triangles.Count} triangle indices, {_uvs.Count} UVs, UseUVCoordinates={UseUVCoordinates}");
 
         // Build the mesh using SurfaceTool with flat normals per-triangle
         var st = new SurfaceTool();
@@ -124,6 +136,18 @@ public partial class HexMesh : MeshInstance3D
 
         _hexMesh = st.Commit();
         Mesh = _hexMesh;
+
+        // Debug: Check the final mesh
+        if (_hexMesh != null && _hexMesh.GetSurfaceCount() > 0)
+        {
+            var arrays = _hexMesh.SurfaceGetArrays(0);
+            var verts = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            GD.Print($"[Apply] {Name}: Committed mesh has {verts.Length} vertices, {_hexMesh.GetSurfaceCount()} surfaces");
+        }
+        else
+        {
+            GD.Print($"[Apply] {Name}: WARNING - Committed mesh has no surfaces!");
+        }
     }
 
     /// <summary>
@@ -131,7 +155,8 @@ public partial class HexMesh : MeshInstance3D
     /// </summary>
     /// <param name="cells">Array of cells to triangulate</param>
     /// <param name="rivers">Optional rivers mesh for water surface triangulation</param>
-    public void Triangulate(HexCell[] cells, HexMesh? rivers = null)
+    /// <param name="roads">Optional roads mesh for road surface triangulation</param>
+    public void Triangulate(HexCell[] cells, HexMesh? rivers = null, HexMesh? roads = null)
     {
         EnsureInitialized();
         Clear();
@@ -140,6 +165,12 @@ public partial class HexMesh : MeshInstance3D
         if (_rivers != null)
         {
             _rivers.Clear();
+        }
+
+        _roads = roads;
+        if (_roads != null)
+        {
+            _roads.Clear();
         }
 
         for (int i = 0; i < cells.Length; i++)
@@ -154,6 +185,12 @@ public partial class HexMesh : MeshInstance3D
         if (_rivers != null)
         {
             _rivers.Apply();
+        }
+        if (_roads != null)
+        {
+            GD.Print($"[ROAD DEBUG] Before _roads.Apply(): vertices={_roads.VertexCount}");
+            _roads.Apply();
+            GD.Print($"[ROAD DEBUG] After _roads.Apply(): Mesh={_roads.Mesh != null}, Material={_roads.MaterialOverride != null}");
         }
     }
 
@@ -179,7 +216,8 @@ public partial class HexMesh : MeshInstance3D
 
     private void TriangulateEdgeStrip(
         EdgeVertices e1, Color c1,
-        EdgeVertices e2, Color c2)
+        EdgeVertices e2, Color c2,
+        bool hasRoad = false)
     {
         AddQuad(e1.V1, e1.V2, e2.V1, e2.V2);
         AddQuadColor(c1, c2);
@@ -189,6 +227,12 @@ public partial class HexMesh : MeshInstance3D
         AddQuadColor(c1, c2);
         AddQuad(e1.V4, e1.V5, e2.V4, e2.V5);
         AddQuadColor(c1, c2);
+
+        // Tutorial 7: Add road segment across edge connection
+        if (hasRoad)
+        {
+            TriangulateRoadSegment(e1.V2, e1.V3, e1.V4, e2.V2, e2.V3, e2.V4);
+        }
     }
 
     private void Triangulate(HexDirection direction, HexCell cell)
@@ -199,7 +243,13 @@ public partial class HexMesh : MeshInstance3D
             center + HexMetrics.GetSecondSolidCorner(direction)
         );
 
-        // Tutorial 6: Check for rivers and route to appropriate triangulation
+        // DEBUG: Check what's happening with roads vs rivers
+        if (cell.HasRoads)
+        {
+            GD.Print($"[TRIANGULATE] Cell {cell.Coordinates} dir={direction} HasRoads=true HasRiver={cell.HasRiver}");
+        }
+
+        // Tutorial 6-7: Check for rivers and route to appropriate triangulation
         if (cell.HasRiver)
         {
             if (cell.HasRiverThroughEdge(direction))
@@ -221,13 +271,36 @@ public partial class HexMesh : MeshInstance3D
         }
         else
         {
-            TriangulateEdgeFan(center, e, cell.Color);
+            TriangulateWithoutRiver(direction, cell, center, e);
         }
 
         // Edge connection (bridge + corners) - only for NE, E, SE to avoid duplicates
         if (direction <= HexDirection.SE)
         {
             TriangulateConnection(direction, cell, e);
+        }
+    }
+
+    /// <summary>
+    /// Triangulates a cell section that has no river.
+    /// Handles road triangulation if cell has roads.
+    /// </summary>
+    private void TriangulateWithoutRiver(
+        HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        TriangulateEdgeFan(center, e, cell.Color);
+
+        if (cell.HasRoads)
+        {
+            GD.Print($"  [ROAD DEBUG] Cell {cell.Coordinates} dir={direction} HasRoads=true, HasRoadThroughEdge={cell.HasRoadThroughEdge(direction)}");
+            Vector2 interpolators = GetRoadInterpolators(direction, cell);
+            TriangulateRoad(
+                center,
+                center.Lerp(e.V1, interpolators.X),
+                center.Lerp(e.V5, interpolators.Y),
+                e,
+                cell.HasRoadThroughEdge(direction)
+            );
         }
     }
 
@@ -392,6 +465,115 @@ public partial class HexMesh : MeshInstance3D
 
         TriangulateEdgeStrip(m, cell.Color, e, cell.Color);
         TriangulateEdgeFan(center, m, cell.Color);
+
+        // Tutorial 7: Handle roads adjacent to rivers
+        if (cell.HasRoads)
+        {
+            TriangulateRoadAdjacentToRiver(direction, cell, center, e);
+        }
+    }
+
+    /// <summary>
+    /// Triangulates roads in a cell section adjacent to a river.
+    /// Handles 6 configurations based on where river flows relative to this direction.
+    /// </summary>
+    private void TriangulateRoadAdjacentToRiver(
+        HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        if (_roads == null) return;
+
+        bool hasRoadThroughEdge = cell.HasRoadThroughEdge(direction);
+        bool previousHasRiver = cell.HasRiverThroughEdge(direction.Previous());
+        bool nextHasRiver = cell.HasRiverThroughEdge(direction.Next());
+
+        Vector2 interpolators = GetRoadInterpolators(direction, cell);
+        Vector3 roadCenter = center;
+
+        // 6 configurations based on where river flows relative to this direction
+        if (cell.HasRiverBeginOrEnd)
+        {
+            // Config 1: River begin/end - push road toward direction away from river
+            roadCenter += HexMetrics.GetSolidEdgeMiddle(
+                cell.RiverBeginOrEndDirection.Opposite()
+            ) * (1f / 3f);
+        }
+        else if (cell.IncomingRiver == cell.OutgoingRiver.Opposite())
+        {
+            // Config 2: Straight river - push road perpendicular
+            Vector3 corner;
+            if (previousHasRiver)
+            {
+                if (!hasRoadThroughEdge && !cell.HasRoadThroughEdge(direction.Next()))
+                {
+                    return; // No road here
+                }
+                corner = HexMetrics.GetSecondSolidCorner(direction);
+            }
+            else
+            {
+                if (!hasRoadThroughEdge && !cell.HasRoadThroughEdge(direction.Previous()))
+                {
+                    return; // No road here
+                }
+                corner = HexMetrics.GetFirstSolidCorner(direction);
+            }
+            roadCenter += corner * 0.5f;
+            // Extend center toward edge since we're pushed far from center
+            center += corner * 0.25f;
+        }
+        else if (cell.IncomingRiver == cell.OutgoingRiver.Previous())
+        {
+            // Config 3: River curves tightly left
+            roadCenter -= HexMetrics.GetSecondCorner(cell.IncomingRiver) * 0.2f;
+        }
+        else if (cell.IncomingRiver == cell.OutgoingRiver.Next())
+        {
+            // Config 4: River curves tightly right
+            roadCenter -= HexMetrics.GetFirstCorner(cell.IncomingRiver) * 0.2f;
+        }
+        else if (previousHasRiver && nextHasRiver)
+        {
+            // Config 5: V-shaped river bend - river on both adjacent sides
+            if (!hasRoadThroughEdge)
+            {
+                return;
+            }
+            Vector3 offset = HexMetrics.GetSolidEdgeMiddle(direction) * HexMetrics.InnerToOuter;
+            roadCenter += offset * 0.7f;
+            center += offset * 0.5f;
+        }
+        else if (previousHasRiver)
+        {
+            // Config 6: River at previous direction only - outside of curve
+            if (!hasRoadThroughEdge && !cell.HasRoadThroughEdge(direction.Next()))
+            {
+                return;
+            }
+            roadCenter += HexMetrics.GetSolidEdgeMiddle(direction) * 0.25f;
+        }
+        else if (nextHasRiver)
+        {
+            // Config 7: River at next direction only - outside of curve
+            if (!hasRoadThroughEdge && !cell.HasRoadThroughEdge(direction.Previous()))
+            {
+                return;
+            }
+            roadCenter += HexMetrics.GetSolidEdgeMiddle(direction) * 0.25f;
+        }
+
+        Vector3 mL = roadCenter.Lerp(e.V1, interpolators.X);
+        Vector3 mR = roadCenter.Lerp(e.V5, interpolators.Y);
+        TriangulateRoad(roadCenter, mL, mR, e, hasRoadThroughEdge);
+
+        // Add road edge triangles at river edges
+        if (previousHasRiver)
+        {
+            TriangulateRoadEdge(roadCenter, center, mL);
+        }
+        if (nextHasRiver)
+        {
+            TriangulateRoadEdge(roadCenter, mR, center);
+        }
     }
 
     private void TriangulateConnection(HexDirection direction, HexCell cell, EdgeVertices e1)
@@ -412,6 +594,9 @@ public partial class HexMesh : MeshInstance3D
 
         // Tutorial 6: Handle rivers through the edge
         bool hasRiver = cell.HasRiverThroughEdge(direction);
+        // Tutorial 7: Handle roads through the edge (roads can't coexist with rivers)
+        bool hasRoad = cell.HasRoadThroughEdge(direction);
+
         if (hasRiver)
         {
             e2.V3.Y = neighbor.StreamBedY;
@@ -430,11 +615,11 @@ public partial class HexMesh : MeshInstance3D
 
         if (cell.GetEdgeType(direction) == HexEdgeType.Slope)
         {
-            TriangulateEdgeTerraces(e1, cell, e2, neighbor);
+            TriangulateEdgeTerraces(e1, cell, e2, neighbor, hasRoad);
         }
         else
         {
-            TriangulateEdgeStrip(e1, cell.Color, e2, neighbor.Color);
+            TriangulateEdgeStrip(e1, cell.Color, e2, neighbor.Color, hasRoad);
         }
 
         // Corner triangle (only for NE and E to avoid duplicates)
@@ -469,12 +654,13 @@ public partial class HexMesh : MeshInstance3D
 
     private void TriangulateEdgeTerraces(
         EdgeVertices begin, HexCell beginCell,
-        EdgeVertices end, HexCell endCell)
+        EdgeVertices end, HexCell endCell,
+        bool hasRoad = false)
     {
         EdgeVertices e2 = EdgeVertices.TerraceLerp(begin, end, 1);
         Color c2 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, 1);
 
-        TriangulateEdgeStrip(begin, beginCell.Color, e2, c2);
+        TriangulateEdgeStrip(begin, beginCell.Color, e2, c2, hasRoad);
 
         for (int i = 2; i < HexMetrics.TerraceSteps; i++)
         {
@@ -482,10 +668,10 @@ public partial class HexMesh : MeshInstance3D
             Color c1 = c2;
             e2 = EdgeVertices.TerraceLerp(begin, end, i);
             c2 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, i);
-            TriangulateEdgeStrip(e1, c1, e2, c2);
+            TriangulateEdgeStrip(e1, c1, e2, c2, hasRoad);
         }
 
-        TriangulateEdgeStrip(e2, c2, end, endCell.Color);
+        TriangulateEdgeStrip(e2, c2, end, endCell.Color, hasRoad);
     }
 
     private void TriangulateCorner(
@@ -804,5 +990,137 @@ public partial class HexMesh : MeshInstance3D
         _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 2);
         _triangles.Add(vertexIndex + 3);
+    }
+
+    // Tutorial 7: Road triangulation methods
+
+    /// <summary>
+    /// Triangulates a road segment as two quads forming the road surface.
+    /// UV coordinates: U=1 at center, U=0 at edges for alpha blending.
+    /// Perturbs X,Z to match terrain, then adds Y offset.
+    /// </summary>
+    private void TriangulateRoadSegment(
+        Vector3 v1, Vector3 v2, Vector3 v3,
+        Vector3 v4, Vector3 v5, Vector3 v6)
+    {
+        if (_roads == null) return;
+
+        // Perturb X,Z coordinates to match terrain displacement
+        v1 = HexMetrics.Perturb(v1);
+        v2 = HexMetrics.Perturb(v2);
+        v3 = HexMetrics.Perturb(v3);
+        v4 = HexMetrics.Perturb(v4);
+        v5 = HexMetrics.Perturb(v5);
+        v6 = HexMetrics.Perturb(v6);
+
+        // Elevate road vertices to prevent z-fighting with terrain
+        v1.Y += HexMetrics.RoadElevationOffset;
+        v2.Y += HexMetrics.RoadElevationOffset;
+        v3.Y += HexMetrics.RoadElevationOffset;
+        v4.Y += HexMetrics.RoadElevationOffset;
+        v5.Y += HexMetrics.RoadElevationOffset;
+        v6.Y += HexMetrics.RoadElevationOffset;
+
+        // Use unperturbed method since we already perturbed above
+        _roads.AddQuadUnperturbed(v1, v2, v4, v5);
+        _roads.AddQuadUV(0f, 1f, 0f, 0f);
+        _roads.AddQuadUnperturbed(v2, v3, v5, v6);
+        _roads.AddQuadUV(1f, 0f, 0f, 0f);
+    }
+
+    /// <summary>
+    /// Triangulates a road from the cell center to the edge.
+    /// If road goes through edge, creates full road segment.
+    /// Otherwise, creates just a road edge termination.
+    /// </summary>
+    private void TriangulateRoad(
+        Vector3 center, Vector3 mL, Vector3 mR,
+        EdgeVertices e, bool hasRoadThroughCellEdge)
+    {
+        if (_roads == null)
+        {
+            GD.Print($"  [ROAD DEBUG] TriangulateRoad called but _roads is NULL!");
+            return;
+        }
+
+        GD.Print($"  [ROAD DEBUG] TriangulateRoad: hasRoadThroughCellEdge={hasRoadThroughCellEdge}, _roads vertex count before={_roads.VertexCount}");
+
+        if (hasRoadThroughCellEdge)
+        {
+            Vector3 mC = mL.Lerp(mR, 0.5f);
+            TriangulateRoadSegment(mL, mC, mR, e.V2, e.V3, e.V4);
+
+            // Perturb X,Z then add elevation offset
+            Vector3 cR = HexMetrics.Perturb(center);
+            cR.Y += HexMetrics.RoadElevationOffset;
+            Vector3 mLR = HexMetrics.Perturb(mL);
+            mLR.Y += HexMetrics.RoadElevationOffset;
+            Vector3 mCR = HexMetrics.Perturb(mC);
+            mCR.Y += HexMetrics.RoadElevationOffset;
+            Vector3 mRR = HexMetrics.Perturb(mR);
+            mRR.Y += HexMetrics.RoadElevationOffset;
+
+            _roads.AddTriangleUnperturbed(cR, mLR, mCR);
+            _roads.AddTriangleUV(
+                new Vector2(1f, 0f),
+                new Vector2(0f, 0f),
+                new Vector2(1f, 0f)
+            );
+            _roads.AddTriangleUnperturbed(cR, mCR, mRR);
+            _roads.AddTriangleUV(
+                new Vector2(1f, 0f),
+                new Vector2(1f, 0f),
+                new Vector2(0f, 0f)
+            );
+        }
+        else
+        {
+            TriangulateRoadEdge(center, mL, mR);
+        }
+    }
+
+    /// <summary>
+    /// Triangulates a road edge termination (where road ends within cell).
+    /// Perturbs X,Z to match terrain, then adds Y offset.
+    /// </summary>
+    private void TriangulateRoadEdge(Vector3 center, Vector3 mL, Vector3 mR)
+    {
+        if (_roads == null) return;
+
+        // Perturb X,Z then add elevation offset
+        center = HexMetrics.Perturb(center);
+        mL = HexMetrics.Perturb(mL);
+        mR = HexMetrics.Perturb(mR);
+
+        center.Y += HexMetrics.RoadElevationOffset;
+        mL.Y += HexMetrics.RoadElevationOffset;
+        mR.Y += HexMetrics.RoadElevationOffset;
+
+        _roads.AddTriangleUnperturbed(center, mL, mR);
+        _roads.AddTriangleUV(
+            new Vector2(1f, 0f),
+            new Vector2(0f, 0f),
+            new Vector2(0f, 0f)
+        );
+    }
+
+    /// <summary>
+    /// Gets the interpolation factors for road edges based on adjacent roads.
+    /// Returns (left interpolator, right interpolator).
+    /// 0.5 if road exists in that direction, 0.25 otherwise.
+    /// </summary>
+    private Vector2 GetRoadInterpolators(HexDirection direction, HexCell cell)
+    {
+        Vector2 interpolators;
+        if (cell.HasRoadThroughEdge(direction))
+        {
+            interpolators.X = interpolators.Y = 0.5f;
+        }
+        else
+        {
+            interpolators.X = cell.HasRoadThroughEdge(direction.Previous()) ? 0.5f : 0.25f;
+            interpolators.Y = cell.HasRoadThroughEdge(direction.Next()) ? 0.5f : 0.25f;
+        }
+        return interpolators;
     }
 }

@@ -9,11 +9,15 @@ public partial class HexGridChunk : Node3D
     HexCell[] _cells = null!;
     HexMesh _hexMesh = null!;
     HexMesh _riversMesh = null!;
+    HexMesh _roadsMesh = null!;
     Node3D _labelContainer = null!;
     bool _needsRefresh;
 
     // Tutorial 6: River material loaded once
     private static Material? _riverMaterial;
+
+    // Tutorial 7: Road material loaded once
+    private static Material? _roadMaterial;
 
     /// <summary>
     /// Initializes the chunk with its mesh and label container.
@@ -48,6 +52,21 @@ public partial class HexGridChunk : Node3D
         AddChild(_riversMesh);
         _riversMesh.EnsureInitialized();
 
+        // Tutorial 7: Create roads HexMesh child
+        _roadsMesh = new HexMesh();
+        _roadsMesh.Name = "RoadsMesh";
+        _roadsMesh.UseColors = false;
+        _roadsMesh.UseUVCoordinates = true;
+        // Use simple solid color material for debugging - brown roads
+        var roadMat = new StandardMaterial3D();
+        roadMat.AlbedoColor = new Color(0.6f, 0.4f, 0.2f);  // Brown
+        roadMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        roadMat.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+        _roadsMesh.MaterialOverride = roadMat;
+        GD.Print("[ROAD] Using simple brown StandardMaterial3D for roads");
+        AddChild(_roadsMesh);
+        _roadsMesh.EnsureInitialized();
+
         // Create label container
         _labelContainer = new Node3D();
         _labelContainer.Name = "Labels";
@@ -62,6 +81,25 @@ public partial class HexGridChunk : Node3D
         if (_riverMaterial == null)
         {
             _riverMaterial = GD.Load<Material>("res://materials/river_material.tres");
+        }
+    }
+
+    /// <summary>
+    /// Loads the road material if not already loaded.
+    /// </summary>
+    private static void LoadRoadMaterial()
+    {
+        if (_roadMaterial == null)
+        {
+            _roadMaterial = GD.Load<Material>("res://materials/road_material.tres");
+            if (_roadMaterial != null)
+            {
+                GD.Print("[ROAD] Road material loaded successfully");
+            }
+            else
+            {
+                GD.PrintErr("[ROAD] FAILED to load road material!");
+            }
         }
     }
 
@@ -102,8 +140,12 @@ public partial class HexGridChunk : Node3D
     {
         if (_needsRefresh)
         {
-            GD.Print($"CHUNK REFRESH: {Name} retriangulating {_cells.Length} cells");
-            _hexMesh.Triangulate(_cells, _riversMesh);
+            // Count cells with roads for debug
+            int roadCells = 0;
+            foreach (var cell in _cells) { if (cell?.HasRoads == true) roadCells++; }
+            GD.Print($"CHUNK REFRESH: {Name} retriangulating {_cells.Length} cells, {roadCells} with roads");
+            _hexMesh.Triangulate(_cells, _riversMesh, _roadsMesh);
+            GD.Print($"CHUNK REFRESH: {Name} DONE - roads mesh vertices: {_roadsMesh.VertexCount}");
             _needsRefresh = false;
             SetProcess(false);
         }

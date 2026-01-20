@@ -34,6 +34,9 @@ public static class HexMetrics
     public const float StreamBedElevationOffset = -1.75f;
     public const float RiverSurfaceElevationOffset = -0.5f;
 
+    // Tutorial 7: Road constants
+    public const float RoadElevationOffset = 0.1f;  // Slight offset to prevent z-fighting
+
     // Procedural noise generation constants
     public const int NoiseTextureSize = 256;
 
