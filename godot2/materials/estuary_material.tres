@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/estuary.gdshader" id="1_estuary"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_estuary")
+shader_parameter/water_color = Color(0.2, 0.6, 0.9, 0.8)
+shader_parameter/foam_color = Color(0.9, 0.95, 1.0, 0.9)
+shader_parameter/flow_speed = 0.5
+shader_parameter/noise_scale = 0.025
+shader_parameter/shore_start = 0.6
+shader_parameter/shore_end = 1.0

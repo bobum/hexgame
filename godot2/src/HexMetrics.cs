@@ -32,7 +32,11 @@ public static class HexMetrics
 
     // Tutorial 6: River constants
     public const float StreamBedElevationOffset = -1.75f;
-    public const float RiverSurfaceElevationOffset = -0.5f;
+
+    // Tutorial 8: Water constants (shared with rivers)
+    public const float WaterElevationOffset = -0.5f;
+    public const float WaterFactor = 0.6f;
+    public const float WaterBlendFactor = 1f - WaterFactor;
 
     // Tutorial 7: Road constants
     public const float RoadElevationOffset = 0.1f;  // Slight offset to prevent z-fighting
@@ -148,6 +152,35 @@ public static class HexMetrics
     public static Vector3 GetSolidEdgeMiddle(HexDirection direction)
     {
         return (Corners[(int)direction] + Corners[(int)direction + 1]) * (0.5f * SolidFactor);
+    }
+
+    // Tutorial 8: Water corner methods
+
+    /// <summary>
+    /// Returns the first water corner for a direction.
+    /// Water corners are scaled by WaterFactor (0.6) to create a smaller water hexagon.
+    /// </summary>
+    public static Vector3 GetFirstWaterCorner(HexDirection direction)
+    {
+        return Corners[(int)direction] * WaterFactor;
+    }
+
+    /// <summary>
+    /// Returns the second water corner for a direction.
+    /// Water corners are scaled by WaterFactor (0.6) to create a smaller water hexagon.
+    /// </summary>
+    public static Vector3 GetSecondWaterCorner(HexDirection direction)
+    {
+        return Corners[(int)direction + 1] * WaterFactor;
+    }
+
+    /// <summary>
+    /// Returns the bridge between water corners for a direction.
+    /// Used for shore connections between water and land.
+    /// </summary>
+    public static Vector3 GetWaterBridge(HexDirection direction)
+    {
+        return (Corners[(int)direction] + Corners[(int)direction + 1]) * WaterBlendFactor;
     }
 
     /// <summary>

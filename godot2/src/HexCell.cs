@@ -34,6 +34,9 @@ public partial class HexCell : Node3D
     // Tutorial 7: Road data
     private bool[] _roads = new bool[6];
 
+    // Tutorial 8: Water data
+    private int _waterLevel;
+
     public int Elevation
     {
         get => _elevation;
@@ -73,6 +76,31 @@ public partial class HexCell : Node3D
         }
     }
 
+    // Tutorial 8: Water properties
+
+    public int WaterLevel
+    {
+        get => _waterLevel;
+        set
+        {
+            if (_waterLevel == value) return;
+            _waterLevel = value;
+            ValidateRivers();
+            Refresh();
+        }
+    }
+
+    /// <summary>
+    /// Returns true if this cell is underwater (water level > elevation).
+    /// </summary>
+    public bool IsUnderwater => _waterLevel > _elevation;
+
+    /// <summary>
+    /// Y position of the water surface.
+    /// </summary>
+    public float WaterSurfaceY =>
+        (_waterLevel + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
+
     // Tutorial 6: River properties
 
     public bool HasIncomingRiver => _hasIncomingRiver;
@@ -101,9 +129,10 @@ public partial class HexCell : Node3D
 
     /// <summary>
     /// Y position of the river water surface.
+    /// Uses WaterElevationOffset as rivers and water share the same surface offset.
     /// </summary>
     public float RiverSurfaceY =>
-        (_elevation + HexMetrics.RiverSurfaceElevationOffset) * HexMetrics.ElevationStep;
+        (_elevation + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
 
     /// <summary>
     /// Gets the direction of a river begin or end.
@@ -320,11 +349,13 @@ public partial class HexCell : Node3D
 
     /// <summary>
     /// Checks if a neighbor is a valid destination for a river.
-    /// Rivers can only flow to cells at the same elevation or lower.
+    /// Rivers can flow to cells at the same elevation or lower,
+    /// or into water bodies at matching water level.
     /// </summary>
     bool IsValidRiverDestination(HexCell neighbor)
     {
-        return neighbor != null && _elevation >= neighbor.Elevation;
+        return neighbor != null &&
+            (_elevation >= neighbor.Elevation || _waterLevel == neighbor.Elevation);
     }
 
     /// <summary>
