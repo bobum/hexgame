@@ -28,6 +28,7 @@
   <!-- Include source files that can be tested without Godot runtime -->
   <ItemGroup>
     <Compile Include="..\src\HexDirection.cs" Link="Source\HexDirection.cs" />
+    <Compile Include="..\src\EdgeVertices.cs" Link="Source\EdgeVertices.cs" />
   </ItemGroup>
 
 </Project>

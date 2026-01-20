@@ -28,13 +28,15 @@ public class HexMetricsTests
     [Fact]
     public void SolidFactor_IsCorrect()
     {
-        HexMetrics.SolidFactor.Should().Be(0.75f);
+        // Tutorial 3 uses 0.8f for solid factor
+        HexMetrics.SolidFactor.Should().Be(0.8f);
     }
 
     [Fact]
     public void BlendFactor_IsCorrect()
     {
-        HexMetrics.BlendFactor.Should().Be(0.25f);
+        // BlendFactor = 1 - SolidFactor = 0.2f
+        HexMetrics.BlendFactor.Should().BeApproximately(0.2f, Tolerance);
     }
 
     [Fact]
@@ -168,7 +170,8 @@ public class HexMetricsTests
     [Fact]
     public void ElevationStep_IsCorrect()
     {
-        HexMetrics.ElevationStep.Should().Be(5f);
+        // Tutorial 3 uses 3f for elevation step
+        HexMetrics.ElevationStep.Should().Be(3f);
     }
 
     [Fact]

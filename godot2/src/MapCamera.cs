@@ -15,11 +15,11 @@ public partial class MapCamera : Camera3D
     [Export] public float MaxZoom { get; set; } = 150.0f;
     [Export] public float MinPitch { get; set; } = 20.0f;
     [Export] public float MaxPitch { get; set; } = 85.0f;
-    [Export] public float PanSpeed { get; set; } = 0.5f;
+    [Export] public float PanSpeed { get; set; } = 1.5f;
     [Export] public float RotateSpeed { get; set; } = 0.3f;
     [Export] public float ZoomSpeed { get; set; } = 0.1f;
-    [Export] public float KeyboardPanSpeed { get; set; } = 30.0f;
-    [Export] public float KeyboardRotateSpeed { get; set; } = 60.0f;
+    [Export] public float KeyboardPanSpeed { get; set; } = 200.0f;
+    [Export] public float KeyboardRotateSpeed { get; set; } = 90.0f;
 
     // Orbital camera state
     private Vector3 _target = new Vector3(45, 0, 40);  // Center of 6x6 grid approximately
