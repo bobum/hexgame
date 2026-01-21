@@ -41,6 +41,12 @@ public partial class HexGrid : Node3D
 
         // Tutorial 6: Generate test rivers for visual verification
         GenerateTestRivers();
+
+        // Tutorial 7: Generate test roads for visual verification
+        GenerateTestRoads();
+
+        // Tutorial 8: Generate test water bodies for visual verification
+        GenerateTestWater();
     }
 
     private void CreateChunks()
@@ -193,6 +199,24 @@ public partial class HexGrid : Node3D
     public void GenerateTestRivers()
     {
         TestRiverGenerator.GenerateTestPatterns(GetCellByOffset);
+    }
+
+    /// <summary>
+    /// Generates test roads for visual verification.
+    /// Call this after the grid and rivers are created.
+    /// </summary>
+    public void GenerateTestRoads()
+    {
+        TestRoadGenerator.GenerateTestPatterns(GetCellByOffset);
+    }
+
+    /// <summary>
+    /// Generates test water bodies for visual verification.
+    /// Call this after the grid is created.
+    /// </summary>
+    public void GenerateTestWater()
+    {
+        TestWaterGenerator.GenerateTestPatterns(GetCellByOffset);
     }
 
     private void InitializeNoiseSource()

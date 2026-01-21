@@ -1,28 +1,35 @@
 shader_type spatial;
-render_mode cull_disabled, blend_mix, depth_draw_opaque;
+render_mode cull_disabled, blend_mix, depth_draw_always;
 
-// River water shader for hex map
-// Ported from Catlike Coding Hex Map Tutorial 6
-// Uses UV coordinates for flow animation
+// River shader - Catlike Coding Hex Map Tutorial 6
+// Uses UV for flow animation
 
-uniform vec4 water_color : source_color = vec4(0.2, 0.5, 0.8, 0.7);
-uniform float flow_speed : hint_range(0.0, 2.0) = 0.5;
+uniform vec4 water_color : source_color = vec4(0.2, 0.5, 0.8, 0.5);
+uniform sampler2D noise_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
+
+// River function - direct port from Water.cginc
+float River(vec2 riverUV, sampler2D noiseTex) {
+    vec2 uv = riverUV;
+    uv.x = uv.x * 0.0625 + TIME * 0.005;  // Very slow horizontal drift
+    uv.y -= TIME * 0.25;  // Flows downstream
+    vec4 noise = texture(noiseTex, uv);
+
+    vec2 uv2 = riverUV;
+    uv2.x = uv2.x * 0.0625 - TIME * 0.0052;  // Counter-drift
+    uv2.y -= TIME * 0.23;  // Slightly different speed
+    vec4 noise2 = texture(noiseTex, uv2);
+
+    return noise.r * noise2.a;  // Multiply creates dark/light interference
+}
 
 void fragment() {
-    // Animate UV in V direction for water flow effect
-    vec2 animated_uv = UV;
-    animated_uv.y -= TIME * flow_speed;
+    float river = River(UV, noise_texture);
 
-    // Simple water pattern using animated UVs
-    // Creates subtle wave effect
-    float wave = sin(animated_uv.y * 10.0) * 0.02;
-    float pattern = sin((animated_uv.x + wave) * 20.0 + animated_uv.y * 5.0);
-    pattern = pattern * 0.1 + 0.9;
+    // Additive blending: base color + river brightness
+    vec4 c = clamp(water_color + vec4(vec3(river), 0.0), vec4(0.0), vec4(1.0));
 
-    ALBEDO = water_color.rgb * pattern;
-    ALPHA = water_color.a;
-
-    // Add some specular for water shine
-    ROUGHNESS = 0.3;
-    METALLIC = 0.1;
+    ALBEDO = c.rgb;
+    ALPHA = c.a;
+    ROUGHNESS = 0.2;
+    METALLIC = 0.0;
 }

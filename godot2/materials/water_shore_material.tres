@@ -1,10 +1,10 @@
 [gd_resource type="ShaderMaterial" load_steps=3 format=3]
 
-[ext_resource type="Shader" path="res://shaders/river.gdshader" id="1_river"]
+[ext_resource type="Shader" path="res://shaders/water_shore.gdshader" id="1_water_shore"]
 [ext_resource type="Texture2D" path="res://assets/noise.png" id="2_noise"]
 
 [resource]
 render_priority = 0
-shader = ExtResource("1_river")
+shader = ExtResource("1_water_shore")
 shader_parameter/water_color = Color(0.2, 0.5, 0.8, 0.5)
 shader_parameter/noise_texture = ExtResource("2_noise")

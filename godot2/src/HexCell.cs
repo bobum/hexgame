@@ -31,6 +31,12 @@ public partial class HexCell : Node3D
     private HexDirection _incomingRiver;
     private HexDirection _outgoingRiver;
 
+    // Tutorial 7: Road data
+    private bool[] _roads = new bool[6];
+
+    // Tutorial 8: Water data
+    private int _waterLevel;
+
     public int Elevation
     {
         get => _elevation;
@@ -54,6 +60,7 @@ public partial class HexCell : Node3D
             }
 
             ValidateRivers();
+            ValidateRoads();
             Refresh();
         }
     }
@@ -68,6 +75,31 @@ public partial class HexCell : Node3D
             Refresh();
         }
     }
+
+    // Tutorial 8: Water properties
+
+    public int WaterLevel
+    {
+        get => _waterLevel;
+        set
+        {
+            if (_waterLevel == value) return;
+            _waterLevel = value;
+            ValidateRivers();
+            Refresh();
+        }
+    }
+
+    /// <summary>
+    /// Returns true if this cell is underwater (water level > elevation).
+    /// </summary>
+    public bool IsUnderwater => _waterLevel > _elevation;
+
+    /// <summary>
+    /// Y position of the water surface.
+    /// </summary>
+    public float WaterSurfaceY =>
+        (_waterLevel + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
 
     // Tutorial 6: River properties
 
@@ -97,9 +129,112 @@ public partial class HexCell : Node3D
 
     /// <summary>
     /// Y position of the river water surface.
+    /// Uses WaterElevationOffset as rivers and water share the same surface offset.
     /// </summary>
     public float RiverSurfaceY =>
-        (_elevation + HexMetrics.RiverSurfaceElevationOffset) * HexMetrics.ElevationStep;
+        (_elevation + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
+
+    /// <summary>
+    /// Gets the direction of a river begin or end.
+    /// Returns incoming direction if has incoming, otherwise outgoing.
+    /// </summary>
+    public HexDirection RiverBeginOrEndDirection =>
+        _hasIncomingRiver ? _incomingRiver : _outgoingRiver;
+
+    // Tutorial 7: Road properties
+
+    /// <summary>
+    /// Returns true if a road exists through the specified edge.
+    /// </summary>
+    public bool HasRoadThroughEdge(HexDirection direction)
+    {
+        return _roads[(int)direction];
+    }
+
+    /// <summary>
+    /// Returns true if this cell has any roads.
+    /// </summary>
+    public bool HasRoads
+    {
+        get
+        {
+            for (int i = 0; i < _roads.Length; i++)
+            {
+                if (_roads[i]) return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets the absolute elevation difference to a neighbor.
+    /// Returns int.MaxValue if neighbor is null.
+    /// </summary>
+    public int GetElevationDifference(HexDirection direction)
+    {
+        HexCell neighbor = GetNeighbor(direction);
+        if (neighbor == null) return int.MaxValue;
+        int difference = _elevation - neighbor.Elevation;
+        return difference >= 0 ? difference : -difference;
+    }
+
+    /// <summary>
+    /// Adds a road in the specified direction if valid.
+    /// Roads cannot be placed where rivers exist or where elevation difference > 1.
+    /// </summary>
+    public void AddRoad(HexDirection direction)
+    {
+        if (!_roads[(int)direction] &&
+            !HasRiverThroughEdge(direction) &&
+            GetElevationDifference(direction) <= 1)
+        {
+            SetRoad((int)direction, true);
+        }
+    }
+
+    /// <summary>
+    /// Removes all roads from this cell.
+    /// </summary>
+    public void RemoveRoads()
+    {
+        for (int i = 0; i < _neighbors.Length; i++)
+        {
+            if (_roads[i])
+            {
+                SetRoad(i, false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sets a road in the specified direction, updating both cells.
+    /// </summary>
+    private void SetRoad(int index, bool state)
+    {
+        _roads[index] = state;
+        HexCell neighbor = _neighbors[index];
+        if (neighbor != null)
+        {
+            neighbor._roads[(int)((HexDirection)index).Opposite()] = state;
+            neighbor.RefreshSelfOnly();
+        }
+        RefreshSelfOnly();
+    }
+
+    /// <summary>
+    /// Validates roads after elevation change.
+    /// Removes roads where elevation difference is now > 1.
+    /// </summary>
+    private void ValidateRoads()
+    {
+        for (int i = 0; i < _neighbors.Length; i++)
+        {
+            if (_roads[i] && GetElevationDifference((HexDirection)i) > 1)
+            {
+                SetRoad(i, false);
+            }
+        }
+    }
 
     public HexCell GetNeighbor(HexDirection direction)
     {
@@ -214,11 +349,13 @@ public partial class HexCell : Node3D
 
     /// <summary>
     /// Checks if a neighbor is a valid destination for a river.
-    /// Rivers can only flow to cells at the same elevation or lower.
+    /// Rivers can flow to cells at the same elevation or lower,
+    /// or into water bodies at matching water level.
     /// </summary>
     bool IsValidRiverDestination(HexCell neighbor)
     {
-        return neighbor != null && _elevation >= neighbor.Elevation;
+        return neighbor != null &&
+            (_elevation >= neighbor.Elevation || _waterLevel == neighbor.Elevation);
     }
 
     /// <summary>
