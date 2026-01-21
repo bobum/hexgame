@@ -787,6 +787,9 @@ public partial class HexMesh : MeshInstance3D
             TriangulateEdgeStrip(e1, cell.Color, e2, neighbor.Color, hasRoad);
         }
 
+        // Tutorial 10: Add walls along edge
+        _features?.AddWall(e1, cell, e2, neighbor, hasRiver, hasRoad);
+
         // Corner triangle (only for NE and E to avoid duplicates)
         HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
         if (direction <= HexDirection.E && nextNeighbor != null)
@@ -889,6 +892,9 @@ public partial class HexMesh : MeshInstance3D
             AddTriangle(bottom, left, right);
             AddTriangleColor(bottomCell.Color, leftCell.Color, rightCell.Color);
         }
+
+        // Tutorial 10: Add corner walls
+        _features?.AddWall(bottom, bottomCell, left, leftCell, right, rightCell);
     }
 
     private void TriangulateCornerTerraces(

@@ -42,6 +42,9 @@ public partial class HexCell : Node3D
     private int _farmLevel;
     private int _plantLevel;
 
+    // Tutorial 10: Wall data
+    private bool _walled;
+
     public int Elevation
     {
         get => _elevation;
@@ -152,6 +155,25 @@ public partial class HexCell : Node3D
             {
                 _plantLevel = value;
                 RefreshSelfOnly();
+            }
+        }
+    }
+
+    // Tutorial 10: Wall properties
+
+    /// <summary>
+    /// Whether this cell is surrounded by walls.
+    /// Walls are placed on the edges between walled and non-walled cells.
+    /// </summary>
+    public bool Walled
+    {
+        get => _walled;
+        set
+        {
+            if (_walled != value)
+            {
+                _walled = value;
+                Refresh();
             }
         }
     }

@@ -53,6 +53,9 @@ public partial class HexGrid : Node3D
 
         // Tutorial 9: Generate test features for visual verification
         GenerateTestFeatures();
+
+        // Tutorial 10: Generate test walls for visual verification
+        GenerateTestWalls();
     }
 
     private void CreateChunks()
@@ -232,6 +235,15 @@ public partial class HexGrid : Node3D
     public void GenerateTestFeatures()
     {
         TestFeatureGenerator.GenerateTestPatterns(GetCellByOffset);
+    }
+
+    /// <summary>
+    /// Generates test walls for visual verification.
+    /// Call this after the grid and other test patterns are created.
+    /// </summary>
+    public void GenerateTestWalls()
+    {
+        TestWallGenerator.GenerateTestPatterns(GetCellByOffset);
     }
 
     private void InitializeNoiseSource()
