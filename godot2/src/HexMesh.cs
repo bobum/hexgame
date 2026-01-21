@@ -37,6 +37,9 @@ public partial class HexMesh : MeshInstance3D
     private HexMesh? _waterShore;
     private HexMesh? _estuaries;
 
+    // Tutorial 9: Reference to feature manager for terrain feature placement
+    private HexFeatureManager? _features;
+
     public override void _Ready()
     {
         // Initialize mesh if not already done
@@ -184,13 +187,15 @@ public partial class HexMesh : MeshInstance3D
     /// <param name="water">Optional water mesh for open water triangulation</param>
     /// <param name="waterShore">Optional water shore mesh for shore foam triangulation</param>
     /// <param name="estuaries">Optional estuaries mesh for river-water transitions</param>
+    /// <param name="features">Optional feature manager for terrain feature placement</param>
     public void Triangulate(
         HexCell[] cells,
         HexMesh? rivers = null,
         HexMesh? roads = null,
         HexMesh? water = null,
         HexMesh? waterShore = null,
-        HexMesh? estuaries = null)
+        HexMesh? estuaries = null,
+        HexFeatureManager? features = null)
     {
         EnsureInitialized();
         Clear();
@@ -225,6 +230,9 @@ public partial class HexMesh : MeshInstance3D
         {
             _estuaries.Clear();
         }
+
+        // Tutorial 9: Initialize feature manager
+        _features = features;
 
         for (int i = 0; i < cells.Length; i++)
         {
@@ -272,6 +280,13 @@ public partial class HexMesh : MeshInstance3D
         if (cell.IsUnderwater)
         {
             TriangulateWater(cell);
+        }
+
+        // Tutorial 9: Add features at cell center
+        // Features are NOT placed on underwater cells, cells with rivers, or cells with roads
+        if (_features != null && !cell.IsUnderwater && !cell.HasRiver && !cell.HasRoads)
+        {
+            _features.AddFeature(cell, cell.Position);
         }
     }
 
@@ -374,6 +389,14 @@ public partial class HexMesh : MeshInstance3D
                 e,
                 cell.HasRoadThroughEdge(direction)
             );
+        }
+
+        // Tutorial 9: Add features at triangle centers (6 per cell, one per direction)
+        // Features skip underwater cells and directions with roads through them
+        if (_features != null && !cell.IsUnderwater && !cell.HasRoadThroughEdge(direction))
+        {
+            Vector3 featurePosition = (center + e.V1 + e.V5) * (1f / 3f);
+            _features.AddFeature(cell, featurePosition);
         }
     }
 
@@ -549,6 +572,14 @@ public partial class HexMesh : MeshInstance3D
         if (cell.HasRoads)
         {
             TriangulateRoadAdjacentToRiver(direction, cell, center, e);
+        }
+
+        // Tutorial 9: Add features at triangle centers adjacent to rivers
+        // Features can appear in triangles adjacent to rivers (just not in river channel itself)
+        if (_features != null && !cell.IsUnderwater && !cell.HasRoadThroughEdge(direction))
+        {
+            Vector3 featurePosition = (center + e.V1 + e.V5) * (1f / 3f);
+            _features.AddFeature(cell, featurePosition);
         }
     }
 

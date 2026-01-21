@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://farm_l1_hay1"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hay"]
+top_radius = 0.3
+bottom_radius = 0.5
+height = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hay"]
+albedo_color = Color(0.8, 0.7, 0.3, 1)
+
+[node name="SmallHaystack" type="Node3D"]
+
+[node name="Hay" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+mesh = SubResource("CylinderMesh_hay")
+surface_material_override/0 = SubResource("StandardMaterial3D_hay")

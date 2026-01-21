@@ -37,6 +37,11 @@ public partial class HexCell : Node3D
     // Tutorial 8: Water data
     private int _waterLevel;
 
+    // Tutorial 9: Feature level data
+    private int _urbanLevel;
+    private int _farmLevel;
+    private int _plantLevel;
+
     public int Elevation
     {
         get => _elevation;
@@ -100,6 +105,56 @@ public partial class HexCell : Node3D
     /// </summary>
     public float WaterSurfaceY =>
         (_waterLevel + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
+
+    // Tutorial 9: Feature properties
+
+    /// <summary>
+    /// Urban feature density level (0-3). 0 = none.
+    /// </summary>
+    public int UrbanLevel
+    {
+        get => _urbanLevel;
+        set
+        {
+            if (_urbanLevel != value)
+            {
+                _urbanLevel = value;
+                RefreshSelfOnly();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Farm feature density level (0-3). 0 = none.
+    /// </summary>
+    public int FarmLevel
+    {
+        get => _farmLevel;
+        set
+        {
+            if (_farmLevel != value)
+            {
+                _farmLevel = value;
+                RefreshSelfOnly();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Plant feature density level (0-3). 0 = none.
+    /// </summary>
+    public int PlantLevel
+    {
+        get => _plantLevel;
+        set
+        {
+            if (_plantLevel != value)
+            {
+                _plantLevel = value;
+                RefreshSelfOnly();
+            }
+        }
+    }
 
     // Tutorial 6: River properties
 

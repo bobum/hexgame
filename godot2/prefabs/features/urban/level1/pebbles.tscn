@@ -1,0 +1,25 @@
+[gd_scene load_steps=3 format=3 uid="uid://urban_l1_pebbles1"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_pebble"]
+radius = 0.2
+height = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pebble"]
+albedo_color = Color(0.5, 0.48, 0.45, 1)
+
+[node name="Pebbles" type="Node3D"]
+
+[node name="Pebble1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7, 0, 0, 0, 1, 0, 0.1, 0)
+mesh = SubResource("SphereMesh_pebble")
+surface_material_override/0 = SubResource("StandardMaterial3D_pebble")
+
+[node name="Pebble2" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.8, 0, 0, 0, 0.6, 0, 0, 0, 0.9, 0.3, 0.08, 0.2)
+mesh = SubResource("SphereMesh_pebble")
+surface_material_override/0 = SubResource("StandardMaterial3D_pebble")
+
+[node name="Pebble3" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.9, 0, 0, 0, 0.5, 0, 0, 0, 1.1, -0.2, 0.07, -0.15)
+mesh = SubResource("SphereMesh_pebble")
+surface_material_override/0 = SubResource("StandardMaterial3D_pebble")
