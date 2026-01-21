@@ -34,39 +34,52 @@ public static class TestSpecialFeatureGenerator
     /// <summary>
     /// Scenario 1: Place one of each special feature type.
     /// SpecialIndex 1 = Castle, 2 = Ziggurat, 3 = Megaflora
+    /// Grid is 20x15 (x: 0-19, z: 0-14), so use valid coordinates.
     /// </summary>
     private static void GenerateAllSpecialTypes(Func<int, int, HexCell?> getCell)
     {
         GD.Print("  Creating all special feature types...");
 
-        // Castle at (20, 2)
-        var castleCell = getCell(20, 2);
+        // Castle at (2, 8) - prominent location
+        var castleCell = getCell(2, 8);
         if (castleCell != null)
         {
             castleCell.Elevation = 2;
             castleCell.Color = new Color(0.6f, 0.6f, 0.6f); // Gray for castle
             castleCell.SpecialIndex = 1;
-            GD.Print("    Castle placed at (20, 2)");
+            GD.Print("    Castle placed at (2, 8)");
+        }
+        else
+        {
+            GD.PrintErr("    Castle cell (2, 8) is NULL!");
         }
 
-        // Ziggurat at (22, 2)
-        var zigguratCell = getCell(22, 2);
+        // Ziggurat at (5, 8)
+        var zigguratCell = getCell(5, 8);
         if (zigguratCell != null)
         {
             zigguratCell.Elevation = 2;
             zigguratCell.Color = new Color(0.8f, 0.7f, 0.5f); // Sandy for ziggurat
             zigguratCell.SpecialIndex = 2;
-            GD.Print("    Ziggurat placed at (22, 2)");
+            GD.Print("    Ziggurat placed at (5, 8)");
+        }
+        else
+        {
+            GD.PrintErr("    Ziggurat cell (5, 8) is NULL!");
         }
 
-        // Megaflora at (24, 2)
-        var megafloraCell = getCell(24, 2);
+        // Megaflora at (8, 8)
+        var megafloraCell = getCell(8, 8);
         if (megafloraCell != null)
         {
             megafloraCell.Elevation = 1;
             megafloraCell.Color = new Color(0.2f, 0.6f, 0.2f); // Green for megaflora
             megafloraCell.SpecialIndex = 3;
-            GD.Print("    Megaflora placed at (24, 2)");
+            GD.Print("    Megaflora placed at (8, 8)");
+        }
+        else
+        {
+            GD.PrintErr("    Megaflora cell (8, 8) is NULL!");
         }
 
         GD.Print("  All special feature types created");
@@ -80,8 +93,8 @@ public static class TestSpecialFeatureGenerator
     {
         GD.Print("  Testing special feature road blocking...");
 
-        // Place a castle
-        var specialCell = getCell(20, 5);
+        // Place a castle at valid coordinates
+        var specialCell = getCell(11, 8);
         if (specialCell == null) return;
 
         specialCell.Elevation = 1;
@@ -106,7 +119,7 @@ public static class TestSpecialFeatureGenerator
 
         if (roadExistsBefore == roadExistsAfter && !roadExistsAfter)
         {
-            GD.Print("    PASS: Roads correctly blocked on special cell (20, 5)");
+            GD.Print("    PASS: Roads correctly blocked on special cell (11, 8)");
         }
         else
         {
@@ -124,8 +137,8 @@ public static class TestSpecialFeatureGenerator
     {
         GD.Print("  Testing river override of special feature...");
 
-        // Place a ziggurat
-        var specialCell = getCell(22, 5);
+        // Place a ziggurat at valid coordinates
+        var specialCell = getCell(14, 8);
         if (specialCell == null) return;
 
         specialCell.Elevation = 2;
@@ -148,7 +161,7 @@ public static class TestSpecialFeatureGenerator
 
         if (specialBefore == 2 && specialAfter == 0)
         {
-            GD.Print("    PASS: River correctly cleared special feature at (22, 5)");
+            GD.Print("    PASS: River correctly cleared special feature at (14, 8)");
         }
         else
         {
@@ -166,26 +179,26 @@ public static class TestSpecialFeatureGenerator
     {
         GD.Print("  Creating underwater special feature test...");
 
-        // Place a megaflora underwater
-        var underwaterCell = getCell(24, 5);
+        // Place a megaflora underwater at valid coordinates
+        var underwaterCell = getCell(17, 8);
         if (underwaterCell != null)
         {
             underwaterCell.Elevation = 0;
             underwaterCell.WaterLevel = 2; // Water above elevation
             underwaterCell.Color = new Color(0.2f, 0.4f, 0.8f); // Water blue
             underwaterCell.SpecialIndex = 3; // Megaflora (won't render due to underwater check)
-            GD.Print("    Underwater special at (24, 5) - should NOT render feature");
+            GD.Print("    Underwater special at (17, 8) - should NOT render feature");
         }
 
         // Place a megaflora just above water for comparison
-        var aboveWaterCell = getCell(25, 5);
+        var aboveWaterCell = getCell(19, 8);
         if (aboveWaterCell != null)
         {
             aboveWaterCell.Elevation = 2;
             aboveWaterCell.WaterLevel = 1; // Water below elevation
             aboveWaterCell.Color = new Color(0.2f, 0.6f, 0.2f);
             aboveWaterCell.SpecialIndex = 3; // Megaflora (will render)
-            GD.Print("    Above-water special at (25, 5) - should render feature");
+            GD.Print("    Above-water special at (19, 8) - should render feature");
         }
 
         GD.Print("  Underwater special feature test created");
