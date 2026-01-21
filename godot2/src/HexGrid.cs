@@ -33,6 +33,9 @@ public partial class HexGrid : Node3D
         // Initialize noise texture for perturbation
         InitializeNoiseSource();
 
+        // Tutorial 9: Initialize hash grid for feature placement
+        HexMetrics.InitializeHashGrid(1234);
+
         _cellCountX = ChunkCountX * HexMetrics.ChunkSizeX;
         _cellCountZ = ChunkCountZ * HexMetrics.ChunkSizeZ;
 
@@ -47,6 +50,9 @@ public partial class HexGrid : Node3D
 
         // Tutorial 8: Generate test water bodies for visual verification
         GenerateTestWater();
+
+        // Tutorial 9: Generate test features for visual verification
+        GenerateTestFeatures();
     }
 
     private void CreateChunks()
@@ -217,6 +223,15 @@ public partial class HexGrid : Node3D
     public void GenerateTestWater()
     {
         TestWaterGenerator.GenerateTestPatterns(GetCellByOffset);
+    }
+
+    /// <summary>
+    /// Generates test terrain features for visual verification.
+    /// Call this after the grid and other test patterns are created.
+    /// </summary>
+    public void GenerateTestFeatures()
+    {
+        TestFeatureGenerator.GenerateTestPatterns(GetCellByOffset);
     }
 
     private void InitializeNoiseSource()

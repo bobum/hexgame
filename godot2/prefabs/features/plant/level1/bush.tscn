@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://plant_l1_bush1"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_bush"]
+radius = 0.5
+height = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bush"]
+albedo_color = Color(0.15, 0.4, 0.1, 1)
+
+[node name="Bush" type="Node3D"]
+
+[node name="Foliage" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("SphereMesh_bush")
+surface_material_override/0 = SubResource("StandardMaterial3D_bush")

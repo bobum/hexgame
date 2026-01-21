@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://urban_l3_boulder1"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_boulder"]
+radius = 1.2
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_boulder"]
+albedo_color = Color(0.35, 0.32, 0.3, 1)
+
+[node name="LargeBoulder" type="Node3D"]
+
+[node name="Boulder" type="MeshInstance3D" parent="."]
+transform = Transform3D(1.4, 0, 0, 0, 1.0, 0, 0, 0, 1.2, 0, 0.9, 0)
+mesh = SubResource("SphereMesh_boulder")
+surface_material_override/0 = SubResource("StandardMaterial3D_boulder")

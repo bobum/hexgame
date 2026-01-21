@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://urban_l1_rock1"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_rock"]
+radius = 0.4
+height = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rock"]
+albedo_color = Color(0.45, 0.42, 0.4, 1)
+
+[node name="SmallRock" type="Node3D"]
+
+[node name="Rock" type="MeshInstance3D" parent="."]
+transform = Transform3D(1.2, 0, 0, 0, 0.8, 0, 0, 0, 1, 0, 0.25, 0)
+mesh = SubResource("SphereMesh_rock")
+surface_material_override/0 = SubResource("StandardMaterial3D_rock")

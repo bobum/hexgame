@@ -18,6 +18,9 @@ public partial class HexGridChunk : Node3D
     HexMesh _waterShoreMesh = null!;
     HexMesh _estuariesMesh = null!;
 
+    // Tutorial 9: Feature manager
+    HexFeatureManager _features = null!;
+
     // Tutorial 6: River material loaded once
     private static Material? _riverMaterial;
 
@@ -114,6 +117,12 @@ public partial class HexGridChunk : Node3D
         }
         AddChild(_estuariesMesh);
         _estuariesMesh.EnsureInitialized();
+
+        // Tutorial 9: Create feature manager
+        _features = new HexFeatureManager();
+        _features.Name = "Features";
+        AddChild(_features);
+        _features.Initialize();
 
         // Create label container
         _labelContainer = new Node3D();
@@ -221,19 +230,22 @@ public partial class HexGridChunk : Node3D
     {
         if (_needsRefresh)
         {
-            // Count cells with roads for debug
-            int roadCells = 0;
-            foreach (var cell in _cells) { if (cell?.HasRoads == true) roadCells++; }
-            GD.Print($"CHUNK REFRESH: {Name} retriangulating {_cells.Length} cells, {roadCells} with roads");
+            // Tutorial 9: Clear features before triangulation
+            _features.Clear();
+
             _hexMesh.Triangulate(
                 _cells,
                 _riversMesh,
                 _roadsMesh,
                 _waterMesh,
                 _waterShoreMesh,
-                _estuariesMesh
+                _estuariesMesh,
+                _features
             );
-            GD.Print($"CHUNK REFRESH: {Name} DONE - roads mesh vertices: {_roadsMesh.VertexCount}");
+
+            // Tutorial 9: Apply features after triangulation
+            _features.Apply();
+
             _needsRefresh = false;
             SetProcess(false);
         }

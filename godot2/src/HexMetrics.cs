@@ -41,6 +41,12 @@ public static class HexMetrics
     // Tutorial 7: Road constants
     public const float RoadElevationOffset = 0.1f;  // Slight offset to prevent z-fighting
 
+    // Tutorial 9: Hash grid constants for feature placement
+    public const int HashGridSize = 256;
+    public const float HashGridScale = 0.25f;
+
+    private static HexHash[] _hashGrid = null!;
+
     // Procedural noise generation constants
     public const int NoiseTextureSize = 256;
 
@@ -242,5 +248,35 @@ public static class HexMetrics
         position.X += (sample.X * 2f - 1f) * CellPerturbStrength;
         position.Z += (sample.Z * 2f - 1f) * CellPerturbStrength;
         return position;
+    }
+
+    // Tutorial 9: Hash grid methods
+
+    /// <summary>
+    /// Initializes the hash grid with the given seed.
+    /// Must be called before sampling. Uses GD.Seed for deterministic generation.
+    /// </summary>
+    public static void InitializeHashGrid(int seed)
+    {
+        _hashGrid = new HexHash[HashGridSize * HashGridSize];
+        GD.Seed((ulong)seed);
+
+        for (int i = 0; i < _hashGrid.Length; i++)
+        {
+            _hashGrid[i] = HexHash.Create();
+        }
+    }
+
+    /// <summary>
+    /// Samples the hash grid at a world position.
+    /// Handles negative coordinates via modulo wraparound.
+    /// </summary>
+    public static HexHash SampleHashGrid(Vector3 position)
+    {
+        int x = (int)(position.X * HashGridScale) % HashGridSize;
+        if (x < 0) x += HashGridSize;
+        int z = (int)(position.Z * HashGridScale) % HashGridSize;
+        if (z < 0) z += HashGridSize;
+        return _hashGrid[x + z * HashGridSize];
     }
 }
