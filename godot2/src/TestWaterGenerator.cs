@@ -30,7 +30,142 @@ public static class TestWaterGenerator
         // Create a river flowing from highland lake to lowland lake
         GenerateConnectingRiver(getCell);
 
+        // Create a small side river flowing into the lowland lake
+        GenerateSideRiver(getCell);
+
+        // NOTE: Removed GenerateOutflowRiver - water hexes flowing into lower elevation
+        // doesn't look right. Rule: water hexes should not flow into lower elevation hexes.
+
         GD.Print("Test water patterns generated.");
+    }
+
+    /// <summary>
+    /// Creates a river flowing from highland area down into a water hex.
+    /// Tests waterfall flowing INTO water from above.
+    /// Path: 12,-18,6 (15,6) -> 11,-18,7 (14,7) -> 10,-17,7 (13,7 water hex)
+    /// </summary>
+    private static void GenerateOutflowRiver(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating outflow river into water hex...");
+
+        // First, make (13, 7) a water hex
+        var waterCell = getCell(13, 7);
+        if (waterCell != null)
+        {
+            waterCell.Elevation = 0;
+            waterCell.WaterLevel = 1;  // Same as lowland lake
+            waterCell.Color = new Color(0.2f, 0.4f, 0.7f);
+            GD.Print($"    Made (13,7) a water hex: elevation=0, waterLevel=1");
+        }
+
+        // Modify (16, 6) - raise elevation and remove from water
+        var cell16_6 = getCell(16, 6);
+        if (cell16_6 != null)
+        {
+            cell16_6.Elevation = 4;   // Raised from 3 to 4
+            cell16_6.WaterLevel = 0;  // No longer a water hex
+            GD.Print($"    Modified (16,6): elevation=4, waterLevel=0 (not underwater)");
+        }
+
+        // Make (15, 5) flow into (15, 6) - river exiting highland lake
+        var lakeExitCell = getCell(15, 5);
+        var firstRiverCell = getCell(15, 6);
+        if (lakeExitCell != null && firstRiverCell != null)
+        {
+            // (15, 5) stays as water hex (highland lake) but adds outgoing river
+            for (int d = 0; d < 6; d++)
+            {
+                if (lakeExitCell.GetNeighbor((HexDirection)d) == firstRiverCell)
+                {
+                    lakeExitCell.SetOutgoingRiver((HexDirection)d);
+                    GD.Print($"    River from lake: (15,5) -> (15,6) dir={(HexDirection)d}");
+                    break;
+                }
+            }
+        }
+
+        var riverPath = new (int x, int z, int elevation)[]
+        {
+            (15, 6, 3),   // Start: 12,-18,6 lowered from 4 to 3
+            (14, 7, 2),   // 11,-18,7 at elevation 2
+            (13, 7, 0),   // End: 10,-17,7 water hex (elevation 0, water level 1)
+        };
+
+        // Set elevations
+        foreach (var (x, z, elevation) in riverPath)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+            cell.Elevation = elevation;
+        }
+
+        // Create river connections
+        for (int i = 0; i < riverPath.Length - 1; i++)
+        {
+            var (x1, z1, _) = riverPath[i];
+            var (x2, z2, _) = riverPath[i + 1];
+
+            var cell = getCell(x1, z1);
+            var nextCell = getCell(x2, z2);
+            if (cell == null || nextCell == null) continue;
+
+            // Find direction
+            for (int d = 0; d < 6; d++)
+            {
+                if (cell.GetNeighbor((HexDirection)d) == nextCell)
+                {
+                    cell.SetOutgoingRiver((HexDirection)d);
+                    GD.Print($"    River: ({x1},{z1}) -> ({x2},{z2}) dir={(HexDirection)d}");
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a small river flowing into the lowland lake from the side.
+    /// Path: 6,-12,6 (9,6) -> 5,-12,7 (8,7) -> 5,-13,8 (9,8 in lake)
+    /// </summary>
+    private static void GenerateSideRiver(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating side river into lowland lake...");
+
+        var riverPath = new (int x, int z, int elevation)[]
+        {
+            (9, 6, 3),   // Start: 6,-12,6 at elevation 3
+            (8, 7, 3),   // 5,-12,7 at elevation 3
+            (9, 8, 0),   // End: 5,-13,8 in lowland lake (elevation 0, water level 1)
+        };
+
+        // Set elevations
+        foreach (var (x, z, elevation) in riverPath)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+            cell.Elevation = elevation;
+        }
+
+        // Create river connections
+        for (int i = 0; i < riverPath.Length - 1; i++)
+        {
+            var (x1, z1, _) = riverPath[i];
+            var (x2, z2, _) = riverPath[i + 1];
+
+            var cell = getCell(x1, z1);
+            var nextCell = getCell(x2, z2);
+            if (cell == null || nextCell == null) continue;
+
+            // Find direction
+            for (int d = 0; d < 6; d++)
+            {
+                if (cell.GetNeighbor((HexDirection)d) == nextCell)
+                {
+                    cell.SetOutgoingRiver((HexDirection)d);
+                    GD.Print($"    River: ({x1},{z1}) -> ({x2},{z2}) dir={(HexDirection)d}");
+                    break;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -48,8 +183,8 @@ public static class TestWaterGenerator
         var lakeCells = new (int x, int z)[]
         {
             // Core lake cells
-            (8, 8), (9, 8), (10, 8), (11, 8),
-            (8, 9), (9, 9), (10, 9), (11, 9),
+            (8, 8), (9, 8), (10, 8), (11, 8), (12, 8),  // Added (12, 8)
+            (8, 9), (9, 9), (10, 9), (11, 9), (12, 9),  // Added (12, 9)
             (8, 10), (9, 10), (10, 10), (11, 10),
             (9, 11), (10, 11),
         };
@@ -137,13 +272,12 @@ public static class TestWaterGenerator
         var riverPath = new (int x, int z, int elevation)[]
         {
             (15, 4, 3),   // Start - part of highland lake (underwater, will be estuary)
-            (14, 4, 3),   // Exit highland lake shore
+            (14, 5, 4),   // Exit highland lake shore (raised from 3 to 4)
             (13, 5, 2),   // Descending
             (13, 6, 2),   //
             (12, 7, 1),   // Waterfall here (2->1)
             (13, 8, 1),   //
-            (12, 9, 0),   // Approaching lowland lake
-            (11, 9, 0),   // End - part of lowland lake (underwater, will be estuary)
+            (12, 9, 0),   // End - flows into lowland lake (removed 11,9)
         };
 
         // First pass: set elevations

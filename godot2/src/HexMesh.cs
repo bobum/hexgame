@@ -405,6 +405,10 @@ public partial class HexMesh : MeshInstance3D
             wm2.Y = cell.RiverSurfaceY;
             Vector3 wm4 = m.V4;
             wm4.Y = cell.RiverSurfaceY;
+            // Perturb vertices to match terrain (matches Unity's rivers.AddTriangle behavior)
+            waterCenter = HexMetrics.Perturb(waterCenter);
+            wm2 = HexMetrics.Perturb(wm2);
+            wm4 = HexMetrics.Perturb(wm4);
             _rivers.AddTriangleUnperturbed(waterCenter, wm2, wm4);
             if (reversed)
             {
@@ -677,41 +681,69 @@ public partial class HexMesh : MeshInstance3D
             e2.V3.Y = neighbor.StreamBedY;
 
             // Tutorial 6/8: Add water surface across connection
-            // Handle various underwater scenarios
-            if (_rivers != null && !cell.IsUnderwater)
+            // Handle various underwater scenarios for river-water body transitions
+            if (_rivers != null)
             {
-                if (!neighbor.IsUnderwater)
+                bool reversed = cell.HasIncomingRiver && cell.IncomingRiver == direction;
+
+                if (!cell.IsUnderwater && !neighbor.IsUnderwater)
                 {
-                    // Neither cell underwater: normal river connection
-                    bool reversed = cell.HasIncomingRiver && cell.IncomingRiver == direction;
+                    // Case 1: Neither cell underwater - normal river connection
                     TriangulateRiverQuad(
                         e1.V2, e1.V4, e2.V2, e2.V4,
                         cell.RiverSurfaceY, neighbor.RiverSurfaceY,
                         0.8f, reversed
                     );
                 }
-                else if (cell.Elevation > neighbor.WaterLevel)
+                else if (!cell.IsUnderwater && neighbor.IsUnderwater)
                 {
-                    // Neighbor underwater, cell above water: waterfall into water
-                    // Use waterfall interpolation to clip river at water surface
-                    bool reversed = cell.HasIncomingRiver && cell.IncomingRiver == direction;
-                    TriangulateWaterfallInWater(
-                        e1.V2, e1.V4, e2.V2, e2.V4,
-                        cell.RiverSurfaceY, neighbor.RiverSurfaceY,
-                        neighbor.WaterSurfaceY, reversed
-                    );
+                    // Case 2: Cell above water, neighbor underwater
+                    if (cell.Elevation > neighbor.WaterLevel)
+                    {
+                        // Case 2a: Cell floor above water level - waterfall dropping into water
+                        // Use interpolation to clip river quad at water surface
+                        TriangulateWaterfallInWater(
+                            e1.V2, e1.V4, e2.V2, e2.V4,
+                            cell.RiverSurfaceY, neighbor.RiverSurfaceY,
+                            neighbor.WaterSurfaceY, reversed
+                        );
+                    }
+                    else
+                    {
+                        // Case 2b: Cell floor at or below water level
+                        // Draw river quad from cell's river surface to neighbor's water surface
+                        TriangulateRiverQuad(
+                            e1.V2, e1.V4, e2.V2, e2.V4,
+                            cell.RiverSurfaceY, neighbor.WaterSurfaceY,
+                            0.8f, reversed
+                        );
+                    }
                 }
-            }
-            else if (cell.IsUnderwater && !neighbor.IsUnderwater && neighbor.Elevation > cell.WaterLevel)
-            {
-                // Cell underwater, neighbor above water: waterfall coming out of water
-                // The river flows FROM neighbor INTO this cell's water
-                bool reversed = cell.HasIncomingRiver && cell.IncomingRiver == direction;
-                TriangulateWaterfallInWater(
-                    e2.V4, e2.V2, e1.V4, e1.V2,  // Note: vertices swapped for opposite direction
-                    neighbor.RiverSurfaceY, cell.RiverSurfaceY,
-                    cell.WaterSurfaceY, !reversed
-                );
+                else if (cell.IsUnderwater && !neighbor.IsUnderwater)
+                {
+                    // Case 3: Cell underwater, neighbor above water
+                    if (neighbor.Elevation > cell.WaterLevel)
+                    {
+                        // Case 3a: Neighbor floor above water level - waterfall from neighbor into water
+                        // Process from underwater side with swapped vertices
+                        TriangulateWaterfallInWater(
+                            e2.V4, e2.V2, e1.V4, e1.V2,
+                            neighbor.RiverSurfaceY, cell.RiverSurfaceY,
+                            cell.WaterSurfaceY, !reversed
+                        );
+                    }
+                    else
+                    {
+                        // Case 3b: Neighbor floor at or below water level
+                        // Draw river quad from cell's water surface to neighbor's river surface
+                        TriangulateRiverQuad(
+                            e1.V2, e1.V4, e2.V2, e2.V4,
+                            cell.WaterSurfaceY, neighbor.RiverSurfaceY,
+                            0.8f, reversed
+                        );
+                    }
+                }
+                // Case 4: Both cells underwater - no river surface needed (water mesh handles it)
             }
         }
 
@@ -1093,6 +1125,12 @@ public partial class HexMesh : MeshInstance3D
         v1.Y = v2.Y = y1;
         v3.Y = v4.Y = y2;
 
+        // Perturb vertices to match terrain banks (matches Unity's rivers.AddQuad behavior)
+        v1 = HexMetrics.Perturb(v1);
+        v2 = HexMetrics.Perturb(v2);
+        v3 = HexMetrics.Perturb(v3);
+        v4 = HexMetrics.Perturb(v4);
+
         _rivers.AddQuadUnperturbed(v1, v2, v3, v4);
         if (reversed)
         {
@@ -1357,7 +1395,8 @@ public partial class HexMesh : MeshInstance3D
         Vector3 c2 = center + HexMetrics.GetSecondWaterCorner(direction);
 
         // Triangulate the water hexagon section (fan from center)
-        _water.AddTriangleUnperturbed(center, c1, c2);
+        // Must use perturbed geometry to match terrain edges
+        _water.AddTriangle(center, c1, c2);
 
         // Water connections (bridges to neighbors) - only NE, E, SE to avoid duplicates
         if (direction <= HexDirection.SE && neighbor != null)
@@ -1369,7 +1408,8 @@ public partial class HexMesh : MeshInstance3D
             // Set neighbor's water surface height
             e1.Y = e2.Y = neighbor.WaterSurfaceY;
 
-            _water.AddQuadUnperturbed(c1, c2, e1, e2);
+            // Must use perturbed geometry to match terrain edges
+            _water.AddQuad(c1, c2, e1, e2);
 
             // Corner triangle (only NE and E to avoid duplicates)
             if (direction <= HexDirection.E)
@@ -1380,7 +1420,7 @@ public partial class HexMesh : MeshInstance3D
                     Vector3 nextBridge = HexMetrics.GetWaterBridge(direction.Next());
                     Vector3 v3 = c2 + nextBridge;
                     v3.Y = nextNeighbor.WaterSurfaceY;
-                    _water.AddTriangleUnperturbed(c2, e2, v3);
+                    _water.AddTriangle(c2, e2, v3);
                 }
             }
         }
@@ -1421,24 +1461,25 @@ public partial class HexMesh : MeshInstance3D
         }
         else
         {
-            // Normal shore quad strip
-            _waterShore.AddQuadUnperturbed(e1.V1, e1.V2, e2.V1, e2.V2);
+            // Normal shore quad strip - must use perturbed geometry to match terrain
+            _waterShore.AddQuad(e1.V1, e1.V2, e2.V1, e2.V2);
             _waterShore.AddQuadUV(0f, 0f, 0f, 1f);
-            _waterShore.AddQuadUnperturbed(e1.V2, e1.V3, e2.V2, e2.V3);
+            _waterShore.AddQuad(e1.V2, e1.V3, e2.V2, e2.V3);
             _waterShore.AddQuadUV(0f, 0f, 0f, 1f);
-            _waterShore.AddQuadUnperturbed(e1.V3, e1.V4, e2.V3, e2.V4);
+            _waterShore.AddQuad(e1.V3, e1.V4, e2.V3, e2.V4);
             _waterShore.AddQuadUV(0f, 0f, 0f, 1f);
-            _waterShore.AddQuadUnperturbed(e1.V4, e1.V5, e2.V4, e2.V5);
+            _waterShore.AddQuad(e1.V4, e1.V5, e2.V4, e2.V5);
             _waterShore.AddQuadUV(0f, 0f, 0f, 1f);
         }
 
         // Water center section - proper triangle fan using all 5 edge vertices
+        // Must use perturbed geometry to match shore edges
         if (_water != null)
         {
-            _water.AddTriangleUnperturbed(center, e1.V1, e1.V2);
-            _water.AddTriangleUnperturbed(center, e1.V2, e1.V3);
-            _water.AddTriangleUnperturbed(center, e1.V3, e1.V4);
-            _water.AddTriangleUnperturbed(center, e1.V4, e1.V5);
+            _water.AddTriangle(center, e1.V1, e1.V2);
+            _water.AddTriangle(center, e1.V2, e1.V3);
+            _water.AddTriangle(center, e1.V3, e1.V4);
+            _water.AddTriangle(center, e1.V4, e1.V5);
         }
 
         // Shore corners - triangulate the corner between this cell (water),
@@ -1453,7 +1494,8 @@ public partial class HexMesh : MeshInstance3D
                 HexMetrics.GetFirstSolidCorner(direction.Previous()));
             v3.Y = center.Y;  // Keep at water surface height
 
-            _waterShore.AddTriangleUnperturbed(e1.V5, e2.V5, v3);
+            // Must use perturbed geometry to match shore edges
+            _waterShore.AddTriangle(e1.V5, e2.V5, v3);
             _waterShore.AddTriangleUV(
                 new Vector2(0f, 0f),
                 new Vector2(0f, 1f),
@@ -1474,16 +1516,16 @@ public partial class HexMesh : MeshInstance3D
     {
         if (_estuaries == null || _waterShore == null) return;
 
-        // Left shore triangle (water side)
-        _waterShore.AddTriangleUnperturbed(e2.V1, e1.V2, e1.V1);
+        // Left shore triangle (water side) - must use perturbed geometry to match river
+        _waterShore.AddTriangle(e2.V1, e1.V2, e1.V1);
         _waterShore.AddTriangleUV(
             new Vector2(0f, 1f),
             new Vector2(0f, 0f),
             new Vector2(0f, 0f)
         );
 
-        // Right shore triangle (water side)
-        _waterShore.AddTriangleUnperturbed(e2.V5, e1.V5, e1.V4);
+        // Right shore triangle (water side) - must use perturbed geometry to match river
+        _waterShore.AddTriangle(e2.V5, e1.V5, e1.V4);
         _waterShore.AddTriangleUV(
             new Vector2(0f, 1f),
             new Vector2(0f, 0f),
@@ -1492,7 +1534,8 @@ public partial class HexMesh : MeshInstance3D
 
         // Estuary trapezoid (center section where river meets water)
         // Uses both UV for shore blending and UV2 for river flow
-        _estuaries.AddQuadUnperturbed(e2.V1, e1.V2, e2.V2, e1.V3);
+        // Must use perturbed geometry to match river quads which are perturbed
+        _estuaries.AddQuad(e2.V1, e1.V2, e2.V2, e1.V3);
         _estuaries.AddQuadUV(
             new Vector2(0f, 1f),
             new Vector2(0f, 0f),
@@ -1518,7 +1561,7 @@ public partial class HexMesh : MeshInstance3D
             );
         }
 
-        _estuaries.AddTriangleUnperturbed(e1.V3, e2.V2, e2.V4);
+        _estuaries.AddTriangle(e1.V3, e2.V2, e2.V4);
         _estuaries.AddTriangleUV(
             new Vector2(0f, 0f),
             new Vector2(1f, 1f),
@@ -1541,7 +1584,7 @@ public partial class HexMesh : MeshInstance3D
             );
         }
 
-        _estuaries.AddQuadUnperturbed(e1.V3, e1.V4, e2.V4, e2.V5);
+        _estuaries.AddQuad(e1.V3, e1.V4, e2.V4, e2.V5);
         _estuaries.AddQuadUV(
             new Vector2(0f, 0f),
             new Vector2(0f, 0f),
