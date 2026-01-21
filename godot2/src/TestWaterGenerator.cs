@@ -33,8 +33,8 @@ public static class TestWaterGenerator
         // Create a small side river flowing into the lowland lake
         GenerateSideRiver(getCell);
 
-        // NOTE: Removed GenerateOutflowRiver - water hexes flowing into lower elevation
-        // doesn't look right. Rule: water hexes should not flow into lower elevation hexes.
+        // Create river from highland lake (15,5) -> (15,6) -> (14,7)
+        GenerateHighlandOutflow(getCell);
 
         GD.Print("Test water patterns generated.");
     }
@@ -169,6 +169,78 @@ public static class TestWaterGenerator
     }
 
     /// <summary>
+    /// Creates a river from highland lake through (15,6) to (14,7).
+    /// Path: 13,-18,5 (15,5) -> 12,-18,6 (15,6) -> 11,-18,7 (14,7)
+    /// </summary>
+    private static void GenerateHighlandOutflow(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating highland outflow river...");
+
+        // Set (15,6) to elevation 1
+        var midCell = getCell(15, 6);
+        if (midCell != null)
+        {
+            midCell.Elevation = 1;
+            midCell.Color = new Color(0.4f, 0.6f, 0.4f);
+            GD.Print($"    Set (15,6) / hex 12,-18,6 to elevation 1");
+        }
+
+        // River from (15,5) highland lake -> (15,6)
+        var sourceCell = getCell(15, 5);
+        if (sourceCell != null && midCell != null)
+        {
+            for (int d = 0; d < 6; d++)
+            {
+                if (sourceCell.GetNeighbor((HexDirection)d) == midCell)
+                {
+                    sourceCell.SetOutgoingRiver((HexDirection)d);
+                    GD.Print($"    River: (15,5) -> (15,6) dir={(HexDirection)d}");
+                    break;
+                }
+            }
+        }
+
+        // River from (15,6) -> (14,7)
+        var cell14_7 = getCell(14, 7);
+        if (midCell != null && cell14_7 != null)
+        {
+            for (int d = 0; d < 6; d++)
+            {
+                if (midCell.GetNeighbor((HexDirection)d) == cell14_7)
+                {
+                    midCell.SetOutgoingRiver((HexDirection)d);
+                    GD.Print($"    River: (15,6) -> (14,7) dir={(HexDirection)d}");
+                    break;
+                }
+            }
+        }
+
+        // Set (13,7) / hex 10,-17,7 as water hex
+        var waterCell = getCell(13, 7);
+        if (waterCell != null)
+        {
+            waterCell.Elevation = 0;
+            waterCell.WaterLevel = 1;  // Same as lowland lake
+            waterCell.Color = new Color(0.2f, 0.4f, 0.7f);
+            GD.Print($"    Set (13,7) / hex 10,-17,7 to water hex (elev=0, waterLevel=1)");
+        }
+
+        // River from (14,7) -> (13,7) water hex
+        if (cell14_7 != null && waterCell != null)
+        {
+            for (int d = 0; d < 6; d++)
+            {
+                if (cell14_7.GetNeighbor((HexDirection)d) == waterCell)
+                {
+                    cell14_7.SetOutgoingRiver((HexDirection)d);
+                    GD.Print($"    River: (14,7) -> (13,7) dir={(HexDirection)d}");
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Creates a large lowland lake at water level 1.
     /// All cells in this lake share the same water level.
     /// </summary>
@@ -215,20 +287,31 @@ public static class TestWaterGenerator
         int count = 0;
 
         // Define highland lake region (upper-right, away from lowland lake)
+        // Note: (16,6) removed - now raised land
         var lakeCells = new (int x, int z)[]
         {
             (15, 4), (16, 4),
             (15, 5), (16, 5), (17, 5),
-            (16, 6),
         };
 
+        // Set (16,6) / hex 13,-19,6 to raised land with beige color
+        var raisedCell = getCell(16, 6);
+        if (raisedCell != null)
+        {
+            raisedCell.Elevation = 4;
+            raisedCell.WaterLevel = 0;
+            raisedCell.Color = new Color(0.76f, 0.70f, 0.50f);  // Beige
+            GD.Print("    Set (16,6) / hex 13,-19,6 to elevation 4, beige");
+        }
+
         // First, create elevated terrain around the highland lake to ensure separation
+        // Note: (15,6) removed - now part of outflow river
         var bufferCells = new (int x, int z)[]
         {
             (14, 3), (15, 3), (16, 3), (17, 3),
             (14, 4), (17, 4), (18, 4),
             (14, 5), (18, 5),
-            (14, 6), (15, 6), (17, 6), (18, 6),
+            (14, 6), (17, 6), (18, 6),
             (15, 7), (16, 7), (17, 7),
         };
 
