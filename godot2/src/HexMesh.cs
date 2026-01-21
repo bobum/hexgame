@@ -635,57 +635,45 @@ public partial class HexMesh : MeshInstance3D
                 corner = HexMetrics.GetFirstSolidCorner(direction);
             }
             roadCenter += corner * 0.5f;
-            // Extend center toward edge since we're pushed far from center
-            center += corner * 0.25f;
 
             // Tutorial 11: Add bridge across straight river
-            // Only add from one side to prevent duplicates
-            if (_features != null &&
-                cell.IncomingRiver == direction.Next() &&
-                (cell.HasRoadThroughEdge(direction.Next2()) ||
-                 cell.HasRoadThroughEdge(direction.Opposite())))
+            // Only place bridge from one direction to prevent duplicates (use direction < opposite)
+            if (_features != null && previousHasRiver &&
+                cell.HasRoadThroughEdge(direction.Opposite()) &&
+                (int)direction < (int)direction.Opposite())
             {
-                _features.AddBridge(
-                    roadCenter,
-                    center - corner * 0.5f
-                );
+                // The 'center' passed in was already offset by GetSecondSolidCorner(direction) * 0.25
+                // in TriangulateAdjacentToRiver. To find the opposite side's roadCenter correctly,
+                // we need to account for this.
+                //
+                // This side:    roadCenter = center + corner * 0.5 (already computed above)
+                // Opposite side: their center = originalCenter + oppositeCorner * 0.25
+                //                their roadCenter = their center + oppositeCorner * 0.5
+                //                               = originalCenter + oppositeCorner * 0.75
+                //
+                // Since center = originalCenter + corner * 0.25:
+                //   originalCenter = center - corner * 0.25
+                //   oppositeRoadCenter = originalCenter + oppositeCorner * 0.75
+                //                      = center - corner * 0.25 + oppositeCorner * 0.75
+                Vector3 oppositeCorner = HexMetrics.GetSecondSolidCorner(direction.Opposite());
+                Vector3 oppositeRoadCenter = center - corner * 0.25f + oppositeCorner * 0.75f;
+                _features.AddBridge(roadCenter, oppositeRoadCenter);
             }
+
+            // Extend center toward edge since we're pushed far from center
+            center += corner * 0.25f;
         }
         else if (cell.IncomingRiver == cell.OutgoingRiver.Previous())
         {
-            // Config 3: River curves tightly left
+            // Config 3: River curves tightly left (adjacent directions)
+            // NO bridge here - tight curves have no land between river edges to bridge across
             roadCenter -= HexMetrics.GetSecondCorner(cell.IncomingRiver) * 0.2f;
-
-            // Tutorial 11: Add bridge at curve - only from middle direction
-            HexDirection middle = cell.IncomingRiver.Next();
-            if (_features != null &&
-                direction == middle &&
-                cell.HasRoadThroughEdge(direction.Opposite()))
-            {
-                Vector3 bridgeOffset = HexMetrics.GetSolidEdgeMiddle(direction);
-                _features.AddBridge(
-                    roadCenter + bridgeOffset * 0.25f,
-                    roadCenter + bridgeOffset * (HexMetrics.InnerToOuter * 0.7f)
-                );
-            }
         }
         else if (cell.IncomingRiver == cell.OutgoingRiver.Next())
         {
-            // Config 4: River curves tightly right
+            // Config 4: River curves tightly right (adjacent directions)
+            // NO bridge here - tight curves have no land between river edges to bridge across
             roadCenter -= HexMetrics.GetFirstCorner(cell.IncomingRiver) * 0.2f;
-
-            // Tutorial 11: Add bridge at curve - only from middle direction
-            HexDirection middle = cell.IncomingRiver.Previous();
-            if (_features != null &&
-                direction == middle &&
-                cell.HasRoadThroughEdge(direction.Opposite()))
-            {
-                Vector3 bridgeOffset = HexMetrics.GetSolidEdgeMiddle(direction);
-                _features.AddBridge(
-                    roadCenter + bridgeOffset * 0.25f,
-                    roadCenter + bridgeOffset * (HexMetrics.InnerToOuter * 0.7f)
-                );
-            }
         }
         else if (previousHasRiver && nextHasRiver)
         {

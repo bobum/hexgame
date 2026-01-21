@@ -52,6 +52,10 @@ public static class TestBridgeGenerator
         // Set up all cells at same elevation first
         riverCell.Elevation = 1;
         riverCell.Color = new Color(0.3f, 0.5f, 0.7f);
+        // Clear all features from bridge cell to avoid visual clutter
+        riverCell.PlantLevel = 0;
+        riverCell.FarmLevel = 0;
+        riverCell.UrbanLevel = 0;
 
         // Set up the upstream cell (river source)
         var upstreamCell = riverCell.GetNeighbor(HexDirection.NE);
@@ -87,6 +91,10 @@ public static class TestBridgeGenerator
         {
             eastCell.Elevation = 1;
             eastCell.Color = new Color(0.5f, 0.4f, 0.3f); // Brown for road
+            // Clear features
+            eastCell.PlantLevel = 0;
+            eastCell.FarmLevel = 0;
+            eastCell.UrbanLevel = 0;
             // Add road from east cell into the river cell
             eastCell.AddRoad(HexDirection.W);
             GD.Print($"    Road: eastCell ({eastCell.Coordinates}) -> W, HasRoad={eastCell.HasRoadThroughEdge(HexDirection.W)}");
@@ -96,6 +104,10 @@ public static class TestBridgeGenerator
         {
             westCell.Elevation = 1;
             westCell.Color = new Color(0.5f, 0.4f, 0.3f);
+            // Clear features
+            westCell.PlantLevel = 0;
+            westCell.FarmLevel = 0;
+            westCell.UrbanLevel = 0;
             // Add road from west cell into the river cell
             westCell.AddRoad(HexDirection.E);
             GD.Print($"    Road: westCell ({westCell.Coordinates}) -> E, HasRoad={westCell.HasRoadThroughEdge(HexDirection.E)}");
@@ -110,61 +122,67 @@ public static class TestBridgeGenerator
 
     /// <summary>
     /// Scenario 2: Curved river with road crossing at the curve.
-    /// River curves through cell, road goes from curve apex to opposite side.
-    /// Tests bridge placement at curved river crossing.
+    /// Uses cell (7,7) on showcase river which has a TIGHT curve (Config 3).
+    /// At (7,7): IncomingRiver=W, OutgoingRiver=NW (W == NW.Previous(), so Config 3)
     /// </summary>
     private static void GenerateCurvedRiverWithBridge(Func<int, int, HexCell?> getCell)
     {
-        GD.Print("  Creating curved river with bridge...");
+        GD.Print("  Creating curved river bridge on showcase river (tight curve)...");
 
-        // Use cell (13, 3) area - river enters from W, curves, exits to SW
-        int curveX = 13;
-        int curveZ = 3;
+        // Use existing showcase river cell at offset (7,7)
+        // This cell has river: incoming W, outgoing NW - a TIGHT left curve (Config 3)
+        int bridgeX = 7;
+        int bridgeZ = 7;
 
-        var curveCell = getCell(curveX, curveZ);
-        if (curveCell == null)
+        var bridgeCell = getCell(bridgeX, bridgeZ);
+        if (bridgeCell == null)
         {
-            GD.PrintErr($"  Curve cell ({curveX}, {curveZ}) is NULL!");
+            GD.PrintErr($"  Bridge cell ({bridgeX}, {bridgeZ}) is NULL!");
             return;
         }
 
-        curveCell.Elevation = 1;
-        curveCell.Color = new Color(0.5f, 0.3f, 0.7f); // Purple for curve test
+        GD.Print($"    Bridge cell ({bridgeX}, {bridgeZ}) = {bridgeCell.Coordinates}");
+        GD.Print($"    HasIncoming={bridgeCell.HasIncomingRiver} from {bridgeCell.IncomingRiver}");
+        GD.Print($"    HasOutgoing={bridgeCell.HasOutgoingRiver} to {bridgeCell.OutgoingRiver}");
 
-        // Set up incoming river from W (west cell flows into curve cell)
-        var westCell = curveCell.GetNeighbor(HexDirection.W);
-        if (westCell != null)
+        // Check if this is Config 3: IncomingRiver == OutgoingRiver.Previous()
+        bool isConfig3 = bridgeCell.IncomingRiver == bridgeCell.OutgoingRiver.Previous();
+        GD.Print($"    IsConfig3 (tight left)? {bridgeCell.IncomingRiver}=={bridgeCell.OutgoingRiver}.Previous()={bridgeCell.OutgoingRiver.Previous()} -> {isConfig3}");
+
+        // For Config 3, bridge is placed when direction == IncomingRiver.Next()
+        // IncomingRiver = W, so bridge direction = W.Next() = NW
+        // Road must be at direction.Opposite() = NW.Opposite() = SE
+        HexDirection bridgeDir = bridgeCell.IncomingRiver.Next();
+        HexDirection roadDir = bridgeDir.Opposite();
+        GD.Print($"    Bridge needs: direction={bridgeDir}, road at {roadDir}");
+
+        // Add road through SE edge (from SE neighbor into bridge cell)
+        var seNeighbor = bridgeCell.GetNeighbor(HexDirection.SE);
+        if (seNeighbor != null)
         {
-            westCell.Elevation = 1;
-            westCell.Color = new Color(0.5f, 0.3f, 0.7f);
-            westCell.SetOutgoingRiver(HexDirection.E);
-            GD.Print($"    River: westCell -> E into curveCell");
+            seNeighbor.Elevation = bridgeCell.Elevation;
+            seNeighbor.AddRoad(HexDirection.NW);
+            GD.Print($"    Road: SE neighbor -> NW into bridge cell");
         }
 
-        // River exits to SW (creating a curve: W -> curveCell -> SW)
-        var swCell = curveCell.GetNeighbor(HexDirection.SW);
-        if (swCell != null)
+        // Also add road on opposite side to complete the crossing
+        var nwNeighbor = bridgeCell.GetNeighbor(HexDirection.NW);
+        if (nwNeighbor != null)
         {
-            swCell.Elevation = 1;
-            swCell.Color = new Color(0.5f, 0.3f, 0.7f);
-        }
-        curveCell.SetOutgoingRiver(HexDirection.SW);
-        GD.Print($"    River: curveCell -> SW");
-        GD.Print($"    CurveCell HasIncoming={curveCell.HasIncomingRiver} from {curveCell.IncomingRiver}, HasOutgoing={curveCell.HasOutgoingRiver} to {curveCell.OutgoingRiver}");
-
-        // Add road crossing the curve - from E to somewhere opposite
-        // For a W->SW curve, road should cross from E direction
-        var eastCell = curveCell.GetNeighbor(HexDirection.E);
-        if (eastCell != null)
-        {
-            eastCell.Elevation = 1;
-            eastCell.Color = new Color(0.5f, 0.4f, 0.3f);
-            eastCell.AddRoad(HexDirection.W);
-            GD.Print($"    Road: eastCell -> W, HasRoad={eastCell.HasRoadThroughEdge(HexDirection.W)}");
+            nwNeighbor.Elevation = bridgeCell.Elevation;
+            nwNeighbor.AddRoad(HexDirection.SE);
+            GD.Print($"    Road: NW neighbor -> SE into bridge cell");
         }
 
-        GD.Print($"    CurveCell roads: E={curveCell.HasRoadThroughEdge(HexDirection.E)}");
-        GD.Print($"  Curved river with bridge created at ({curveX}, {curveZ})");
+        GD.Print($"    BridgeCell HasRoads={bridgeCell.HasRoads}");
+        for (int d = 0; d < 6; d++)
+        {
+            if (bridgeCell.HasRoadThroughEdge((HexDirection)d))
+            {
+                GD.Print($"      Road through {(HexDirection)d}");
+            }
+        }
+        GD.Print($"  Curved river bridge test created at ({bridgeX}, {bridgeZ})");
     }
 
     /// <summary>

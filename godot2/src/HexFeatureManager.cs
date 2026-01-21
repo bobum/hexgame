@@ -70,6 +70,13 @@ public partial class HexFeatureManager : Node3D
         _specialPrefabs[0] = GD.Load<PackedScene>("res://prefabs/features/special/castle.tscn");
         _specialPrefabs[1] = GD.Load<PackedScene>("res://prefabs/features/special/ziggurat.tscn");
         _specialPrefabs[2] = GD.Load<PackedScene>("res://prefabs/features/special/megaflora.tscn");
+
+        GD.Print($"HexFeatureManager.Initialize: Loaded prefabs:");
+        GD.Print($"  Bridge: {(_bridgePrefab != null ? "OK" : "FAILED")}");
+        GD.Print($"  WallTower: {(_wallTowerPrefab != null ? "OK" : "FAILED")}");
+        GD.Print($"  Castle: {(_specialPrefabs[0] != null ? "OK" : "FAILED")}");
+        GD.Print($"  Ziggurat: {(_specialPrefabs[1] != null ? "OK" : "FAILED")}");
+        GD.Print($"  Megaflora: {(_specialPrefabs[2] != null ? "OK" : "FAILED")}");
     }
 
     /// <summary>
@@ -543,24 +550,31 @@ public partial class HexFeatureManager : Node3D
             return;
         }
 
-        // Perturb positions to match terrain
+        // Save the Y height before perturbing (use average for bridge height)
+        float bridgeY = (roadCenter1.Y + roadCenter2.Y) * 0.5f;
+
+        // Perturb positions to match terrain XZ
         roadCenter1 = HexMetrics.Perturb(roadCenter1);
         roadCenter2 = HexMetrics.Perturb(roadCenter2);
 
         var bridge = _bridgePrefab.Instantiate<Node3D>();
 
-        // Position at midpoint between road centers
-        bridge.Position = (roadCenter1 + roadCenter2) * 0.5f;
+        // Position at midpoint, but use consistent Y to keep bridge level
+        // Add RoadElevationOffset to match road surface height
+        Vector3 midpoint = (roadCenter1 + roadCenter2) * 0.5f;
+        bridge.Position = new Vector3(midpoint.X, bridgeY + HexMetrics.RoadElevationOffset, midpoint.Z);
 
-        // Align rotation to bridge direction
+        // Calculate direction for rotation using only XZ (ignore Y difference)
         Vector3 direction = roadCenter2 - roadCenter1;
+        direction.Y = 0; // Keep bridge horizontal
+
         if (direction.LengthSquared() > 0.0001f)
         {
             float angle = Mathf.Atan2(direction.X, direction.Z);
             bridge.RotationDegrees = new Vector3(0f, Mathf.RadToDeg(angle), 0f);
         }
 
-        // Scale Z axis based on distance / design length
+        // Scale Z axis based on horizontal distance / design length
         float length = direction.Length();
         float scale = length / HexMetrics.BridgeDesignLength;
         bridge.Scale = new Vector3(1f, 1f, scale);
@@ -578,17 +592,22 @@ public partial class HexFeatureManager : Node3D
     /// <param name="position">World position for placement</param>
     public void AddSpecialFeature(HexCell cell, Vector3 position)
     {
+        GD.Print($"AddSpecialFeature called: cell={cell.Coordinates}, SpecialIndex={cell.SpecialIndex}, pos={position}");
+
         if (_container == null || _specialPrefabs == null)
         {
+            GD.PrintErr("  AddSpecialFeature: _container or _specialPrefabs is null!");
             return;
         }
 
         int index = cell.SpecialIndex - 1;  // Convert 1-3 to 0-2 array index
         if (index < 0 || index >= _specialPrefabs.Length || _specialPrefabs[index] == null)
         {
+            GD.PrintErr($"  AddSpecialFeature: Invalid index {index} or null prefab");
             return;
         }
 
+        GD.Print($"  Instantiating special feature type {index}");
         HexHash hash = HexMetrics.SampleHashGrid(position);
         var feature = _specialPrefabs[index].Instantiate<Node3D>();
 
@@ -599,5 +618,6 @@ public partial class HexFeatureManager : Node3D
         feature.RotationDegrees = new Vector3(0f, 360f * hash.e, 0f);
 
         _container.AddChild(feature);
+        GD.Print($"  Special feature added at {feature.Position}");
     }
 }
