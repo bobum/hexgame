@@ -25,24 +25,15 @@
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
   </ItemGroup>
 
-  <!-- Reference the main game project's source files directly for testing -->
-  <!-- We compile the same source files but without Godot dependencies -->
+  <!-- Only include self-contained Godot2 tests -->
+  <!-- Old tests that referenced godot/src/CSharp have been excluded -->
+  <!-- as that directory was removed in favor of godot2/src -->
   <ItemGroup>
-    <!-- Core types that don't depend on Godot -->
-    <Compile Include="..\..\godot\src\CSharp\Core\HexCoordinates.cs" Link="Core\HexCoordinates.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Core\HexMetrics.cs" Link="Core\HexMetrics.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Core\HexDirection.cs" Link="Core\HexDirection.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Core\GameConstants.cs" Link="Core\GameConstants.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Services\IService.cs" Link="Services\IService.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Services\DependencyInjection\IServiceContainer.cs" Link="Services\DependencyInjection\IServiceContainer.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Services\DependencyInjection\ServiceContainer.cs" Link="Services\DependencyInjection\ServiceContainer.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Commands\ICommand.cs" Link="Commands\ICommand.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Commands\CommandHistory.cs" Link="Commands\CommandHistory.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Events\GameEvent.cs" Link="Events\GameEvent.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Events\EventBus.cs" Link="Events\EventBus.cs" />
-    <Compile Include="..\..\godot\src\CSharp\Utilities\IPoolable.cs" Link="Utilities\IPoolable.cs" />
+    <Compile Remove="Core\**" />
+    <Compile Remove="Commands\**" />
+    <Compile Remove="Events\**" />
+    <Compile Remove="Services\**" />
+    <Compile Remove="Mocks\**" />
   </ItemGroup>
-
-  <!-- Test-specific mock types are included by default via EnableDefaultCompileItems -->
 
 </Project>
