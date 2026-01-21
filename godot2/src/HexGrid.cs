@@ -19,6 +19,7 @@ public partial class HexGrid : Node3D
     private int _cellCountZ;
     private HexCell[] _cells = null!;
     private HexGridChunk[] _chunks = null!;
+    private bool _labelsVisible = true;
 
     // Colors from Catlike Coding tutorial palette
     private static readonly Color[] _colors = {
@@ -53,6 +54,21 @@ public partial class HexGrid : Node3D
 
         // Tutorial 9: Generate test features for visual verification
         GenerateTestFeatures();
+
+        // Tutorial 10: Generate test walls for visual verification
+        GenerateTestWalls();
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
+        {
+            if (keyEvent.Keycode == Key.L)
+            {
+                _labelsVisible = !_labelsVisible;
+                ShowUI(_labelsVisible);
+            }
+        }
     }
 
     private void CreateChunks()
@@ -232,6 +248,15 @@ public partial class HexGrid : Node3D
     public void GenerateTestFeatures()
     {
         TestFeatureGenerator.GenerateTestPatterns(GetCellByOffset);
+    }
+
+    /// <summary>
+    /// Generates test walls for visual verification.
+    /// Call this after the grid and other test patterns are created.
+    /// </summary>
+    public void GenerateTestWalls()
+    {
+        TestWallGenerator.GenerateTestPatterns(GetCellByOffset);
     }
 
     private void InitializeNoiseSource()

@@ -47,6 +47,13 @@ public static class HexMetrics
 
     private static HexHash[] _hashGrid = null!;
 
+    // Tutorial 10: Wall constants
+    public const float WallHeight = 4f;
+    public const float WallYOffset = -1f;
+    public const float WallThickness = 0.75f;
+    public static float WallElevationOffset => VerticalTerraceStepSize;
+    public const float WallTowerThreshold = 0.5f;
+
     // Procedural noise generation constants
     public const int NoiseTextureSize = 256;
 
@@ -248,6 +255,34 @@ public static class HexMetrics
         position.X += (sample.X * 2f - 1f) * CellPerturbStrength;
         position.Z += (sample.Z * 2f - 1f) * CellPerturbStrength;
         return position;
+    }
+
+    // Tutorial 10: Wall methods
+
+    /// <summary>
+    /// Interpolates wall position along the edge between near and far positions.
+    /// XZ is averaged, Y selects based on which side is lower and applies offset.
+    /// </summary>
+    public static Vector3 WallLerp(Vector3 near, Vector3 far)
+    {
+        near.X += (far.X - near.X) * 0.5f;
+        near.Z += (far.Z - near.Z) * 0.5f;
+        float v = near.Y < far.Y ? WallElevationOffset : (1f - WallElevationOffset);
+        near.Y += (far.Y - near.Y) * v + WallYOffset;
+        return near;
+    }
+
+    /// <summary>
+    /// Calculates the offset vector for wall thickness perpendicular to the wall direction.
+    /// Y component is zeroed to keep wall tops flat.
+    /// </summary>
+    public static Vector3 WallThicknessOffset(Vector3 near, Vector3 far)
+    {
+        Vector3 offset;
+        offset.X = far.X - near.X;
+        offset.Y = 0f;
+        offset.Z = far.Z - near.Z;
+        return offset.Normalized() * (WallThickness * 0.5f);
     }
 
     // Tutorial 9: Hash grid methods

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Manages terrain feature instantiation and placement.
-/// Ported exactly from Catlike Coding Hex Map Tutorial 9.
+/// Ported exactly from Catlike Coding Hex Map Tutorials 9-10.
 /// </summary>
 public partial class HexFeatureManager : Node3D
 {
@@ -14,6 +14,9 @@ public partial class HexFeatureManager : Node3D
 
     // Container for instantiated features (destroyed and recreated on refresh)
     private Node3D? _container;
+
+    // Tutorial 10: Wall mesh
+    private HexMesh? _walls;
 
     // Feature selection thresholds per level
     // Level 1 threshold = 0.4, Level 2 = 0.6, Level 3 = 0.8
@@ -32,6 +35,20 @@ public partial class HexFeatureManager : Node3D
 
         // Load prefabs programmatically
         LoadFeaturePrefabs();
+
+        // Tutorial 10: Create wall mesh
+        _walls = new HexMesh();
+        _walls.Name = "WallsMesh";
+        _walls.UseColors = false;
+        _walls.UseUVCoordinates = false;
+        AddChild(_walls);
+        _walls.EnsureInitialized();
+
+        // Set wall material - RED for visibility during debugging
+        var wallMaterial = new StandardMaterial3D();
+        wallMaterial.AlbedoColor = new Color(1.0f, 0.0f, 0.0f); // Bright RED
+        wallMaterial.CullMode = BaseMaterial3D.CullModeEnum.Disabled; // Show both sides
+        _walls.MaterialOverride = wallMaterial;
     }
 
     /// <summary>
@@ -47,15 +64,19 @@ public partial class HexFeatureManager : Node3D
         _container = new Node3D();
         _container.Name = "Features Container";
         AddChild(_container);
+
+        // Tutorial 10: Clear wall mesh
+        _walls?.Clear();
     }
 
     /// <summary>
-    /// Finalizes feature placement. Currently a stub for future optimization.
+    /// Finalizes feature placement.
     /// Called at the end of chunk triangulation.
     /// </summary>
     public void Apply()
     {
-        // Reserved for future batching/optimization
+        // Tutorial 10: Apply wall mesh
+        _walls?.Apply();
     }
 
     /// <summary>
@@ -245,5 +266,226 @@ public partial class HexFeatureManager : Node3D
         }
 
         return scenes.ToArray();
+    }
+
+    // Tutorial 10: Wall methods
+
+    /// <summary>
+    /// Adds wall segments along an edge between two cells.
+    /// Only places walls where one cell is walled and the other is not.
+    /// </summary>
+    public void AddWall(
+        EdgeVertices near, HexCell nearCell,
+        EdgeVertices far, HexCell farCell,
+        bool hasRiver, bool hasRoad)
+    {
+        if (
+            nearCell.Walled != farCell.Walled &&
+            !nearCell.IsUnderwater && !farCell.IsUnderwater &&
+            nearCell.GetEdgeType(farCell) != HexEdgeType.Cliff
+        )
+        {
+            AddWallSegment(near.V1, far.V1, near.V2, far.V2);
+            if (hasRiver || hasRoad)
+            {
+                // Add caps at gap edges
+                AddWallCap(near.V2, far.V2);
+                AddWallCap(far.V4, near.V4);
+            }
+            else
+            {
+                AddWallSegment(near.V2, far.V2, near.V3, far.V3);
+                AddWallSegment(near.V3, far.V3, near.V4, far.V4);
+            }
+            AddWallSegment(near.V4, far.V4, near.V5, far.V5);
+        }
+    }
+
+    /// <summary>
+    /// Adds wall corner segments where three cells meet.
+    /// Handles all 8 configurations of walled state.
+    /// </summary>
+    public void AddWall(
+        Vector3 c1, HexCell cell1,
+        Vector3 c2, HexCell cell2,
+        Vector3 c3, HexCell cell3)
+    {
+        if (cell1.Walled)
+        {
+            if (cell2.Walled)
+            {
+                if (!cell3.Walled)
+                {
+                    AddWallSegment(c3, cell3, c1, cell1, c2, cell2);
+                }
+            }
+            else if (cell3.Walled)
+            {
+                AddWallSegment(c2, cell2, c3, cell3, c1, cell1);
+            }
+            else
+            {
+                AddWallSegment(c1, cell1, c2, cell2, c3, cell3);
+            }
+        }
+        else if (cell2.Walled)
+        {
+            if (cell3.Walled)
+            {
+                AddWallSegment(c1, cell1, c2, cell2, c3, cell3);
+            }
+            else
+            {
+                AddWallSegment(c2, cell2, c3, cell3, c1, cell1);
+            }
+        }
+        else if (cell3.Walled)
+        {
+            AddWallSegment(c3, cell3, c1, cell1, c2, cell2);
+        }
+    }
+
+    /// <summary>
+    /// Creates an individual wall segment from four vertices (edge-based).
+    /// </summary>
+    private void AddWallSegment(
+        Vector3 nearLeft, Vector3 farLeft,
+        Vector3 nearRight, Vector3 farRight,
+        bool addTower = false)
+    {
+        nearLeft = HexMetrics.Perturb(nearLeft);
+        farLeft = HexMetrics.Perturb(farLeft);
+        nearRight = HexMetrics.Perturb(nearRight);
+        farRight = HexMetrics.Perturb(farRight);
+
+        Vector3 left = HexMetrics.WallLerp(nearLeft, farLeft);
+        Vector3 right = HexMetrics.WallLerp(nearRight, farRight);
+
+        Vector3 leftThicknessOffset = HexMetrics.WallThicknessOffset(nearLeft, farLeft);
+        Vector3 rightThicknessOffset = HexMetrics.WallThicknessOffset(nearRight, farRight);
+
+        float leftTop = left.Y + HexMetrics.WallHeight;
+        float rightTop = right.Y + HexMetrics.WallHeight;
+
+        Vector3 v1, v2, v3, v4;
+        v1 = v3 = left - leftThicknessOffset;
+        v2 = v4 = right - rightThicknessOffset;
+        v3.Y = leftTop;
+        v4.Y = rightTop;
+
+        // Inner face - swap vertex order for outward-facing normal
+        _walls?.AddQuadUnperturbed(v2, v1, v4, v3);
+
+        Vector3 t1 = v3, t2 = v4;
+
+        v1 = v3 = left + leftThicknessOffset;
+        v2 = v4 = right + rightThicknessOffset;
+        v3.Y = leftTop;
+        v4.Y = rightTop;
+        // Outer face - swap vertex order for outward-facing normal
+        _walls?.AddQuadUnperturbed(v1, v2, v3, v4);
+
+        // Top quad - swap for upward-facing normal
+        _walls?.AddQuadUnperturbed(t2, t1, v4, v3);
+    }
+
+    /// <summary>
+    /// Creates a corner wall segment where three cells meet (pivot-based).
+    /// </summary>
+    private void AddWallSegment(
+        Vector3 pivot, HexCell pivotCell,
+        Vector3 left, HexCell leftCell,
+        Vector3 right, HexCell rightCell)
+    {
+        if (pivotCell.IsUnderwater)
+        {
+            return;
+        }
+
+        bool hasLeftWall = !leftCell.IsUnderwater &&
+            pivotCell.GetEdgeType(leftCell) != HexEdgeType.Cliff;
+        bool hasRightWall = !rightCell.IsUnderwater &&
+            pivotCell.GetEdgeType(rightCell) != HexEdgeType.Cliff;
+
+        if (hasLeftWall)
+        {
+            if (hasRightWall)
+            {
+                bool hasTower = false;
+                if (leftCell.Elevation == rightCell.Elevation)
+                {
+                    HexHash hash = HexMetrics.SampleHashGrid(
+                        (pivot + left + right) * (1f / 3f)
+                    );
+                    hasTower = hash.e < HexMetrics.WallTowerThreshold;
+                }
+                AddWallSegment(pivot, left, pivot, right, hasTower);
+            }
+            else if (leftCell.Elevation < rightCell.Elevation)
+            {
+                AddWallWedge(pivot, left, right);
+            }
+            else
+            {
+                AddWallCap(pivot, left);
+            }
+        }
+        else if (hasRightWall)
+        {
+            if (rightCell.Elevation < leftCell.Elevation)
+            {
+                AddWallWedge(right, pivot, left);
+            }
+            else
+            {
+                AddWallCap(right, pivot);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a wall cap to seal endpoints at river/road openings.
+    /// </summary>
+    private void AddWallCap(Vector3 near, Vector3 far)
+    {
+        near = HexMetrics.Perturb(near);
+        far = HexMetrics.Perturb(far);
+
+        Vector3 center = HexMetrics.WallLerp(near, far);
+        Vector3 thickness = HexMetrics.WallThicknessOffset(near, far);
+
+        Vector3 v1, v2, v3, v4;
+
+        v1 = v3 = center - thickness;
+        v2 = v4 = center + thickness;
+        v3.Y = v4.Y = center.Y + HexMetrics.WallHeight;
+        // Swap vertex order for correct outward-facing normal
+        _walls?.AddQuadUnperturbed(v2, v1, v4, v3);
+    }
+
+    /// <summary>
+    /// Creates a wall wedge to connect walls to cliff faces.
+    /// </summary>
+    private void AddWallWedge(Vector3 near, Vector3 far, Vector3 point)
+    {
+        near = HexMetrics.Perturb(near);
+        far = HexMetrics.Perturb(far);
+        point = HexMetrics.Perturb(point);
+
+        Vector3 center = HexMetrics.WallLerp(near, far);
+        Vector3 thickness = HexMetrics.WallThicknessOffset(near, far);
+
+        Vector3 v1, v2, v3, v4;
+        Vector3 pointTop = point;
+        point.Y = center.Y;
+
+        v1 = v3 = center - thickness;
+        v2 = v4 = center + thickness;
+        v3.Y = v4.Y = pointTop.Y = center.Y + HexMetrics.WallHeight;
+
+        // Swap vertex orders for correct outward-facing normals
+        _walls?.AddQuadUnperturbed(point, v1, pointTop, v3);
+        _walls?.AddQuadUnperturbed(v2, point, v4, pointTop);
+        _walls?.AddTriangleUnperturbed(pointTop, v4, v3);
     }
 }

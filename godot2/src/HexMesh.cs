@@ -110,7 +110,9 @@ public partial class HexMesh : MeshInstance3D
             Vector3 v1 = _vertices[idx1];
             Vector3 v2 = _vertices[idx2];
 
-            // Calculate flat face normal (edge2 x edge1 for correct winding)
+            // Calculate flat face normal
+            // Using edge2 x edge1 for correct terrain normals (pointing up)
+            // Wall quads have their vertex order swapped to get correct outward normals
             Vector3 edge1 = v1 - v0;
             Vector3 edge2 = v2 - v0;
             Vector3 normal = edge2.Cross(edge1).Normalized();
@@ -787,6 +789,9 @@ public partial class HexMesh : MeshInstance3D
             TriangulateEdgeStrip(e1, cell.Color, e2, neighbor.Color, hasRoad);
         }
 
+        // Tutorial 10: Add walls along edge
+        _features?.AddWall(e1, cell, e2, neighbor, hasRiver, hasRoad);
+
         // Corner triangle (only for NE and E to avoid duplicates)
         HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
         if (direction <= HexDirection.E && nextNeighbor != null)
@@ -889,6 +894,9 @@ public partial class HexMesh : MeshInstance3D
             AddTriangle(bottom, left, right);
             AddTriangleColor(bottomCell.Color, leftCell.Color, rightCell.Color);
         }
+
+        // Tutorial 10: Add corner walls
+        _features?.AddWall(bottom, bottomCell, left, leftCell, right, rightCell);
     }
 
     private void TriangulateCornerTerraces(
