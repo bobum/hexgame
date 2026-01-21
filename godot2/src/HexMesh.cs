@@ -110,7 +110,9 @@ public partial class HexMesh : MeshInstance3D
             Vector3 v1 = _vertices[idx1];
             Vector3 v2 = _vertices[idx2];
 
-            // Calculate flat face normal (edge2 x edge1 for correct winding)
+            // Calculate flat face normal
+            // Using edge2 x edge1 for correct terrain normals (pointing up)
+            // Wall quads have their vertex order swapped to get correct outward normals
             Vector3 edge1 = v1 - v0;
             Vector3 edge2 = v2 - v0;
             Vector3 normal = edge2.Cross(edge1).Normalized();

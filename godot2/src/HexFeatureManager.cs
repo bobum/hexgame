@@ -44,9 +44,10 @@ public partial class HexFeatureManager : Node3D
         AddChild(_walls);
         _walls.EnsureInitialized();
 
-        // Set wall material
+        // Set wall material - RED for visibility during debugging
         var wallMaterial = new StandardMaterial3D();
-        wallMaterial.AlbedoColor = new Color(0.6f, 0.5f, 0.4f); // Stone gray-brown
+        wallMaterial.AlbedoColor = new Color(1.0f, 0.0f, 0.0f); // Bright RED
+        wallMaterial.CullMode = BaseMaterial3D.CullModeEnum.Disabled; // Show both sides
         _walls.MaterialOverride = wallMaterial;
     }
 
@@ -371,7 +372,9 @@ public partial class HexFeatureManager : Node3D
         v2 = v4 = right - rightThicknessOffset;
         v3.Y = leftTop;
         v4.Y = rightTop;
-        _walls?.AddQuadUnperturbed(v1, v2, v3, v4);
+
+        // Inner face - swap vertex order for outward-facing normal
+        _walls?.AddQuadUnperturbed(v2, v1, v4, v3);
 
         Vector3 t1 = v3, t2 = v4;
 
@@ -379,10 +382,11 @@ public partial class HexFeatureManager : Node3D
         v2 = v4 = right + rightThicknessOffset;
         v3.Y = leftTop;
         v4.Y = rightTop;
-        _walls?.AddQuadUnperturbed(v2, v1, v4, v3);
+        // Outer face - swap vertex order for outward-facing normal
+        _walls?.AddQuadUnperturbed(v1, v2, v3, v4);
 
-        // Top quad
-        _walls?.AddQuadUnperturbed(t1, t2, v3, v4);
+        // Top quad - swap for upward-facing normal
+        _walls?.AddQuadUnperturbed(t2, t1, v4, v3);
     }
 
     /// <summary>
@@ -455,7 +459,8 @@ public partial class HexFeatureManager : Node3D
         v1 = v3 = center - thickness;
         v2 = v4 = center + thickness;
         v3.Y = v4.Y = center.Y + HexMetrics.WallHeight;
-        _walls?.AddQuadUnperturbed(v1, v2, v3, v4);
+        // Swap vertex order for correct outward-facing normal
+        _walls?.AddQuadUnperturbed(v2, v1, v4, v3);
     }
 
     /// <summary>
@@ -478,8 +483,9 @@ public partial class HexFeatureManager : Node3D
         v2 = v4 = center + thickness;
         v3.Y = v4.Y = pointTop.Y = center.Y + HexMetrics.WallHeight;
 
-        _walls?.AddQuadUnperturbed(v1, point, v3, pointTop);
-        _walls?.AddQuadUnperturbed(point, v2, pointTop, v4);
-        _walls?.AddTriangleUnperturbed(pointTop, v3, v4);
+        // Swap vertex orders for correct outward-facing normals
+        _walls?.AddQuadUnperturbed(point, v1, pointTop, v3);
+        _walls?.AddQuadUnperturbed(v2, point, v4, pointTop);
+        _walls?.AddTriangleUnperturbed(pointTop, v4, v3);
     }
 }
