@@ -11,6 +11,7 @@ public static class TestWallGenerator
     /// <summary>
     /// Generates test wall placements on the grid.
     /// Creates distinct regions to test wall behavior with roads, rivers, cliffs, and water.
+    /// Tutorial 11 adds tower placement tests.
     /// </summary>
     public static void GenerateTestPatterns(Func<int, int, HexCell?> getCell)
     {
@@ -33,6 +34,12 @@ public static class TestWallGenerator
 
         // Scenario 6: Walled area with cliffs (wedge test)
         GenerateWalledAreaWithCliffs(getCell);
+
+        // Tutorial 11: Scenario 7: Tower placement test (same elevation)
+        GenerateWalledAreaForTowers(getCell);
+
+        // Tutorial 11: Scenario 8: No towers on elevation changes
+        GenerateWalledAreaNoTowers(getCell);
 
         GD.Print("Test wall patterns generated.");
     }
@@ -258,5 +265,63 @@ public static class TestWallGenerator
         }
 
         GD.Print($"  Walled area with cliffs created with {count} cells");
+    }
+
+    /// <summary>
+    /// Tutorial 11: Scenario 7: Large flat walled area for tower placement.
+    /// Towers appear when hash.e < 0.5f and cells have same elevation.
+    /// With a larger area, statistically some wall corners will get towers.
+    /// </summary>
+    private static void GenerateWalledAreaForTowers(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating walled area for tower placement test...");
+        int count = 0;
+
+        // 5x5 walled area at flat elevation to maximize tower placement chance
+        // Located at (14, 2) to (18, 6)
+        for (int z = 2; z <= 6; z++)
+        {
+            for (int x = 14; x <= 18; x++)
+            {
+                var cell = getCell(x, z);
+                if (cell == null) continue;
+
+                cell.Walled = true;
+                cell.Elevation = 2; // Flat elevation
+                cell.Color = new Color(0.7f, 0.5f, 0.3f); // Brown for tower test area
+                count++;
+            }
+        }
+
+        GD.Print($"  Walled area for towers created with {count} cells at elevation 2");
+    }
+
+    /// <summary>
+    /// Tutorial 11: Scenario 8: Walled area with varying elevations where towers should NOT appear.
+    /// Towers only placed when leftCell.Elevation == rightCell.Elevation.
+    /// </summary>
+    private static void GenerateWalledAreaNoTowers(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating walled area with varied elevation (no towers expected)...");
+        int count = 0;
+
+        // 3x3 walled area with alternating elevations
+        // Located at (14, 10) to (16, 12)
+        for (int z = 10; z <= 12; z++)
+        {
+            for (int x = 14; x <= 16; x++)
+            {
+                var cell = getCell(x, z);
+                if (cell == null) continue;
+
+                cell.Walled = true;
+                // Alternating pattern ensures adjacent cells have different elevations
+                cell.Elevation = ((x + z) % 2 == 0) ? 1 : 3;
+                cell.Color = new Color(0.5f, 0.5f, 0.7f); // Blue-gray for no-tower test
+                count++;
+            }
+        }
+
+        GD.Print($"  Walled area with varied elevation created with {count} cells (towers should NOT appear)");
     }
 }

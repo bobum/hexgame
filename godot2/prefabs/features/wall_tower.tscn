@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3 uid="uid://wall_tower"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_tower"]
+top_radius = 0.6
+bottom_radius = 0.7
+height = 4.5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_cap"]
+top_radius = 0.8
+bottom_radius = 0.8
+height = 0.5
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tower"]
+albedo_color = Color(0.55, 0.5, 0.45, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cap"]
+albedo_color = Color(0.4, 0.35, 0.3, 1)
+
+[node name="WallTower" type="Node3D"]
+
+[node name="TowerBody" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 0)
+mesh = SubResource("CylinderMesh_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_tower")
+
+[node name="TowerCap" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.75, 0)
+mesh = SubResource("CylinderMesh_cap")
+surface_material_override/0 = SubResource("StandardMaterial3D_cap")

@@ -1,0 +1,70 @@
+[gd_scene load_steps=7 format=3 uid="uid://special_castle"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_keep"]
+size = Vector3(4.0, 5.0, 4.0)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_tower"]
+top_radius = 0.8
+bottom_radius = 1.0
+height = 6.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_cap"]
+top_radius = 1.1
+bottom_radius = 1.1
+height = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_keep"]
+albedo_color = Color(0.6, 0.55, 0.5, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tower"]
+albedo_color = Color(0.55, 0.5, 0.45, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cap"]
+albedo_color = Color(0.45, 0.4, 0.35, 1)
+
+[node name="Castle" type="Node3D"]
+
+[node name="Keep" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 0)
+mesh = SubResource("BoxMesh_keep")
+surface_material_override/0 = SubResource("StandardMaterial3D_keep")
+
+[node name="TowerNE" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 3.0, 2.2)
+mesh = SubResource("CylinderMesh_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_tower")
+
+[node name="TowerNECap" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 6.3, 2.2)
+mesh = SubResource("CylinderMesh_cap")
+surface_material_override/0 = SubResource("StandardMaterial3D_cap")
+
+[node name="TowerSE" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 3.0, -2.2)
+mesh = SubResource("CylinderMesh_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_tower")
+
+[node name="TowerSECap" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 6.3, -2.2)
+mesh = SubResource("CylinderMesh_cap")
+surface_material_override/0 = SubResource("StandardMaterial3D_cap")
+
+[node name="TowerSW" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 3.0, -2.2)
+mesh = SubResource("CylinderMesh_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_tower")
+
+[node name="TowerSWCap" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 6.3, -2.2)
+mesh = SubResource("CylinderMesh_cap")
+surface_material_override/0 = SubResource("StandardMaterial3D_cap")
+
+[node name="TowerNW" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 3.0, 2.2)
+mesh = SubResource("CylinderMesh_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_tower")
+
+[node name="TowerNWCap" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 6.3, 2.2)
+mesh = SubResource("CylinderMesh_cap")
+surface_material_override/0 = SubResource("StandardMaterial3D_cap")

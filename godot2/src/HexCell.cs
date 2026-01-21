@@ -45,6 +45,9 @@ public partial class HexCell : Node3D
     // Tutorial 10: Wall data
     private bool _walled;
 
+    // Tutorial 11: Special feature data
+    private int _specialIndex;
+
     public int Elevation
     {
         get => _elevation;
@@ -178,6 +181,31 @@ public partial class HexCell : Node3D
         }
     }
 
+    // Tutorial 11: Special feature properties
+
+    /// <summary>
+    /// Index of special feature (0 = none, 1 = castle, 2 = ziggurat, 3 = megaflora).
+    /// Tutorial 11.
+    /// </summary>
+    public int SpecialIndex
+    {
+        get => _specialIndex;
+        set
+        {
+            if (_specialIndex != value)
+            {
+                _specialIndex = value;
+                RefreshSelfOnly();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns true if this cell has a special feature.
+    /// Tutorial 11.
+    /// </summary>
+    public bool IsSpecial => _specialIndex > 0;
+
     // Tutorial 6: River properties
 
     public bool HasIncomingRiver => _hasIncomingRiver;
@@ -257,12 +285,14 @@ public partial class HexCell : Node3D
 
     /// <summary>
     /// Adds a road in the specified direction if valid.
-    /// Roads cannot be placed where rivers exist or where elevation difference > 1.
+    /// Roads cannot be placed where rivers exist, where elevation difference > 1,
+    /// or in cells with special features (Tutorial 11).
     /// </summary>
     public void AddRoad(HexDirection direction)
     {
         if (!_roads[(int)direction] &&
             !HasRiverThroughEdge(direction) &&
+            !IsSpecial &&  // Tutorial 11: No roads in special cells
             GetElevationDifference(direction) <= 1)
         {
             SetRoad((int)direction, true);
@@ -370,6 +400,9 @@ public partial class HexCell : Node3D
         {
             RemoveIncomingRiver();
         }
+
+        // Tutorial 11: Rivers override special features
+        _specialIndex = 0;
 
         _hasOutgoingRiver = true;
         _outgoingRiver = direction;

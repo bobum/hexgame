@@ -18,6 +18,15 @@ public partial class HexFeatureManager : Node3D
     // Tutorial 10: Wall mesh
     private HexMesh? _walls;
 
+    // Tutorial 11: Wall tower prefab
+    private PackedScene? _wallTowerPrefab;
+
+    // Tutorial 11: Bridge prefab
+    private PackedScene? _bridgePrefab;
+
+    // Tutorial 11: Special feature prefabs (castle, ziggurat, megaflora)
+    private PackedScene[] _specialPrefabs = null!;
+
     // Feature selection thresholds per level
     // Level 1 threshold = 0.4, Level 2 = 0.6, Level 3 = 0.8
     private static readonly float[] FeatureThresholds = { 0.0f, 0.4f, 0.6f, 0.8f };
@@ -49,6 +58,18 @@ public partial class HexFeatureManager : Node3D
         wallMaterial.AlbedoColor = new Color(1.0f, 0.0f, 0.0f); // Bright RED
         wallMaterial.CullMode = BaseMaterial3D.CullModeEnum.Disabled; // Show both sides
         _walls.MaterialOverride = wallMaterial;
+
+        // Tutorial 11: Load wall tower prefab
+        _wallTowerPrefab = GD.Load<PackedScene>("res://prefabs/features/wall_tower.tscn");
+
+        // Tutorial 11: Load bridge prefab
+        _bridgePrefab = GD.Load<PackedScene>("res://prefabs/features/bridge.tscn");
+
+        // Tutorial 11: Load special feature prefabs
+        _specialPrefabs = new PackedScene[3];
+        _specialPrefabs[0] = GD.Load<PackedScene>("res://prefabs/features/special/castle.tscn");
+        _specialPrefabs[1] = GD.Load<PackedScene>("res://prefabs/features/special/ziggurat.tscn");
+        _specialPrefabs[2] = GD.Load<PackedScene>("res://prefabs/features/special/megaflora.tscn");
     }
 
     /// <summary>
@@ -387,6 +408,24 @@ public partial class HexFeatureManager : Node3D
 
         // Top quad - swap for upward-facing normal
         _walls?.AddQuadUnperturbed(t2, t1, v4, v3);
+
+        // Tutorial 11: Place tower at wall corner
+        if (addTower && _wallTowerPrefab != null && _container != null)
+        {
+            Vector3 towerPosition = (left + right) * 0.5f;
+            var tower = _wallTowerPrefab.Instantiate<Node3D>();
+            tower.Position = towerPosition;
+
+            // Align tower rotation to wall direction
+            Vector3 direction = right - left;
+            if (direction.LengthSquared() > 0.0001f)
+            {
+                float angle = Mathf.Atan2(direction.X, direction.Z);
+                tower.RotationDegrees = new Vector3(0f, Mathf.RadToDeg(angle), 0f);
+            }
+
+            _container.AddChild(tower);
+        }
     }
 
     /// <summary>
@@ -487,5 +526,78 @@ public partial class HexFeatureManager : Node3D
         _walls?.AddQuadUnperturbed(point, v1, pointTop, v3);
         _walls?.AddQuadUnperturbed(v2, point, v4, pointTop);
         _walls?.AddTriangleUnperturbed(pointTop, v4, v3);
+    }
+
+    // Tutorial 11: Bridge methods
+
+    /// <summary>
+    /// Adds a bridge across a river between road endpoints.
+    /// Tutorial 11.
+    /// </summary>
+    /// <param name="roadCenter1">Road center on first bank</param>
+    /// <param name="roadCenter2">Road center on second bank</param>
+    public void AddBridge(Vector3 roadCenter1, Vector3 roadCenter2)
+    {
+        if (_bridgePrefab == null || _container == null)
+        {
+            return;
+        }
+
+        // Perturb positions to match terrain
+        roadCenter1 = HexMetrics.Perturb(roadCenter1);
+        roadCenter2 = HexMetrics.Perturb(roadCenter2);
+
+        var bridge = _bridgePrefab.Instantiate<Node3D>();
+
+        // Position at midpoint between road centers
+        bridge.Position = (roadCenter1 + roadCenter2) * 0.5f;
+
+        // Align rotation to bridge direction
+        Vector3 direction = roadCenter2 - roadCenter1;
+        if (direction.LengthSquared() > 0.0001f)
+        {
+            float angle = Mathf.Atan2(direction.X, direction.Z);
+            bridge.RotationDegrees = new Vector3(0f, Mathf.RadToDeg(angle), 0f);
+        }
+
+        // Scale Z axis based on distance / design length
+        float length = direction.Length();
+        float scale = length / HexMetrics.BridgeDesignLength;
+        bridge.Scale = new Vector3(1f, 1f, scale);
+
+        _container.AddChild(bridge);
+    }
+
+    // Tutorial 11: Special feature methods
+
+    /// <summary>
+    /// Adds a special feature at the cell center.
+    /// Tutorial 11.
+    /// </summary>
+    /// <param name="cell">Cell containing the special feature</param>
+    /// <param name="position">World position for placement</param>
+    public void AddSpecialFeature(HexCell cell, Vector3 position)
+    {
+        if (_container == null || _specialPrefabs == null)
+        {
+            return;
+        }
+
+        int index = cell.SpecialIndex - 1;  // Convert 1-3 to 0-2 array index
+        if (index < 0 || index >= _specialPrefabs.Length || _specialPrefabs[index] == null)
+        {
+            return;
+        }
+
+        HexHash hash = HexMetrics.SampleHashGrid(position);
+        var feature = _specialPrefabs[index].Instantiate<Node3D>();
+
+        // Position with perturbation
+        feature.Position = HexMetrics.Perturb(position);
+
+        // Random Y rotation using hash.e (same as regular features)
+        feature.RotationDegrees = new Vector3(0f, 360f * hash.e, 0f);
+
+        _container.AddChild(feature);
     }
 }
