@@ -57,6 +57,12 @@ public partial class HexGrid : Node3D
 
         // Tutorial 10: Generate test walls for visual verification
         GenerateTestWalls();
+
+        // Tutorial 11: Generate test bridges for visual verification
+        GenerateTestBridges();
+
+        // Tutorial 11: Generate test special features for visual verification
+        GenerateTestSpecialFeatures();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -257,6 +263,26 @@ public partial class HexGrid : Node3D
     public void GenerateTestWalls()
     {
         TestWallGenerator.GenerateTestPatterns(GetCellByOffset);
+    }
+
+    /// <summary>
+    /// Generates test bridges for visual verification.
+    /// Call this after rivers and roads are created.
+    /// Tutorial 11.
+    /// </summary>
+    public void GenerateTestBridges()
+    {
+        TestBridgeGenerator.GenerateTestPatterns(GetCellByOffset);
+    }
+
+    /// <summary>
+    /// Generates test special features for visual verification.
+    /// Call this after the grid is created.
+    /// Tutorial 11.
+    /// </summary>
+    public void GenerateTestSpecialFeatures()
+    {
+        TestSpecialFeatureGenerator.GenerateTestPatterns(GetCellByOffset);
     }
 
     private void InitializeNoiseSource()

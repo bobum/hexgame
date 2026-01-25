@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3 uid="uid://special_megaflora"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_trunk"]
+top_radius = 0.6
+bottom_radius = 1.2
+height = 8.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_canopy_main"]
+radius = 4.0
+height = 6.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_canopy_side"]
+radius = 2.5
+height = 4.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_trunk"]
+albedo_color = Color(0.35, 0.2, 0.1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_canopy_main"]
+albedo_color = Color(0.15, 0.55, 0.15, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_canopy_side"]
+albedo_color = Color(0.1, 0.45, 0.1, 1)
+
+[node name="Megaflora" type="Node3D"]
+
+[node name="Trunk" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.0, 0)
+mesh = SubResource("CylinderMesh_trunk")
+surface_material_override/0 = SubResource("StandardMaterial3D_trunk")
+
+[node name="CanopyMain" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.0, 0)
+mesh = SubResource("SphereMesh_canopy_main")
+surface_material_override/0 = SubResource("StandardMaterial3D_canopy_main")
+
+[node name="CanopyLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 8.5, 0)
+mesh = SubResource("SphereMesh_canopy_side")
+surface_material_override/0 = SubResource("StandardMaterial3D_canopy_side")
+
+[node name="CanopyRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 8.5, 0)
+mesh = SubResource("SphereMesh_canopy_side")
+surface_material_override/0 = SubResource("StandardMaterial3D_canopy_side")
+
+[node name="CanopyFront" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 2.5)
+mesh = SubResource("SphereMesh_canopy_side")
+surface_material_override/0 = SubResource("StandardMaterial3D_canopy_side")

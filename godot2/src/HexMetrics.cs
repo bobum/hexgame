@@ -54,6 +54,9 @@ public static class HexMetrics
     public static float WallElevationOffset => VerticalTerraceStepSize;
     public const float WallTowerThreshold = 0.5f;
 
+    // Tutorial 11: Bridge constants
+    public const float BridgeDesignLength = 7f;
+
     // Procedural noise generation constants
     public const int NoiseTextureSize = 256;
 
