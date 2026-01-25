@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/terrain.gdshader" id="1_terrain"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_terrain")
+shader_parameter/use_textures = false
+shader_parameter/color_sand = Vector3(0.93, 0.87, 0.73)
+shader_parameter/color_grass = Vector3(0.4, 0.7, 0.3)
+shader_parameter/color_mud = Vector3(0.5, 0.4, 0.3)
+shader_parameter/color_stone = Vector3(0.6, 0.6, 0.6)
+shader_parameter/color_snow = Vector3(0.95, 0.95, 0.95)
+shader_parameter/texture_scale = 0.02

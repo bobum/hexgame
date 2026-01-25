@@ -3,18 +3,19 @@ using Godot;
 /// <summary>
 /// Handles mouse input for editing hex cells.
 /// Ported from Catlike Coding Hex Map Tutorial 5.
+/// Tutorial 14: Updated to use terrain type indices instead of colors.
 /// Uses a collision plane for raycasting.
 /// </summary>
 public partial class HexMapEditor : Node3D
 {
     [Export] public NodePath HexGridPath = null!;
-    [Export] public Color[] Colors = null!;
+    [Export] public int TerrainTypeCount = 5;
 
     private HexGrid _hexGrid = null!;
 
-    private int _activeColorIndex;
+    private int _activeTerrainTypeIndex;
     private int _activeElevation;
-    private bool _applyColor;
+    private bool _applyTerrainType;
     private bool _applyElevation = true;
 
     private Camera3D? _camera;
@@ -35,18 +36,6 @@ public partial class HexMapEditor : Node3D
         shape.Plane = new Plane(Vector3.Up, 0f);
         _groundShape.Shape = shape;
         _groundPlane.AddChild(_groundShape);
-
-        // Default colors if not set
-        if (Colors == null || Colors.Length == 0)
-        {
-            Colors = new Color[]
-            {
-                new Color(1f, 1f, 0f),  // Yellow
-                new Color(0f, 1f, 0f),  // Green
-                new Color(0f, 0f, 1f),  // Blue
-                new Color(1f, 1f, 1f),  // White
-            };
-        }
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -86,9 +75,9 @@ public partial class HexMapEditor : Node3D
     {
         if (cell == null) return;
 
-        if (_applyColor)
+        if (_applyTerrainType)
         {
-            cell.Color = Colors[_activeColorIndex];
+            cell.TerrainTypeIndex = _activeTerrainTypeIndex;
         }
         if (_applyElevation)
         {
@@ -96,12 +85,12 @@ public partial class HexMapEditor : Node3D
         }
     }
 
-    public void SelectColor(int index)
+    public void SelectTerrainType(int index)
     {
-        _applyColor = index >= 0;
-        if (_applyColor)
+        _applyTerrainType = index >= 0;
+        if (_applyTerrainType)
         {
-            _activeColorIndex = index;
+            _activeTerrainTypeIndex = index;
         }
     }
 

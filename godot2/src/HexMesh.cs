@@ -23,6 +23,10 @@ public partial class HexMesh : MeshInstance3D
     public bool UseUV2Coordinates = false;
     private List<Vector2> _uv2s = new List<Vector2>();
 
+    // Tutorial 14: Terrain type indices for texture array sampling
+    public bool UseTerrainTypes = false;
+    private List<Vector3> _terrainTypes = new List<Vector3>();
+
     // Debug: expose vertex count for debugging
     public int VertexCount => _vertices.Count;
 
@@ -39,6 +43,12 @@ public partial class HexMesh : MeshInstance3D
 
     // Tutorial 9: Reference to feature manager for terrain feature placement
     private HexFeatureManager? _features;
+
+    // Tutorial 14: Static splat map weights for terrain texture blending
+    // Colors are now used as splat weights, not actual terrain colors
+    private static readonly Color SplatWeights1 = new Color(1f, 0f, 0f); // 100% texture 1
+    private static readonly Color SplatWeights2 = new Color(0f, 1f, 0f); // 100% texture 2
+    private static readonly Color SplatWeights3 = new Color(0f, 0f, 1f); // 100% texture 3
 
     public override void _Ready()
     {
@@ -80,6 +90,10 @@ public partial class HexMesh : MeshInstance3D
         {
             _uv2s.Clear();
         }
+        if (UseTerrainTypes)
+        {
+            _terrainTypes.Clear();
+        }
     }
 
     /// <summary>
@@ -98,6 +112,12 @@ public partial class HexMesh : MeshInstance3D
         // Build the mesh using SurfaceTool with flat normals per-triangle
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
+
+        // Tutorial 14: Set custom format for terrain types (CUSTOM0 as RGB float)
+        if (UseTerrainTypes)
+        {
+            st.SetCustomFormat(0, SurfaceTool.CustomFormat.RgbFloat);
+        }
 
         // Process triangles in groups of 3 to calculate flat face normals
         for (int i = 0; i < _triangles.Count; i += 3)
@@ -131,6 +151,11 @@ public partial class HexMesh : MeshInstance3D
             {
                 st.SetUV2(_uv2s[idx0]);
             }
+            if (UseTerrainTypes)
+            {
+                var t = _terrainTypes[idx0];
+                st.SetCustom(0, new Color(t.X, t.Y, t.Z, 0f));
+            }
             st.AddVertex(v0);
 
             st.SetNormal(normal);
@@ -146,6 +171,11 @@ public partial class HexMesh : MeshInstance3D
             {
                 st.SetUV2(_uv2s[idx1]);
             }
+            if (UseTerrainTypes)
+            {
+                var t = _terrainTypes[idx1];
+                st.SetCustom(0, new Color(t.X, t.Y, t.Z, 0f));
+            }
             st.AddVertex(v1);
 
             st.SetNormal(normal);
@@ -160,6 +190,11 @@ public partial class HexMesh : MeshInstance3D
             if (UseUV2Coordinates)
             {
                 st.SetUV2(_uv2s[idx2]);
+            }
+            if (UseTerrainTypes)
+            {
+                var t = _terrainTypes[idx2];
+                st.SetCustom(0, new Color(t.X, t.Y, t.Z, 0f));
             }
             st.AddVertex(v2);
         }
@@ -297,31 +332,47 @@ public partial class HexMesh : MeshInstance3D
         }
     }
 
-    private void TriangulateEdgeFan(Vector3 center, EdgeVertices edge, Color color)
+    /// <summary>
+    /// Triangulates an edge fan with a single terrain type.
+    /// Tutorial 14: Uses splat weight (1,0,0) for single-texture rendering.
+    /// </summary>
+    private void TriangulateEdgeFan(Vector3 center, EdgeVertices edge, float type)
     {
         AddTriangle(center, edge.V1, edge.V2);
-        AddTriangleColor(color);
+        AddTriangleColor(SplatWeights1);
+        AddTriangleTerrainTypes(new Vector3(type, type, type));
         AddTriangle(center, edge.V2, edge.V3);
-        AddTriangleColor(color);
+        AddTriangleColor(SplatWeights1);
+        AddTriangleTerrainTypes(new Vector3(type, type, type));
         AddTriangle(center, edge.V3, edge.V4);
-        AddTriangleColor(color);
+        AddTriangleColor(SplatWeights1);
+        AddTriangleTerrainTypes(new Vector3(type, type, type));
         AddTriangle(center, edge.V4, edge.V5);
-        AddTriangleColor(color);
+        AddTriangleColor(SplatWeights1);
+        AddTriangleTerrainTypes(new Vector3(type, type, type));
     }
 
+    /// <summary>
+    /// Triangulates an edge strip blending two terrain types.
+    /// Tutorial 14: e1 side uses type1, e2 side uses type2, with splat blending.
+    /// </summary>
     private void TriangulateEdgeStrip(
-        EdgeVertices e1, Color c1,
-        EdgeVertices e2, Color c2,
+        EdgeVertices e1, float type1,
+        EdgeVertices e2, float type2,
         bool hasRoad = false)
     {
         AddQuad(e1.V1, e1.V2, e2.V1, e2.V2);
-        AddQuadColor(c1, c2);
+        AddQuadColor(SplatWeights1, SplatWeights2);
+        AddQuadTerrainTypes(new Vector3(type1, type2, type1));
         AddQuad(e1.V2, e1.V3, e2.V2, e2.V3);
-        AddQuadColor(c1, c2);
+        AddQuadColor(SplatWeights1, SplatWeights2);
+        AddQuadTerrainTypes(new Vector3(type1, type2, type1));
         AddQuad(e1.V3, e1.V4, e2.V3, e2.V4);
-        AddQuadColor(c1, c2);
+        AddQuadColor(SplatWeights1, SplatWeights2);
+        AddQuadTerrainTypes(new Vector3(type1, type2, type1));
         AddQuad(e1.V4, e1.V5, e2.V4, e2.V5);
-        AddQuadColor(c1, c2);
+        AddQuadColor(SplatWeights1, SplatWeights2);
+        AddQuadTerrainTypes(new Vector3(type1, type2, type1));
 
         // Tutorial 7: Add road segment across edge connection
         if (hasRoad)
@@ -383,7 +434,7 @@ public partial class HexMesh : MeshInstance3D
     private void TriangulateWithoutRiver(
         HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
     {
-        TriangulateEdgeFan(center, e, cell.Color);
+        TriangulateEdgeFan(center, e, cell.TerrainTypeIndex);
 
         if (cell.HasRoads)
         {
@@ -421,8 +472,9 @@ public partial class HexMesh : MeshInstance3D
         );
         m.V3.Y = e.V3.Y;
 
-        TriangulateEdgeStrip(m, cell.Color, e, cell.Color);
-        TriangulateEdgeFan(center, m, cell.Color);
+        float type = cell.TerrainTypeIndex;
+        TriangulateEdgeStrip(m, type, e, type);
+        TriangulateEdgeFan(center, m, type);
 
         // Tutorial 6/8: Add water surface if rivers mesh available and cell is not underwater
         if (_rivers != null && !cell.IsUnderwater)
@@ -517,16 +569,22 @@ public partial class HexMesh : MeshInstance3D
         m.V3.Y = center.Y = e.V3.Y;
 
         // Terrain triangulation (channel banks)
-        TriangulateEdgeStrip(m, cell.Color, e, cell.Color);
+        float type = cell.TerrainTypeIndex;
+        Vector3 types = new Vector3(type, type, type);
+        TriangulateEdgeStrip(m, type, e, type);
 
         AddTriangle(centerL, m.V1, m.V2);
-        AddTriangleColor(cell.Color);
+        AddTriangleColor(SplatWeights1);
+        AddTriangleTerrainTypes(types);
         AddQuad(centerL, center, m.V2, m.V3);
-        AddQuadColor(cell.Color, cell.Color);
+        AddQuadColor(SplatWeights1, SplatWeights1);
+        AddQuadTerrainTypes(types);
         AddQuad(center, centerR, m.V3, m.V4);
-        AddQuadColor(cell.Color, cell.Color);
+        AddQuadColor(SplatWeights1, SplatWeights1);
+        AddQuadTerrainTypes(types);
         AddTriangle(centerR, m.V4, m.V5);
-        AddTriangleColor(cell.Color);
+        AddTriangleColor(SplatWeights1);
+        AddTriangleTerrainTypes(types);
 
         // Tutorial 6/8: Add water surface if rivers mesh available and cell is not underwater
         if (_rivers != null && !cell.IsUnderwater)
@@ -572,8 +630,9 @@ public partial class HexMesh : MeshInstance3D
             center.Lerp(e.V5, 0.5f)
         );
 
-        TriangulateEdgeStrip(m, cell.Color, e, cell.Color);
-        TriangulateEdgeFan(center, m, cell.Color);
+        float type = cell.TerrainTypeIndex;
+        TriangulateEdgeStrip(m, type, e, type);
+        TriangulateEdgeFan(center, m, type);
 
         // Tutorial 7: Handle roads adjacent to rivers
         if (cell.HasRoads)
@@ -852,7 +911,9 @@ public partial class HexMesh : MeshInstance3D
         }
         else
         {
-            TriangulateEdgeStrip(e1, cell.Color, e2, neighbor.Color, hasRoad);
+            TriangulateEdgeStrip(
+                e1, cell.TerrainTypeIndex,
+                e2, neighbor.TerrainTypeIndex, hasRoad);
         }
 
         // Tutorial 10: Add walls along edge
@@ -888,26 +949,29 @@ public partial class HexMesh : MeshInstance3D
         }
     }
 
+    /// <summary>
+    /// Triangulates terraced edge between two cells.
+    /// Tutorial 14: Terrain types are constant across terrace steps (no interpolation).
+    /// </summary>
     private void TriangulateEdgeTerraces(
         EdgeVertices begin, HexCell beginCell,
         EdgeVertices end, HexCell endCell,
         bool hasRoad = false)
     {
         EdgeVertices e2 = EdgeVertices.TerraceLerp(begin, end, 1);
-        Color c2 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, 1);
+        float t1 = beginCell.TerrainTypeIndex;
+        float t2 = endCell.TerrainTypeIndex;
 
-        TriangulateEdgeStrip(begin, beginCell.Color, e2, c2, hasRoad);
+        TriangulateEdgeStrip(begin, t1, e2, t2, hasRoad);
 
         for (int i = 2; i < HexMetrics.TerraceSteps; i++)
         {
             EdgeVertices e1 = e2;
-            Color c1 = c2;
             e2 = EdgeVertices.TerraceLerp(begin, end, i);
-            c2 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, i);
-            TriangulateEdgeStrip(e1, c1, e2, c2, hasRoad);
+            TriangulateEdgeStrip(e1, t1, e2, t2, hasRoad);
         }
 
-        TriangulateEdgeStrip(e2, c2, end, endCell.Color, hasRoad);
+        TriangulateEdgeStrip(e2, t1, end, t2, hasRoad);
     }
 
     private void TriangulateCorner(
@@ -958,13 +1022,21 @@ public partial class HexMesh : MeshInstance3D
         else
         {
             AddTriangle(bottom, left, right);
-            AddTriangleColor(bottomCell.Color, leftCell.Color, rightCell.Color);
+            AddTriangleColor(SplatWeights1, SplatWeights2, SplatWeights3);
+            AddTriangleTerrainTypes(new Vector3(
+                bottomCell.TerrainTypeIndex,
+                leftCell.TerrainTypeIndex,
+                rightCell.TerrainTypeIndex));
         }
 
         // Tutorial 10: Add corner walls
         _features?.AddWall(bottom, bottomCell, left, leftCell, right, rightCell);
     }
 
+    /// <summary>
+    /// Triangulates corner terraces between three cells.
+    /// Tutorial 14: Splat weights are interpolated, terrain types stay fixed.
+    /// </summary>
     private void TriangulateCornerTerraces(
         Vector3 begin, HexCell beginCell,
         Vector3 left, HexCell leftCell,
@@ -972,11 +1044,16 @@ public partial class HexMesh : MeshInstance3D
     {
         Vector3 v3 = HexMetrics.TerraceLerp(begin, left, 1);
         Vector3 v4 = HexMetrics.TerraceLerp(begin, right, 1);
-        Color c3 = HexMetrics.TerraceLerp(beginCell.Color, leftCell.Color, 1);
-        Color c4 = HexMetrics.TerraceLerp(beginCell.Color, rightCell.Color, 1);
+        Color c3 = HexMetrics.TerraceLerp(SplatWeights1, SplatWeights2, 1);
+        Color c4 = HexMetrics.TerraceLerp(SplatWeights1, SplatWeights3, 1);
+        Vector3 types = new Vector3(
+            beginCell.TerrainTypeIndex,
+            leftCell.TerrainTypeIndex,
+            rightCell.TerrainTypeIndex);
 
         AddTriangle(begin, v3, v4);
-        AddTriangleColor(beginCell.Color, c3, c4);
+        AddTriangleColor(SplatWeights1, c3, c4);
+        AddTriangleTerrainTypes(types);
 
         for (int i = 2; i < HexMetrics.TerraceSteps; i++)
         {
@@ -986,41 +1063,55 @@ public partial class HexMesh : MeshInstance3D
             Color c2 = c4;
             v3 = HexMetrics.TerraceLerp(begin, left, i);
             v4 = HexMetrics.TerraceLerp(begin, right, i);
-            c3 = HexMetrics.TerraceLerp(beginCell.Color, leftCell.Color, i);
-            c4 = HexMetrics.TerraceLerp(beginCell.Color, rightCell.Color, i);
+            c3 = HexMetrics.TerraceLerp(SplatWeights1, SplatWeights2, i);
+            c4 = HexMetrics.TerraceLerp(SplatWeights1, SplatWeights3, i);
             AddQuad(v1, v2, v3, v4);
             AddQuadColor(c1, c2, c3, c4);
+            AddQuadTerrainTypes(types);
         }
 
         AddQuad(v3, v4, left, right);
-        AddQuadColor(c3, c4, leftCell.Color, rightCell.Color);
+        AddQuadColor(c3, c4, SplatWeights2, SplatWeights3);
+        AddQuadTerrainTypes(types);
     }
 
+    /// <summary>
+    /// Triangulates boundary triangle between terrace and cliff.
+    /// Tutorial 14: Uses splat weights for blending, terrain types stay fixed.
+    /// </summary>
     private void TriangulateBoundaryTriangle(
-        Vector3 begin, Color beginColor,
-        Vector3 left, Color leftColor,
-        Vector3 boundary, Color boundaryColor)
+        Vector3 begin, Color beginWeights,
+        Vector3 left, Color leftWeights,
+        Vector3 boundary, Color boundaryWeights,
+        Vector3 types)
     {
         Vector3 v2 = HexMetrics.Perturb(HexMetrics.TerraceLerp(begin, left, 1));
-        Color c2 = HexMetrics.TerraceLerp(beginColor, leftColor, 1);
+        Color c2 = HexMetrics.TerraceLerp(beginWeights, leftWeights, 1);
 
         AddTriangleUnperturbed(HexMetrics.Perturb(begin), v2, boundary);
-        AddTriangleColor(beginColor, c2, boundaryColor);
+        AddTriangleColor(beginWeights, c2, boundaryWeights);
+        AddTriangleTerrainTypes(types);
 
         for (int i = 2; i < HexMetrics.TerraceSteps; i++)
         {
             Vector3 v1 = v2;
             Color c1 = c2;
             v2 = HexMetrics.Perturb(HexMetrics.TerraceLerp(begin, left, i));
-            c2 = HexMetrics.TerraceLerp(beginColor, leftColor, i);
+            c2 = HexMetrics.TerraceLerp(beginWeights, leftWeights, i);
             AddTriangleUnperturbed(v1, v2, boundary);
-            AddTriangleColor(c1, c2, boundaryColor);
+            AddTriangleColor(c1, c2, boundaryWeights);
+            AddTriangleTerrainTypes(types);
         }
 
         AddTriangleUnperturbed(v2, HexMetrics.Perturb(left), boundary);
-        AddTriangleColor(c2, leftColor, boundaryColor);
+        AddTriangleColor(c2, leftWeights, boundaryWeights);
+        AddTriangleTerrainTypes(types);
     }
 
+    /// <summary>
+    /// Triangulates corner where terraces meet cliff (left side has terraces).
+    /// Tutorial 14: Uses splat weights, terrain types stay fixed.
+    /// </summary>
     private void TriangulateCornerTerracesCliff(
         Vector3 begin, HexCell beginCell,
         Vector3 left, HexCell leftCell,
@@ -1032,21 +1123,32 @@ public partial class HexMesh : MeshInstance3D
             b = -b;
         }
         Vector3 boundary = HexMetrics.Perturb(begin).Lerp(HexMetrics.Perturb(right), b);
-        Color boundaryColor = beginCell.Color.Lerp(rightCell.Color, b);
+        Color boundaryWeights = SplatWeights1.Lerp(SplatWeights3, b);
+        Vector3 types = new Vector3(
+            beginCell.TerrainTypeIndex,
+            leftCell.TerrainTypeIndex,
+            rightCell.TerrainTypeIndex);
 
-        TriangulateBoundaryTriangle(begin, beginCell.Color, left, leftCell.Color, boundary, boundaryColor);
+        TriangulateBoundaryTriangle(
+            begin, SplatWeights1, left, SplatWeights2, boundary, boundaryWeights, types);
 
         if (leftCell.GetEdgeType(rightCell) == HexEdgeType.Slope)
         {
-            TriangulateBoundaryTriangle(left, leftCell.Color, right, rightCell.Color, boundary, boundaryColor);
+            TriangulateBoundaryTriangle(
+                left, SplatWeights2, right, SplatWeights3, boundary, boundaryWeights, types);
         }
         else
         {
             AddTriangleUnperturbed(HexMetrics.Perturb(left), HexMetrics.Perturb(right), boundary);
-            AddTriangleColor(leftCell.Color, rightCell.Color, boundaryColor);
+            AddTriangleColor(SplatWeights2, SplatWeights3, boundaryWeights);
+            AddTriangleTerrainTypes(types);
         }
     }
 
+    /// <summary>
+    /// Triangulates corner where cliff meets terraces (right side has terraces).
+    /// Tutorial 14: Uses splat weights, terrain types stay fixed.
+    /// </summary>
     private void TriangulateCornerCliffTerraces(
         Vector3 begin, HexCell beginCell,
         Vector3 left, HexCell leftCell,
@@ -1058,18 +1160,25 @@ public partial class HexMesh : MeshInstance3D
             b = -b;
         }
         Vector3 boundary = HexMetrics.Perturb(begin).Lerp(HexMetrics.Perturb(left), b);
-        Color boundaryColor = beginCell.Color.Lerp(leftCell.Color, b);
+        Color boundaryWeights = SplatWeights1.Lerp(SplatWeights2, b);
+        Vector3 types = new Vector3(
+            beginCell.TerrainTypeIndex,
+            leftCell.TerrainTypeIndex,
+            rightCell.TerrainTypeIndex);
 
-        TriangulateBoundaryTriangle(right, rightCell.Color, begin, beginCell.Color, boundary, boundaryColor);
+        TriangulateBoundaryTriangle(
+            right, SplatWeights3, begin, SplatWeights1, boundary, boundaryWeights, types);
 
         if (leftCell.GetEdgeType(rightCell) == HexEdgeType.Slope)
         {
-            TriangulateBoundaryTriangle(left, leftCell.Color, right, rightCell.Color, boundary, boundaryColor);
+            TriangulateBoundaryTriangle(
+                left, SplatWeights2, right, SplatWeights3, boundary, boundaryWeights, types);
         }
         else
         {
             AddTriangleUnperturbed(HexMetrics.Perturb(left), HexMetrics.Perturb(right), boundary);
-            AddTriangleColor(leftCell.Color, rightCell.Color, boundaryColor);
+            AddTriangleColor(SplatWeights2, SplatWeights3, boundaryWeights);
+            AddTriangleTerrainTypes(types);
         }
     }
 
@@ -1107,6 +1216,31 @@ public partial class HexMesh : MeshInstance3D
         _colors.Add(c1);
         _colors.Add(c2);
         _colors.Add(c3);
+    }
+
+    // Tutorial 14: Terrain type methods
+
+    /// <summary>
+    /// Adds terrain type indices for a triangle (same types for all 3 vertices).
+    /// The Vector3 contains terrain type indices that reference textures in the terrain array.
+    /// </summary>
+    public void AddTriangleTerrainTypes(Vector3 types)
+    {
+        _terrainTypes.Add(types);
+        _terrainTypes.Add(types);
+        _terrainTypes.Add(types);
+    }
+
+    /// <summary>
+    /// Adds terrain type indices for a quad (same types for all 4 vertices).
+    /// The Vector3 contains terrain type indices that reference textures in the terrain array.
+    /// </summary>
+    public void AddQuadTerrainTypes(Vector3 types)
+    {
+        _terrainTypes.Add(types);
+        _terrainTypes.Add(types);
+        _terrainTypes.Add(types);
+        _terrainTypes.Add(types);
     }
 
     private void AddQuad(Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4)

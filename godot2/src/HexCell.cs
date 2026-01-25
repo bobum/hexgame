@@ -23,7 +23,9 @@ public partial class HexCell : Node3D
 
     // Tutorial 5: Initialize to MinValue so first set always triggers refresh
     private int _elevation = int.MinValue;
-    private Color _color;
+
+    // Tutorial 14: Terrain type replaces color
+    private int _terrainTypeIndex;
 
     // Tutorial 6: River data
     private bool _hasIncomingRiver;
@@ -76,13 +78,17 @@ public partial class HexCell : Node3D
         }
     }
 
-    public Color Color
+    /// <summary>
+    /// Index into terrain texture array (0 = sand, 1 = grass, 2 = mud, 3 = stone, 4 = snow).
+    /// Tutorial 14: Replaces Color property.
+    /// </summary>
+    public int TerrainTypeIndex
     {
-        get => _color;
+        get => _terrainTypeIndex;
         set
         {
-            if (_color == value) return;
-            _color = value;
+            if (_terrainTypeIndex == value) return;
+            _terrainTypeIndex = value;
             Refresh();
         }
     }

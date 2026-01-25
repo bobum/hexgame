@@ -54,7 +54,7 @@ public static class TestWaterGenerator
         {
             waterCell.Elevation = 0;
             waterCell.WaterLevel = 1;  // Same as lowland lake
-            waterCell.Color = new Color(0.2f, 0.4f, 0.7f);
+            waterCell.TerrainTypeIndex = 2; // Mud for water areas
             GD.Print($"    Made (13,7) a water hex: elevation=0, waterLevel=1");
         }
 
@@ -181,7 +181,7 @@ public static class TestWaterGenerator
         if (midCell != null)
         {
             midCell.Elevation = 1;
-            midCell.Color = new Color(0.4f, 0.6f, 0.4f);
+            midCell.TerrainTypeIndex = 1; // Grass for mid areas
             GD.Print($"    Set (15,6) / hex 12,-18,6 to elevation 1");
         }
 
@@ -221,7 +221,7 @@ public static class TestWaterGenerator
         {
             waterCell.Elevation = 0;
             waterCell.WaterLevel = 1;  // Same as lowland lake
-            waterCell.Color = new Color(0.2f, 0.4f, 0.7f);
+            waterCell.TerrainTypeIndex = 2; // Mud for water areas
             GD.Print($"    Set (13,7) / hex 10,-17,7 to water hex (elev=0, waterLevel=1)");
         }
 
@@ -268,7 +268,7 @@ public static class TestWaterGenerator
 
             cell.Elevation = 0;
             cell.WaterLevel = waterLevel;
-            cell.Color = new Color(0.2f, 0.4f, 0.7f);  // Deep blue for lake bed
+            cell.TerrainTypeIndex = 2; // Mud for water areas
             count++;
         }
 
@@ -300,7 +300,7 @@ public static class TestWaterGenerator
         {
             raisedCell.Elevation = 4;
             raisedCell.WaterLevel = 0;
-            raisedCell.Color = new Color(0.76f, 0.70f, 0.50f);  // Beige
+            raisedCell.TerrainTypeIndex = 0; // Sand for raised areas
             GD.Print("    Set (16,6) / hex 13,-19,6 to elevation 4, beige");
         }
 
@@ -321,7 +321,7 @@ public static class TestWaterGenerator
             var cell = getCell(x, z);
             if (cell == null) continue;
             cell.Elevation = waterLevel;  // At water level = shore (not underwater)
-            cell.Color = new Color(0.5f, 0.7f, 0.5f);  // Light green for highland shore
+            cell.TerrainTypeIndex = 1; // Grass for highland shore
         }
 
         // Set lake cells
@@ -332,7 +332,7 @@ public static class TestWaterGenerator
 
             cell.Elevation = lakeElevation;
             cell.WaterLevel = waterLevel;
-            cell.Color = new Color(0.3f, 0.5f, 0.8f);  // Mountain lake blue
+            cell.TerrainTypeIndex = 2; // Mud for mountain lake
             count++;
         }
 
@@ -374,7 +374,7 @@ public static class TestWaterGenerator
                 continue;
             }
             cell.Elevation = elevation;
-            cell.Color = new Color(0.4f, 0.6f, 0.4f);  // Greenish for river banks
+            cell.TerrainTypeIndex = 1; // Grass for mid areas
             GD.Print($"    Cell ({x},{z}) elevation set to {elevation}");
         }
 

@@ -12,8 +12,6 @@ public partial class HexGrid : Node3D
     [Export] public PackedScene? CellLabelPrefab;
     [Export] public Texture2D? NoiseSource;
     [Export] public Material? HexMaterial;
-    [Export] public Color DefaultColor = Colors.White;
-    [Export] public Color TouchedColor = Colors.Magenta;
 
     private int _cellCountX;
     private int _cellCountZ;
@@ -21,13 +19,8 @@ public partial class HexGrid : Node3D
     private HexGridChunk[] _chunks = null!;
     private bool _labelsVisible = true;
 
-    // Colors from Catlike Coding tutorial palette
-    private static readonly Color[] _colors = {
-        new Color(1f, 1f, 0f),      // Yellow
-        new Color(0f, 1f, 0f),      // Green
-        new Color(0f, 0f, 1f),      // Blue
-        new Color(1f, 1f, 1f),      // White
-    };
+    // Tutorial 14: Number of terrain types available
+    private const int TerrainTypeCount = 5;
 
     public override void _Ready()
     {
@@ -158,11 +151,11 @@ public partial class HexGrid : Node3D
         AddCellToChunk(x, z, cell);
 
         // Set initial values AFTER adding to chunk so Refresh works
-        // Color by chunk to visualize chunk boundaries
+        // Tutorial 14: Assign terrain type by chunk to visualize chunk boundaries
         int chunkX = x / HexMetrics.ChunkSizeX;
         int chunkZ = z / HexMetrics.ChunkSizeZ;
         int chunkIndex = chunkX + chunkZ * ChunkCountX;
-        cell.Color = _colors[chunkIndex % _colors.Length];
+        cell.TerrainTypeIndex = chunkIndex % TerrainTypeCount;
         cell.Elevation = (x + z) % 4;
     }
 

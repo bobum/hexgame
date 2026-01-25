@@ -45,7 +45,7 @@ public static class TestSpecialFeatureGenerator
         if (castleCell != null)
         {
             castleCell.Elevation = 2;
-            castleCell.Color = new Color(0.6f, 0.6f, 0.6f); // Gray for castle
+            castleCell.TerrainTypeIndex = 3; // Stone for castle
             castleCell.SpecialIndex = 1;
             GD.Print("    Castle placed at (2, 8)");
         }
@@ -59,7 +59,7 @@ public static class TestSpecialFeatureGenerator
         if (zigguratCell != null)
         {
             zigguratCell.Elevation = 2;
-            zigguratCell.Color = new Color(0.8f, 0.7f, 0.5f); // Sandy for ziggurat
+            zigguratCell.TerrainTypeIndex = 0; // Sand for ziggurat
             zigguratCell.SpecialIndex = 2;
             GD.Print("    Ziggurat placed at (5, 8)");
         }
@@ -73,7 +73,7 @@ public static class TestSpecialFeatureGenerator
         if (megafloraCell != null)
         {
             megafloraCell.Elevation = 1;
-            megafloraCell.Color = new Color(0.2f, 0.6f, 0.2f); // Green for megaflora
+            megafloraCell.TerrainTypeIndex = 1; // Grass for megaflora
             megafloraCell.SpecialIndex = 3;
             GD.Print("    Megaflora placed at (8, 8)");
         }
@@ -98,7 +98,7 @@ public static class TestSpecialFeatureGenerator
         if (specialCell == null) return;
 
         specialCell.Elevation = 1;
-        specialCell.Color = new Color(0.6f, 0.6f, 0.6f);
+        specialCell.TerrainTypeIndex = 3; // Stone for castle
         specialCell.SpecialIndex = 1; // Castle
 
         // Set up neighbors at same elevation
@@ -142,7 +142,7 @@ public static class TestSpecialFeatureGenerator
         if (specialCell == null) return;
 
         specialCell.Elevation = 2;
-        specialCell.Color = new Color(0.8f, 0.7f, 0.5f);
+        specialCell.TerrainTypeIndex = 0; // Sand for ziggurat
         specialCell.SpecialIndex = 2; // Ziggurat
 
         int specialBefore = specialCell.SpecialIndex;
@@ -185,7 +185,7 @@ public static class TestSpecialFeatureGenerator
         {
             underwaterCell.Elevation = 0;
             underwaterCell.WaterLevel = 2; // Water above elevation
-            underwaterCell.Color = new Color(0.2f, 0.4f, 0.8f); // Water blue
+            underwaterCell.TerrainTypeIndex = 2; // Mud for water test
             underwaterCell.SpecialIndex = 3; // Megaflora (won't render due to underwater check)
             GD.Print("    Underwater special at (17, 8) - should NOT render feature");
         }
@@ -196,7 +196,7 @@ public static class TestSpecialFeatureGenerator
         {
             aboveWaterCell.Elevation = 2;
             aboveWaterCell.WaterLevel = 1; // Water below elevation
-            aboveWaterCell.Color = new Color(0.2f, 0.6f, 0.2f);
+            aboveWaterCell.TerrainTypeIndex = 1; // Grass for megaflora
             aboveWaterCell.SpecialIndex = 3; // Megaflora (will render)
             GD.Print("    Above-water special at (19, 8) - should render feature");
         }

@@ -459,15 +459,14 @@ public static class TestBridgeGenerator
         GD.Print($"    Start cell cube coords: {startCell.Coordinates}");
 
         // First, flatten a large area around the loop (7x7 cells)
-        // Set all to elevation 1, beige color, no features
-        var beige = new Color(0.93f, 0.87f, 0.73f); // Sand/beige color
+        // Tutorial 14: Use terrain type 0 (sand) instead of color
         // Extended west to include Cell 6's W neighbor at offset (5, 7)
         // Keep original east boundary but restore highland lake cliff terrain after
-        FlattenArea(getCell, 4, 4, 14, 12, beige);
+        FlattenArea(getCell, 4, 4, 14, 12, 0); // Sand terrain type
 
         // Restore cliff terrain around highland lake to prevent floating water
         // Highland lake is at water level 4, so surrounding terrain needs elevation 4+
-        var cliffColor = new Color(0.6f, 0.55f, 0.45f); // Rocky cliff color
+        const int cliffTerrainType = 3; // Stone
         var cliffCells = new (int x, int z)[]
         {
             // Row Z=3: cube (13,-16,3) to (16,-19,3)
@@ -485,7 +484,7 @@ public static class TestBridgeGenerator
             if (cell != null)
             {
                 cell.Elevation = 4;
-                cell.Color = cliffColor;
+                cell.TerrainTypeIndex = cliffTerrainType;
                 cell.Walled = false; // Remove walls
             }
         }
@@ -499,7 +498,7 @@ public static class TestBridgeGenerator
         if (cell_15_5 != null)
         {
             cell_15_5.Elevation = 3;
-            cell_15_5.Color = new Color(0.4f, 0.5f, 0.4f);
+            cell_15_5.TerrainTypeIndex = 1; // Grass
             cell_15_5.Walled = false;
         }
 
@@ -551,7 +550,7 @@ public static class TestBridgeGenerator
         if (cell_15_6 != null)
         {
             cell_15_6.Elevation = 3;
-            cell_15_6.Color = new Color(0.4f, 0.5f, 0.4f);
+            cell_15_6.TerrainTypeIndex = 1; // Grass
             cell_15_6.Walled = false;
 
             if (cell_14_7 != null)
@@ -571,7 +570,7 @@ public static class TestBridgeGenerator
         if (cell_14_7 != null)
         {
             cell_14_7.Elevation = 2; // Lower - waterfall drop
-            cell_14_7.Color = new Color(0.4f, 0.5f, 0.4f);
+            cell_14_7.TerrainTypeIndex = 1; // Grass
             cell_14_7.Walled = false; // Remove wall
 
             // River continues to (14,8) cube (10,-18,8)
@@ -685,10 +684,11 @@ public static class TestBridgeGenerator
     }
 
     /// <summary>
-    /// Flattens a rectangular area to consistent elevation and color.
+    /// Flattens a rectangular area to consistent elevation and terrain type.
+    /// Tutorial 14: Changed from Color to int terrainType.
     /// </summary>
     private static void FlattenArea(Func<int, int, HexCell?> getCell,
-        int minX, int minZ, int maxX, int maxZ, Color color)
+        int minX, int minZ, int maxX, int maxZ, int terrainType)
     {
         for (int x = minX; x <= maxX; x++)
         {
@@ -699,7 +699,7 @@ public static class TestBridgeGenerator
                 {
                     cell.Elevation = 1;
                     cell.WaterLevel = 0;
-                    cell.Color = color;
+                    cell.TerrainTypeIndex = terrainType;
                     cell.PlantLevel = 0;
                     cell.FarmLevel = 0;
                     cell.UrbanLevel = 0;
@@ -773,13 +773,9 @@ public static class TestBridgeGenerator
             cell.SpecialIndex = 0;
             cell.WaterLevel = 0;
 
-            // Color gradient: brown (mountain) to green (lowland)
-            float t = (5f - elevation) / 4f;
-            cell.Color = new Color(
-                0.6f - t * 0.2f,  // R: brown to green
-                0.4f + t * 0.3f,  // G: more green at lower elevation
-                0.3f - t * 0.1f   // B: slight decrease
-            );
+            // Tutorial 14: Terrain type based on elevation
+            // Higher elevation = stone (3), lower = grass (1)
+            cell.TerrainTypeIndex = elevation >= 4 ? 3 : 1;
         }
 
         // Set up riverbank neighbors at matching elevations
@@ -798,7 +794,7 @@ public static class TestBridgeGenerator
                 eastNeighbor.PlantLevel = 0;
                 eastNeighbor.FarmLevel = 0;
                 eastNeighbor.UrbanLevel = 0;
-                eastNeighbor.Color = new Color(0.5f, 0.55f, 0.4f); // Muted green riverbank
+                eastNeighbor.TerrainTypeIndex = 1; // Grass for riverbank
             }
 
             if (westNeighbor != null)
@@ -807,7 +803,7 @@ public static class TestBridgeGenerator
                 westNeighbor.PlantLevel = 0;
                 westNeighbor.FarmLevel = 0;
                 westNeighbor.UrbanLevel = 0;
-                westNeighbor.Color = new Color(0.5f, 0.55f, 0.4f); // Muted green riverbank
+                westNeighbor.TerrainTypeIndex = 1; // Grass for riverbank
             }
         }
 
