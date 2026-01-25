@@ -131,8 +131,8 @@ public partial class HexMesh : MeshInstance3D
             Vector3 v2 = _vertices[idx2];
 
             // Calculate flat face normal
-            // Using edge2 x edge1 for correct terrain normals (pointing up)
-            // Wall quads have their vertex order swapped to get correct outward normals
+            // Using edge2 x edge1 for correct normals in Godot's right-handed system
+            // With CCW winding (after Unity->Godot conversion), edge2.Cross(edge1) gives outward normals
             Vector3 edge1 = v1 - v0;
             Vector3 edge2 = v2 - v0;
             Vector3 normal = edge2.Cross(edge1).Normalized();
@@ -1188,9 +1188,11 @@ public partial class HexMesh : MeshInstance3D
         _vertices.Add(HexMetrics.Perturb(v1));
         _vertices.Add(HexMetrics.Perturb(v2));
         _vertices.Add(HexMetrics.Perturb(v3));
+        // Godot uses CCW winding for front faces (right-handed system)
+        // Swap v2 and v3 indices to convert from Unity's CW to Godot's CCW
         _triangles.Add(vertexIndex);
-        _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 2);
+        _triangles.Add(vertexIndex + 1);
     }
 
     public void AddTriangleUnperturbed(Vector3 v1, Vector3 v2, Vector3 v3)
@@ -1199,9 +1201,11 @@ public partial class HexMesh : MeshInstance3D
         _vertices.Add(v1);
         _vertices.Add(v2);
         _vertices.Add(v3);
+        // Godot uses CCW winding for front faces (right-handed system)
+        // Swap v2 and v3 indices to convert from Unity's CW to Godot's CCW
         _triangles.Add(vertexIndex);
-        _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 2);
+        _triangles.Add(vertexIndex + 1);
     }
 
     private void AddTriangleColor(Color color)
@@ -1250,12 +1254,14 @@ public partial class HexMesh : MeshInstance3D
         _vertices.Add(HexMetrics.Perturb(v2));
         _vertices.Add(HexMetrics.Perturb(v3));
         _vertices.Add(HexMetrics.Perturb(v4));
+        // Godot uses CCW winding for front faces (right-handed system)
+        // Swap second and third indices to convert from Unity's CW to Godot's CCW
         _triangles.Add(vertexIndex);
-        _triangles.Add(vertexIndex + 2);
-        _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 2);
+        _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 3);
+        _triangles.Add(vertexIndex + 2);
     }
 
     private void AddQuadColor(Color c1, Color c2, Color c3, Color c4)
@@ -1391,12 +1397,14 @@ public partial class HexMesh : MeshInstance3D
         _vertices.Add(v2);
         _vertices.Add(v3);
         _vertices.Add(v4);
+        // Godot uses CCW winding for front faces (right-handed system)
+        // Swap second and third indices to convert from Unity's CW to Godot's CCW
         _triangles.Add(vertexIndex);
-        _triangles.Add(vertexIndex + 2);
-        _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 2);
+        _triangles.Add(vertexIndex + 1);
         _triangles.Add(vertexIndex + 3);
+        _triangles.Add(vertexIndex + 2);
     }
 
     // Tutorial 8: Waterfall triangulation

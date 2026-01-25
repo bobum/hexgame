@@ -23,6 +23,8 @@ uniform float texture_scale : hint_range(0.001, 0.1) = 0.02;
 
 // Terrain type indices from CUSTOM0 (set in HexMesh)
 varying vec3 terrain_indices;
+// World position for UV calculation (passed from vertex to fragment)
+varying vec3 world_position;
 
 // Get fallback color for a terrain type index
 vec3 get_terrain_color(float index) {
@@ -38,7 +40,12 @@ void vertex() {
     // Get terrain type indices from custom vertex attribute
     // CUSTOM0 contains (type1, type2, type3) as RGB floats
     terrain_indices = CUSTOM0.rgb;
+    // Calculate world position for seamless UV mapping
+    world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
+
+// Debug mode: 0=normal, 1=show splat weights, 2=show terrain indices
+uniform int debug_mode : hint_range(0, 2) = 1;
 
 void fragment() {
     // Get splat weights from vertex color
@@ -46,9 +53,15 @@ void fragment() {
 
     vec3 blended;
 
-    if (use_textures) {
-        // Calculate world-space UV coordinates to avoid seams at cell boundaries
-        vec2 world_uv = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz * texture_scale;
+    if (debug_mode == 1) {
+        // DEBUG: Shows splat weights as RGB (red=weight1, green=weight2, blue=weight3)
+        blended = splat;
+    } else if (debug_mode == 2) {
+        // DEBUG: Shows terrain indices as grayscale (0=black, 5=white)
+        blended = terrain_indices / 5.0;
+    } else if (use_textures) {
+        // Use world-space UV coordinates to avoid seams at cell boundaries
+        vec2 world_uv = world_position.xz * texture_scale;
 
         // Sample all three terrain textures based on indices
         vec4 tex1 = texture(terrain_textures, vec3(world_uv, terrain_indices.x));

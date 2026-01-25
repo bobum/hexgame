@@ -12,3 +12,4 @@ shader_parameter/color_mud = Vector3(0.5, 0.4, 0.3)
 shader_parameter/color_stone = Vector3(0.6, 0.6, 0.6)
 shader_parameter/color_snow = Vector3(0.95, 0.95, 0.95)
 shader_parameter/texture_scale = 0.02
+shader_parameter/debug_mode = 0

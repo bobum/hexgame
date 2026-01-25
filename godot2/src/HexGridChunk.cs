@@ -34,6 +34,7 @@ public partial class HexGridChunk : Node3D
 
     // Tutorial 14: Terrain material with texture array
     private static Material? _terrainMaterial;
+    private static bool _terrainTexturesApplied;
 
     /// <summary>
     /// Initializes the chunk with its mesh and label container.
@@ -219,6 +220,30 @@ public partial class HexGridChunk : Node3D
             else
             {
                 GD.PrintErr("[TERRAIN] Failed to load terrain material - falling back to default");
+            }
+        }
+
+        // Tutorial 14: Load and assign the terrain texture array (separate from material loading)
+        if (_terrainMaterial != null && !_terrainTexturesApplied)
+        {
+            var textureArray = TerrainTextureArray.GetTextureArray();
+            if (textureArray != null && _terrainMaterial is ShaderMaterial shaderMat)
+            {
+                shaderMat.SetShaderParameter("terrain_textures", textureArray);
+                shaderMat.SetShaderParameter("use_textures", true);
+                shaderMat.SetShaderParameter("debug_mode", 0);
+                _terrainTexturesApplied = true;
+                GD.Print("[TERRAIN] Texture array assigned and textures enabled");
+            }
+            else if (textureArray == null)
+            {
+                GD.Print("[TERRAIN] Using color fallback (texture array failed to load)");
+                _terrainTexturesApplied = true; // Don't retry
+            }
+            else
+            {
+                GD.Print("[TERRAIN] Using color fallback (material is not ShaderMaterial)");
+                _terrainTexturesApplied = true;
             }
         }
     }
