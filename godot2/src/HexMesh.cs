@@ -689,9 +689,10 @@ public partial class HexMesh : MeshInstance3D
 
             // Tutorial 11: Add bridge across gentle curve
             // Bridge connects from this side (inside of curve) to opposite side
+            // Note: No duplicate check needed - Config 5 only triggers for ONE direction per cell
+            // (the direction where both adjacent sides have rivers)
             if (_features != null &&
-                cell.HasRoadThroughEdge(direction.Opposite()) &&
-                (int)direction < (int)direction.Opposite())
+                cell.HasRoadThroughEdge(direction.Opposite()))
             {
                 // Bridge endpoint geometry for gentle curve (river on both adjacent sides):
                 //
