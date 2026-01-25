@@ -50,6 +50,51 @@ public partial class HexCell : Node3D
     // Tutorial 11: Special feature data
     private int _specialIndex;
 
+    // Tutorial 15: Pathfinding data
+    // Initialize to MaxValue so BFS can detect unvisited cells
+    private int _distance = int.MaxValue;
+    public HexCell? PathFrom { get; set; }
+    public int SearchHeuristic { get; set; }
+    public int SearchPhase { get; set; }
+
+    /// <summary>
+    /// Distance from the selected cell. Used for pathfinding visualization.
+    /// Tutorial 15: Setting this updates the cell's label.
+    /// </summary>
+    public int Distance
+    {
+        get => _distance;
+        set
+        {
+            _distance = value;
+            UpdateDistanceLabel();
+        }
+    }
+
+    /// <summary>
+    /// Combined priority for A* pathfinding.
+    /// Tutorial 15: Distance + heuristic for priority queue ordering.
+    /// </summary>
+    public int SearchPriority => _distance + SearchHeuristic;
+
+    /// <summary>
+    /// Next cell in the priority queue linked list.
+    /// Tutorial 15: Used for efficient priority queue implementation.
+    /// </summary>
+    public HexCell? NextWithSamePriority { get; set; }
+
+    /// <summary>
+    /// Updates the cell label to show distance value.
+    /// Tutorial 15.
+    /// </summary>
+    void UpdateDistanceLabel()
+    {
+        if (UiLabel != null)
+        {
+            UiLabel.Text = _distance == int.MaxValue ? "" : _distance.ToString();
+        }
+    }
+
     public int Elevation
     {
         get => _elevation;

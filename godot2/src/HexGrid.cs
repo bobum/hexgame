@@ -1,8 +1,10 @@
 using Godot;
+using System.Collections.Generic;
 
 /// <summary>
 /// Creates and manages a hexagonal grid using chunks.
 /// Ported from Catlike Coding Hex Map Tutorial 5.
+/// Tutorial 15: Added Edit/Navigation mode toggle and pathfinding.
 /// </summary>
 public partial class HexGrid : Node3D
 {
@@ -21,6 +23,14 @@ public partial class HexGrid : Node3D
 
     // Tutorial 14: Number of terrain types available
     private const int TerrainTypeCount = 5;
+
+    // Tutorial 15: Edit vs Navigation mode
+    private bool _editMode = true;
+    private HexCell? _selectedCell;
+
+    // Tutorial 15: Priority queue for Dijkstra's algorithm
+    private HexCellPriorityQueue _searchFrontier = new HexCellPriorityQueue();
+    private int _searchFrontierPhase;
 
     public override void _Ready()
     {
@@ -67,6 +77,211 @@ public partial class HexGrid : Node3D
                 _labelsVisible = !_labelsVisible;
                 ShowUI(_labelsVisible);
             }
+            // Tutorial 15: Toggle Edit/Navigation mode with E key
+            else if (keyEvent.Keycode == Key.E)
+            {
+                _editMode = !_editMode;
+                SetEditMode(_editMode);
+                GD.Print($"Mode: {(_editMode ? "Edit" : "Navigation")}");
+            }
+        }
+        // Tutorial 15: Handle mouse clicks for navigation mode
+        else if (@event is InputEventMouseButton mouseEvent &&
+                 mouseEvent.Pressed &&
+                 mouseEvent.ButtonIndex == MouseButton.Left &&
+                 !_editMode)
+        {
+            HandleNavigationClick(mouseEvent);
+        }
+    }
+
+    /// <summary>
+    /// Sets the grid to edit or navigation mode.
+    /// Tutorial 15: Navigation mode shows grid overlay and enables pathfinding.
+    /// </summary>
+    private void SetEditMode(bool editMode)
+    {
+        _editMode = editMode;
+
+        // Toggle grid overlay
+        SetGridVisible(!editMode);
+
+        if (editMode)
+        {
+            // Clear distance labels when returning to edit mode
+            ClearDistances();
+        }
+    }
+
+    /// <summary>
+    /// Sets the grid overlay visibility.
+    /// Tutorial 15.
+    /// </summary>
+    public void SetGridVisible(bool visible)
+    {
+        // Update terrain material on all chunks directly
+        int updated = 0;
+        for (int i = 0; i < _chunks.Length; i++)
+        {
+            var chunk = _chunks[i];
+            // Find the HexMesh child and update its material
+            foreach (var child in chunk.GetChildren())
+            {
+                if (child is MeshInstance3D meshInstance && child.Name == "HexMesh")
+                {
+                    if (meshInstance.MaterialOverride is ShaderMaterial shaderMat)
+                    {
+                        shaderMat.SetShaderParameter("show_grid", visible);
+                        updated++;
+                    }
+                }
+            }
+        }
+        GD.Print($"[GRID] show_grid = {visible} (updated {updated} chunks)");
+    }
+
+    /// <summary>
+    /// Handles mouse clicks in navigation mode.
+    /// Tutorial 15: Calculates distances from clicked cell.
+    /// </summary>
+    private void HandleNavigationClick(InputEventMouseButton mouseEvent)
+    {
+        // Get camera for raycasting
+        var camera = GetViewport().GetCamera3D();
+        if (camera == null) return;
+
+        // Raycast from mouse position
+        var from = camera.ProjectRayOrigin(mouseEvent.Position);
+        var dir = camera.ProjectRayNormal(mouseEvent.Position);
+        var to = from + dir * 1000f;
+
+        var spaceState = GetWorld3D().DirectSpaceState;
+        var query = PhysicsRayQueryParameters3D.Create(from, to);
+        var result = spaceState.IntersectRay(query);
+
+        if (result.Count > 0)
+        {
+            Vector3 hitPos = (Vector3)result["position"];
+            HexCell? cell = GetCell(hitPos);
+            if (cell != null)
+            {
+                _selectedCell = cell;
+                FindDistancesTo(cell);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Calculates distances from all cells to the given target cell using Dijkstra's algorithm.
+    /// Tutorial 15: Includes movement obstacles and terrain costs.
+    /// Movement costs: Road = 1, Flat = 5, Slope = 10, +1 per feature level.
+    /// </summary>
+    public void FindDistancesTo(HexCell cell)
+    {
+        // Clear previous distances
+        ClearDistances();
+
+        // Cannot pathfind from underwater cell
+        if (cell.IsUnderwater)
+        {
+            return;
+        }
+
+        // Tutorial 15: Use search frontier phase to track visited cells
+        _searchFrontierPhase++;
+        _searchFrontier.Clear();
+
+        cell.Distance = 0;
+        cell.SearchPhase = _searchFrontierPhase;
+        _searchFrontier.Enqueue(cell);
+
+        while (_searchFrontier.Count > 0)
+        {
+            HexCell current = _searchFrontier.Dequeue();
+
+            for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+            {
+                HexCell? neighbor = current.GetNeighbor(d);
+                if (neighbor == null)
+                {
+                    continue;
+                }
+
+                // Tutorial 15: Calculate movement cost (handles all obstacle checks)
+                int moveCost = GetMoveCost(current, neighbor, d);
+                if (moveCost < 0)
+                {
+                    continue; // Impassable
+                }
+
+                int distance = current.Distance + moveCost;
+                if (neighbor.SearchPhase < _searchFrontierPhase)
+                {
+                    // First time visiting this cell
+                    neighbor.Distance = distance;
+                    neighbor.SearchPhase = _searchFrontierPhase;
+                    neighbor.SearchHeuristic = 0; // No A* heuristic for simple distances
+                    _searchFrontier.Enqueue(neighbor);
+                }
+                else if (distance < neighbor.Distance)
+                {
+                    // Found a shorter path
+                    int oldPriority = neighbor.SearchPriority;
+                    neighbor.Distance = distance;
+                    _searchFrontier.Change(neighbor, oldPriority);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Calculates the movement cost to travel from one cell to a neighbor.
+    /// Tutorial 15: Road = 1, Flat = 5, Slope = 10, +1 per feature level.
+    /// Roads/bridges allow crossing water and walls.
+    /// </summary>
+    private int GetMoveCost(HexCell fromCell, HexCell toCell, HexDirection direction)
+    {
+        // Roads (including bridges) bypass most obstacles
+        if (fromCell.HasRoadThroughEdge(direction))
+        {
+            return 1;
+        }
+
+        // Without a road, check for obstacles
+        HexEdgeType edgeType = fromCell.GetEdgeType(toCell);
+        if (edgeType == HexEdgeType.Cliff)
+        {
+            return -1; // Impassable without road
+        }
+
+        // Underwater cells impassable without road/bridge
+        if (toCell.IsUnderwater)
+        {
+            return -1;
+        }
+
+        // Walls block movement without road
+        if (fromCell.Walled != toCell.Walled)
+        {
+            return -1;
+        }
+
+        // Normal terrain cost
+        int moveCost = edgeType == HexEdgeType.Flat ? 5 : 10;
+        // Add cost for features in destination cell
+        moveCost += toCell.UrbanLevel + toCell.FarmLevel + toCell.PlantLevel;
+        return moveCost;
+    }
+
+    /// <summary>
+    /// Clears all distance values and resets labels.
+    /// Tutorial 15.
+    /// </summary>
+    public void ClearDistances()
+    {
+        for (int i = 0; i < _cells.Length; i++)
+        {
+            _cells[i].Distance = int.MaxValue;
         }
     }
 

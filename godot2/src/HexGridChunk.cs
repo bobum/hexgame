@@ -46,10 +46,11 @@ public partial class HexGridChunk : Node3D
 
         // Create terrain HexMesh child
         // Tutorial 14: Enable terrain types for texture array support
+        // Tutorial 15: Enable UV coordinates for grid overlay
         _hexMesh = new HexMesh();
         _hexMesh.Name = "HexMesh";
         _hexMesh.UseColors = true;  // Colors are now splat weights
-        _hexMesh.UseUVCoordinates = false;
+        _hexMesh.UseUVCoordinates = true;  // Tutorial 15: Grid overlay UVs
         _hexMesh.UseTerrainTypes = true;  // Tutorial 14
         LoadTerrainMaterial();
         if (_terrainMaterial != null)
@@ -204,9 +205,13 @@ public partial class HexGridChunk : Node3D
         }
     }
 
+    // Tutorial 15: Grid texture loaded once
+    private static Texture2D? _gridTexture;
+
     /// <summary>
     /// Loads the terrain material if not already loaded.
     /// Tutorial 14: Uses terrain shader with texture array.
+    /// Tutorial 15: Also loads grid overlay texture.
     /// </summary>
     private static void LoadTerrainMaterial()
     {
@@ -224,27 +229,43 @@ public partial class HexGridChunk : Node3D
         }
 
         // Tutorial 14: Load and assign the terrain texture array (separate from material loading)
-        if (_terrainMaterial != null && !_terrainTexturesApplied)
+        if (_terrainMaterial != null && !_terrainTexturesApplied && _terrainMaterial is ShaderMaterial shaderMat)
         {
             var textureArray = TerrainTextureArray.GetTextureArray();
-            if (textureArray != null && _terrainMaterial is ShaderMaterial shaderMat)
+            if (textureArray != null)
             {
                 shaderMat.SetShaderParameter("terrain_textures", textureArray);
                 shaderMat.SetShaderParameter("use_textures", true);
-                shaderMat.SetShaderParameter("debug_mode", 0);
-                _terrainTexturesApplied = true;
                 GD.Print("[TERRAIN] Texture array assigned and textures enabled");
-            }
-            else if (textureArray == null)
-            {
-                GD.Print("[TERRAIN] Using color fallback (texture array failed to load)");
-                _terrainTexturesApplied = true; // Don't retry
             }
             else
             {
-                GD.Print("[TERRAIN] Using color fallback (material is not ShaderMaterial)");
-                _terrainTexturesApplied = true;
+                GD.Print("[TERRAIN] Using color fallback (texture array failed to load)");
             }
+
+            // Tutorial 15: Load and assign grid texture (always try, regardless of terrain textures)
+            if (_gridTexture == null)
+            {
+                _gridTexture = GD.Load<Texture2D>("res://textures/grid.png");
+            }
+            if (_gridTexture != null)
+            {
+                shaderMat.SetShaderParameter("grid_texture", _gridTexture);
+                shaderMat.SetShaderParameter("show_grid", false);  // Off by default
+                GD.Print("[TERRAIN] Grid texture loaded successfully");
+            }
+            else
+            {
+                GD.PrintErr("[TERRAIN] Failed to load grid texture");
+            }
+
+            shaderMat.SetShaderParameter("debug_mode", 0);
+            _terrainTexturesApplied = true;
+        }
+        else if (_terrainMaterial != null && !_terrainTexturesApplied)
+        {
+            GD.Print("[TERRAIN] Using color fallback (material is not ShaderMaterial)");
+            _terrainTexturesApplied = true;
         }
     }
 

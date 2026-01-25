@@ -50,6 +50,9 @@ public partial class HexMesh : MeshInstance3D
     private static readonly Color SplatWeights2 = new Color(0f, 1f, 0f); // 100% texture 2
     private static readonly Color SplatWeights3 = new Color(0f, 0f, 1f); // 100% texture 3
 
+    // Tutorial 15: Current cell center for grid UV calculation
+    private Vector3 _cellCenter;
+
     public override void _Ready()
     {
         // Initialize mesh if not already done
@@ -308,6 +311,9 @@ public partial class HexMesh : MeshInstance3D
 
     private void Triangulate(HexCell cell)
     {
+        // Tutorial 15: Store cell center for grid UV calculation
+        _cellCenter = cell.Position;
+
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
             Triangulate(d, cell);
@@ -335,26 +341,32 @@ public partial class HexMesh : MeshInstance3D
     /// <summary>
     /// Triangulates an edge fan with a single terrain type.
     /// Tutorial 14: Uses splat weight (1,0,0) for single-texture rendering.
+    /// Tutorial 15: Added grid UV coordinates.
     /// </summary>
     private void TriangulateEdgeFan(Vector3 center, EdgeVertices edge, float type)
     {
         AddTriangle(center, edge.V1, edge.V2);
         AddTriangleColor(SplatWeights1);
         AddTriangleTerrainTypes(new Vector3(type, type, type));
+        AddTriangleGridUV(center, edge.V1, edge.V2);
         AddTriangle(center, edge.V2, edge.V3);
         AddTriangleColor(SplatWeights1);
         AddTriangleTerrainTypes(new Vector3(type, type, type));
+        AddTriangleGridUV(center, edge.V2, edge.V3);
         AddTriangle(center, edge.V3, edge.V4);
         AddTriangleColor(SplatWeights1);
         AddTriangleTerrainTypes(new Vector3(type, type, type));
+        AddTriangleGridUV(center, edge.V3, edge.V4);
         AddTriangle(center, edge.V4, edge.V5);
         AddTriangleColor(SplatWeights1);
         AddTriangleTerrainTypes(new Vector3(type, type, type));
+        AddTriangleGridUV(center, edge.V4, edge.V5);
     }
 
     /// <summary>
     /// Triangulates an edge strip blending two terrain types.
     /// Tutorial 14: e1 side uses type1, e2 side uses type2, with splat blending.
+    /// Tutorial 15: Added grid UV coordinates.
     /// </summary>
     private void TriangulateEdgeStrip(
         EdgeVertices e1, float type1,
@@ -364,15 +376,19 @@ public partial class HexMesh : MeshInstance3D
         AddQuad(e1.V1, e1.V2, e2.V1, e2.V2);
         AddQuadColor(SplatWeights1, SplatWeights2);
         AddQuadTerrainTypes(new Vector3(type1, type2, type1));
+        AddQuadGridUV(e1.V1, e1.V2, e2.V1, e2.V2);
         AddQuad(e1.V2, e1.V3, e2.V2, e2.V3);
         AddQuadColor(SplatWeights1, SplatWeights2);
         AddQuadTerrainTypes(new Vector3(type1, type2, type1));
+        AddQuadGridUV(e1.V2, e1.V3, e2.V2, e2.V3);
         AddQuad(e1.V3, e1.V4, e2.V3, e2.V4);
         AddQuadColor(SplatWeights1, SplatWeights2);
         AddQuadTerrainTypes(new Vector3(type1, type2, type1));
+        AddQuadGridUV(e1.V3, e1.V4, e2.V3, e2.V4);
         AddQuad(e1.V4, e1.V5, e2.V4, e2.V5);
         AddQuadColor(SplatWeights1, SplatWeights2);
         AddQuadTerrainTypes(new Vector3(type1, type2, type1));
+        AddQuadGridUV(e1.V4, e1.V5, e2.V4, e2.V5);
 
         // Tutorial 7: Add road segment across edge connection
         if (hasRoad)
@@ -576,15 +592,19 @@ public partial class HexMesh : MeshInstance3D
         AddTriangle(centerL, m.V1, m.V2);
         AddTriangleColor(SplatWeights1);
         AddTriangleTerrainTypes(types);
+        AddTriangleGridUV(centerL, m.V1, m.V2);
         AddQuad(centerL, center, m.V2, m.V3);
         AddQuadColor(SplatWeights1, SplatWeights1);
         AddQuadTerrainTypes(types);
+        AddQuadGridUV(centerL, center, m.V2, m.V3);
         AddQuad(center, centerR, m.V3, m.V4);
         AddQuadColor(SplatWeights1, SplatWeights1);
         AddQuadTerrainTypes(types);
+        AddQuadGridUV(center, centerR, m.V3, m.V4);
         AddTriangle(centerR, m.V4, m.V5);
         AddTriangleColor(SplatWeights1);
         AddTriangleTerrainTypes(types);
+        AddTriangleGridUV(centerR, m.V4, m.V5);
 
         // Tutorial 6/8: Add water surface if rivers mesh available and cell is not underwater
         if (_rivers != null && !cell.IsUnderwater)
@@ -1027,6 +1047,7 @@ public partial class HexMesh : MeshInstance3D
                 bottomCell.TerrainTypeIndex,
                 leftCell.TerrainTypeIndex,
                 rightCell.TerrainTypeIndex));
+            AddTriangleGridUV(bottom, left, right);
         }
 
         // Tutorial 10: Add corner walls
@@ -1036,6 +1057,7 @@ public partial class HexMesh : MeshInstance3D
     /// <summary>
     /// Triangulates corner terraces between three cells.
     /// Tutorial 14: Splat weights are interpolated, terrain types stay fixed.
+    /// Tutorial 15: Added grid UV coordinates.
     /// </summary>
     private void TriangulateCornerTerraces(
         Vector3 begin, HexCell beginCell,
@@ -1054,6 +1076,7 @@ public partial class HexMesh : MeshInstance3D
         AddTriangle(begin, v3, v4);
         AddTriangleColor(SplatWeights1, c3, c4);
         AddTriangleTerrainTypes(types);
+        AddTriangleGridUV(begin, v3, v4);
 
         for (int i = 2; i < HexMetrics.TerraceSteps; i++)
         {
@@ -1068,16 +1091,19 @@ public partial class HexMesh : MeshInstance3D
             AddQuad(v1, v2, v3, v4);
             AddQuadColor(c1, c2, c3, c4);
             AddQuadTerrainTypes(types);
+            AddQuadGridUV(v1, v2, v3, v4);
         }
 
         AddQuad(v3, v4, left, right);
         AddQuadColor(c3, c4, SplatWeights2, SplatWeights3);
         AddQuadTerrainTypes(types);
+        AddQuadGridUV(v3, v4, left, right);
     }
 
     /// <summary>
     /// Triangulates boundary triangle between terrace and cliff.
     /// Tutorial 14: Uses splat weights for blending, terrain types stay fixed.
+    /// Tutorial 15: Added grid UV coordinates.
     /// </summary>
     private void TriangulateBoundaryTriangle(
         Vector3 begin, Color beginWeights,
@@ -1091,6 +1117,7 @@ public partial class HexMesh : MeshInstance3D
         AddTriangleUnperturbed(HexMetrics.Perturb(begin), v2, boundary);
         AddTriangleColor(beginWeights, c2, boundaryWeights);
         AddTriangleTerrainTypes(types);
+        AddTriangleGridUV(begin, HexMetrics.TerraceLerp(begin, left, 1), boundary);
 
         for (int i = 2; i < HexMetrics.TerraceSteps; i++)
         {
@@ -1101,16 +1128,19 @@ public partial class HexMesh : MeshInstance3D
             AddTriangleUnperturbed(v1, v2, boundary);
             AddTriangleColor(c1, c2, boundaryWeights);
             AddTriangleTerrainTypes(types);
+            AddTriangleGridUV(HexMetrics.TerraceLerp(begin, left, i-1), HexMetrics.TerraceLerp(begin, left, i), boundary);
         }
 
         AddTriangleUnperturbed(v2, HexMetrics.Perturb(left), boundary);
         AddTriangleColor(c2, leftWeights, boundaryWeights);
         AddTriangleTerrainTypes(types);
+        AddTriangleGridUV(HexMetrics.TerraceLerp(begin, left, HexMetrics.TerraceSteps - 1), left, boundary);
     }
 
     /// <summary>
     /// Triangulates corner where terraces meet cliff (left side has terraces).
     /// Tutorial 14: Uses splat weights, terrain types stay fixed.
+    /// Tutorial 15: Added grid UV coordinates.
     /// </summary>
     private void TriangulateCornerTerracesCliff(
         Vector3 begin, HexCell beginCell,
@@ -1142,12 +1172,14 @@ public partial class HexMesh : MeshInstance3D
             AddTriangleUnperturbed(HexMetrics.Perturb(left), HexMetrics.Perturb(right), boundary);
             AddTriangleColor(SplatWeights2, SplatWeights3, boundaryWeights);
             AddTriangleTerrainTypes(types);
+            AddTriangleGridUV(left, right, begin.Lerp(right, b));
         }
     }
 
     /// <summary>
     /// Triangulates corner where cliff meets terraces (right side has terraces).
     /// Tutorial 14: Uses splat weights, terrain types stay fixed.
+    /// Tutorial 15: Added grid UV coordinates.
     /// </summary>
     private void TriangulateCornerCliffTerraces(
         Vector3 begin, HexCell beginCell,
@@ -1179,6 +1211,7 @@ public partial class HexMesh : MeshInstance3D
             AddTriangleUnperturbed(HexMetrics.Perturb(left), HexMetrics.Perturb(right), boundary);
             AddTriangleColor(SplatWeights2, SplatWeights3, boundaryWeights);
             AddTriangleTerrainTypes(types);
+            AddTriangleGridUV(left, right, begin.Lerp(left, b));
         }
     }
 
@@ -1220,6 +1253,45 @@ public partial class HexMesh : MeshInstance3D
         _colors.Add(c1);
         _colors.Add(c2);
         _colors.Add(c3);
+    }
+
+    // Tutorial 15: Grid UV calculation methods
+
+    /// <summary>
+    /// Calculates UV coordinate for grid overlay based on vertex position relative to cell center.
+    /// Maps hex cell to UV space with center at (0.5, 0.5).
+    /// </summary>
+    private Vector2 GetGridUV(Vector3 vertex)
+    {
+        // UV is based on position relative to cell center
+        // Scaled to fit the hex within 0-1 UV space
+        // Using 2 * OuterRadius as the scale factor
+        float u = (vertex.X - _cellCenter.X) / (HexMetrics.OuterRadius * 2f) + 0.5f;
+        float v = (vertex.Z - _cellCenter.Z) / (HexMetrics.OuterRadius * 2f) + 0.5f;
+        return new Vector2(u, v);
+    }
+
+    /// <summary>
+    /// Adds grid UV coordinates for a triangle.
+    /// Tutorial 15.
+    /// </summary>
+    private void AddTriangleGridUV(Vector3 v1, Vector3 v2, Vector3 v3)
+    {
+        _uvs.Add(GetGridUV(v1));
+        _uvs.Add(GetGridUV(v2));
+        _uvs.Add(GetGridUV(v3));
+    }
+
+    /// <summary>
+    /// Adds grid UV coordinates for a quad.
+    /// Tutorial 15.
+    /// </summary>
+    private void AddQuadGridUV(Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4)
+    {
+        _uvs.Add(GetGridUV(v1));
+        _uvs.Add(GetGridUV(v2));
+        _uvs.Add(GetGridUV(v3));
+        _uvs.Add(GetGridUV(v4));
     }
 
     // Tutorial 14: Terrain type methods
