@@ -195,6 +195,11 @@ public partial class HexCell : Node3D
             if (_specialIndex != value)
             {
                 _specialIndex = value;
+                // Tutorial 11: Special features remove existing roads
+                if (value > 0)
+                {
+                    RemoveRoads();
+                }
                 RefreshSelfOnly();
             }
         }
