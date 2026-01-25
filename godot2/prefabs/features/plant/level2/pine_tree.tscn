@@ -5,8 +5,9 @@ top_radius = 0.15
 bottom_radius = 0.25
 height = 2.0
 
-[sub_resource type="ConeMesh" id="ConeMesh_foliage"]
-radius = 1.0
+[sub_resource type="CylinderMesh" id="CylinderMesh_foliage"]
+top_radius = 0.0
+bottom_radius = 1.0
 height = 3.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_trunk"]
@@ -24,5 +25,5 @@ surface_material_override/0 = SubResource("StandardMaterial3D_trunk")
 
 [node name="Foliage" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.0, 0)
-mesh = SubResource("ConeMesh_foliage")
+mesh = SubResource("CylinderMesh_foliage")
 surface_material_override/0 = SubResource("StandardMaterial3D_foliage")

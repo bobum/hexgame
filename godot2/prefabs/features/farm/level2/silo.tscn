@@ -5,8 +5,9 @@ top_radius = 0.6
 bottom_radius = 0.6
 height = 2.0
 
-[sub_resource type="ConeMesh" id="ConeMesh_roof"]
-radius = 0.7
+[sub_resource type="CylinderMesh" id="CylinderMesh_roof"]
+top_radius = 0.0
+bottom_radius = 0.7
 height = 0.5
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_silo"]
@@ -24,5 +25,5 @@ surface_material_override/0 = SubResource("StandardMaterial3D_silo")
 
 [node name="Roof" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 0)
-mesh = SubResource("ConeMesh_roof")
+mesh = SubResource("CylinderMesh_roof")
 surface_material_override/0 = SubResource("StandardMaterial3D_roof")
