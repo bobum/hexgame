@@ -91,7 +91,7 @@ public static class TestRiverGenerator
             if (cell != null)
             {
                 cell.Elevation = elevation;
-                cell.Color = new Color(0.3f, 0.6f, 0.3f); // Green for river path visibility
+                cell.TerrainTypeIndex = 1; // Grass for river path visibility
                 GD.Print($"    Cell ({x},{z}) elevation set to {elevation}");
             }
             else

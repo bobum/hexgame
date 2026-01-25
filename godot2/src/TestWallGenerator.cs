@@ -288,7 +288,7 @@ public static class TestWallGenerator
 
                 cell.Walled = true;
                 cell.Elevation = 2; // Flat elevation
-                cell.Color = new Color(0.7f, 0.5f, 0.3f); // Brown for tower test area
+                cell.TerrainTypeIndex = 3; // Stone for tower test area
                 count++;
             }
         }
@@ -317,7 +317,7 @@ public static class TestWallGenerator
                 cell.Walled = true;
                 // Alternating pattern ensures adjacent cells have different elevations
                 cell.Elevation = ((x + z) % 2 == 0) ? 1 : 3;
-                cell.Color = new Color(0.5f, 0.5f, 0.7f); // Blue-gray for no-tower test
+                cell.TerrainTypeIndex = 3; // Stone for no-tower test
                 count++;
             }
         }

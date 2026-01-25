@@ -32,6 +32,10 @@ public partial class HexGridChunk : Node3D
     private static Material? _waterShoreMaterial;
     private static Material? _estuaryMaterial;
 
+    // Tutorial 14: Terrain material with texture array
+    private static Material? _terrainMaterial;
+    private static bool _terrainTexturesApplied;
+
     /// <summary>
     /// Initializes the chunk with its mesh and label container.
     /// Call this after instantiation and after the chunk is in the scene tree.
@@ -41,11 +45,18 @@ public partial class HexGridChunk : Node3D
         _cells = new HexCell[HexMetrics.ChunkSizeX * HexMetrics.ChunkSizeZ];
 
         // Create terrain HexMesh child
+        // Tutorial 14: Enable terrain types for texture array support
         _hexMesh = new HexMesh();
         _hexMesh.Name = "HexMesh";
-        _hexMesh.UseColors = true;
+        _hexMesh.UseColors = true;  // Colors are now splat weights
         _hexMesh.UseUVCoordinates = false;
-        if (material != null)
+        _hexMesh.UseTerrainTypes = true;  // Tutorial 14
+        LoadTerrainMaterial();
+        if (_terrainMaterial != null)
+        {
+            _hexMesh.MaterialOverride = _terrainMaterial;
+        }
+        else if (material != null)
         {
             _hexMesh.MaterialOverride = material;
         }
@@ -190,6 +201,50 @@ public partial class HexGridChunk : Node3D
         if (_estuaryMaterial == null)
         {
             _estuaryMaterial = GD.Load<Material>("res://materials/estuary_material.tres");
+        }
+    }
+
+    /// <summary>
+    /// Loads the terrain material if not already loaded.
+    /// Tutorial 14: Uses terrain shader with texture array.
+    /// </summary>
+    private static void LoadTerrainMaterial()
+    {
+        if (_terrainMaterial == null)
+        {
+            _terrainMaterial = GD.Load<Material>("res://materials/terrain_material.tres");
+            if (_terrainMaterial != null)
+            {
+                GD.Print("[TERRAIN] Terrain material loaded successfully");
+            }
+            else
+            {
+                GD.PrintErr("[TERRAIN] Failed to load terrain material - falling back to default");
+            }
+        }
+
+        // Tutorial 14: Load and assign the terrain texture array (separate from material loading)
+        if (_terrainMaterial != null && !_terrainTexturesApplied)
+        {
+            var textureArray = TerrainTextureArray.GetTextureArray();
+            if (textureArray != null && _terrainMaterial is ShaderMaterial shaderMat)
+            {
+                shaderMat.SetShaderParameter("terrain_textures", textureArray);
+                shaderMat.SetShaderParameter("use_textures", true);
+                shaderMat.SetShaderParameter("debug_mode", 0);
+                _terrainTexturesApplied = true;
+                GD.Print("[TERRAIN] Texture array assigned and textures enabled");
+            }
+            else if (textureArray == null)
+            {
+                GD.Print("[TERRAIN] Using color fallback (texture array failed to load)");
+                _terrainTexturesApplied = true; // Don't retry
+            }
+            else
+            {
+                GD.Print("[TERRAIN] Using color fallback (material is not ShaderMaterial)");
+                _terrainTexturesApplied = true;
+            }
         }
     }
 
