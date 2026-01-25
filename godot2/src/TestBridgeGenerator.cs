@@ -2,250 +2,427 @@ using Godot;
 using System;
 
 /// <summary>
-/// Generates test bridge placements to verify bridge rendering across rivers.
-/// Creates distinct test scenarios for bridges with various river configurations.
-/// Ported from Catlike Coding Hex Map Tutorial 11.
+/// Generates comprehensive test bridge placements to verify bridge rendering.
+/// Creates scenarios for all bridge/road/river permutations from Catlike Coding Tutorial 11.
+///
+/// Key Rule: Bridges ONLY appear where roads exist on BOTH sides of a STRAIGHT river.
+/// Curved rivers and river begin/end cells do NOT support bridges.
 /// </summary>
 public static class TestBridgeGenerator
 {
+    // Test area starts at row 10 to avoid conflicts with other generators
+    private const int TestAreaStartZ = 10;
+    private const int TestAreaStartX = 2;
+
     /// <summary>
-    /// Generates test bridge placements on the grid.
-    /// Creates scenarios to test bridges across straight and curved rivers.
+    /// Generates all test bridge patterns on the grid.
     /// </summary>
     public static void GenerateTestPatterns(Func<int, int, HexCell?> getCell)
     {
-        GD.Print("Generating test bridge patterns...");
+        GD.Print("=== Generating Bridge Test Patterns ===");
 
-        // Scenario 1: Bridge across straight river
-        GenerateStraightRiverWithBridge(getCell);
+        // SECTION 1: Straight rivers WITH bridges (positive tests)
+        GD.Print("\n--- Section 1: Straight Rivers with Bridges ---");
+        GenerateStraightRiver_NE_SW_WithBridge(getCell);      // Column 2-4
+        GenerateStraightRiver_E_W_WithBridge(getCell);        // Column 6-8
+        GenerateStraightRiver_NW_SE_WithBridge(getCell);      // Column 10-12
 
-        // Scenario 2: Bridge across curved river (gentle curve)
-        GenerateCurvedRiverWithBridge(getCell);
+        // SECTION 2: Straight rivers WITHOUT bridges (negative - missing road)
+        GD.Print("\n--- Section 2: Straight Rivers - No Bridge (One Road Only) ---");
+        GenerateStraightRiver_OneRoadOnly(getCell);           // Column 14-16
 
-        // Scenario 3: Multiple bridges on same river
-        GenerateMultipleBridges(getCell);
+        // SECTION 3: Curved rivers
+        GD.Print("\n--- Section 3: Curved Rivers ---");
+        GenerateSharpLeftCurve_NoBridge(getCell);             // Row 14, Column 2-4 - NO bridge
+        GenerateSharpRightCurve_NoBridge(getCell);            // Row 14, Column 6-8 - NO bridge
+        GenerateGentleCurve_WithBridge(getCell);              // Row 14, Column 10-12 - BRIDGE expected
 
-        GD.Print("Test bridge patterns generated.");
+        // SECTION 4: River begin/end - NO bridges
+        GD.Print("\n--- Section 4: River Begin/End - No Bridges ---");
+        GenerateRiverSource_NoBridge(getCell);                // Row 14, Column 14-16
+        GenerateRiverMouth_NoBridge(getCell);                 // Row 14, Column 18-20
+
+        // SECTION 5: Multiple bridges on same river
+        GD.Print("\n--- Section 5: Multiple Bridges ---");
+        GenerateMultipleBridgesOnRiver(getCell);              // Row 18, Column 2-8
+
+        GD.Print("\n=== Bridge Test Patterns Complete ===");
     }
 
     /// <summary>
-    /// Scenario 1: Straight river with road crossing perpendicular.
-    /// River flows straight through cell, road crosses from one side to opposite.
-    /// Tests bridge placement at straight river crossing.
+    /// Helper to set up a cell at consistent elevation with cleared features.
     /// </summary>
-    private static void GenerateStraightRiverWithBridge(Func<int, int, HexCell?> getCell)
+    private static void SetupCell(HexCell? cell, int elevation = 1)
     {
-        GD.Print("  Creating straight river with bridge...");
+        if (cell == null) return;
+        cell.Elevation = elevation;
+        cell.PlantLevel = 0;
+        cell.FarmLevel = 0;
+        cell.UrbanLevel = 0;
+        cell.SpecialIndex = 0;
+    }
 
-        // Use cell (10, 3) area which is clear from other tests
-        int riverX = 10;
-        int riverZ = 3;
+    // ========================================================================
+    // SECTION 1: STRAIGHT RIVERS WITH BRIDGES
+    // ========================================================================
 
-        // Get the main river cell and set it up
-        var riverCell = getCell(riverX, riverZ);
-        if (riverCell == null)
-        {
-            GD.PrintErr($"  River cell ({riverX}, {riverZ}) is NULL!");
-            return;
-        }
+    /// <summary>
+    /// Test 1.1: Straight river NE→SW axis with E-W roads.
+    /// Expected: Bridge appears spanning E to W.
+    /// </summary>
+    private static void GenerateStraightRiver_NE_SW_WithBridge(Func<int, int, HexCell?> getCell)
+    {
+        int x = TestAreaStartX;
+        int z = TestAreaStartZ;
+        GD.Print($"  Test 1.1: NE-SW river with E-W roads at ({x}, {z})");
 
-        // Set up all cells at same elevation first
-        riverCell.Elevation = 1;
-        riverCell.Color = new Color(0.3f, 0.5f, 0.7f);
-        // Clear all features from bridge cell to avoid visual clutter
-        riverCell.PlantLevel = 0;
-        riverCell.FarmLevel = 0;
-        riverCell.UrbanLevel = 0;
+        // Get cells
+        var center = getCell(x, z);
+        var upstream = getCell(x, z)?.GetNeighbor(HexDirection.NE);
+        var downstream = getCell(x, z)?.GetNeighbor(HexDirection.SW);
+        var east = getCell(x, z)?.GetNeighbor(HexDirection.E);
+        var west = getCell(x, z)?.GetNeighbor(HexDirection.W);
 
-        // Set up the upstream cell (river source)
-        var upstreamCell = riverCell.GetNeighbor(HexDirection.NE);
-        if (upstreamCell != null)
-        {
-            upstreamCell.Elevation = 1;
-            upstreamCell.Color = new Color(0.3f, 0.5f, 0.7f);
-        }
+        // Setup all cells at same elevation
+        SetupCell(center);
+        SetupCell(upstream);
+        SetupCell(downstream);
+        SetupCell(east);
+        SetupCell(west);
 
-        // Set up downstream cell
-        var downstreamCell = riverCell.GetNeighbor(HexDirection.SW);
-        if (downstreamCell != null)
-        {
-            downstreamCell.Elevation = 1;
-            downstreamCell.Color = new Color(0.3f, 0.5f, 0.7f);
-        }
+        // Create straight river: NE → center → SW
+        upstream?.SetOutgoingRiver(HexDirection.SW);
+        center?.SetOutgoingRiver(HexDirection.SW);
 
-        // Create the river: NE -> riverCell -> SW (straight through)
-        if (upstreamCell != null)
-        {
-            upstreamCell.SetOutgoingRiver(HexDirection.SW);
-            GD.Print($"    River: upstream ({upstreamCell.Coordinates}) -> SW");
-        }
-        riverCell.SetOutgoingRiver(HexDirection.SW);
-        GD.Print($"    River: riverCell ({riverCell.Coordinates}) -> SW");
-        GD.Print($"    RiverCell HasIncoming={riverCell.HasIncomingRiver} from {riverCell.IncomingRiver}, HasOutgoing={riverCell.HasOutgoingRiver} to {riverCell.OutgoingRiver}");
+        // Add roads on BOTH sides (E and W) - should create bridge
+        east?.AddRoad(HexDirection.W);
+        west?.AddRoad(HexDirection.E);
 
-        // Now add roads perpendicular to the river (E-W direction)
-        var eastCell = riverCell.GetNeighbor(HexDirection.E);
-        var westCell = riverCell.GetNeighbor(HexDirection.W);
-
-        if (eastCell != null)
-        {
-            eastCell.Elevation = 1;
-            eastCell.Color = new Color(0.5f, 0.4f, 0.3f); // Brown for road
-            // Clear features
-            eastCell.PlantLevel = 0;
-            eastCell.FarmLevel = 0;
-            eastCell.UrbanLevel = 0;
-            // Add road from east cell into the river cell
-            eastCell.AddRoad(HexDirection.W);
-            GD.Print($"    Road: eastCell ({eastCell.Coordinates}) -> W, HasRoad={eastCell.HasRoadThroughEdge(HexDirection.W)}");
-        }
-
-        if (westCell != null)
-        {
-            westCell.Elevation = 1;
-            westCell.Color = new Color(0.5f, 0.4f, 0.3f);
-            // Clear features
-            westCell.PlantLevel = 0;
-            westCell.FarmLevel = 0;
-            westCell.UrbanLevel = 0;
-            // Add road from west cell into the river cell
-            westCell.AddRoad(HexDirection.E);
-            GD.Print($"    Road: westCell ({westCell.Coordinates}) -> E, HasRoad={westCell.HasRoadThroughEdge(HexDirection.E)}");
-        }
-
-        // Check if riverCell has roads on E and W edges
-        GD.Print($"    RiverCell roads: E={riverCell.HasRoadThroughEdge(HexDirection.E)}, W={riverCell.HasRoadThroughEdge(HexDirection.W)}");
-        GD.Print($"    RiverCell HasRoads={riverCell.HasRoads}");
-
-        GD.Print($"  Straight river with bridge created at ({riverX}, {riverZ})");
+        GD.Print($"    River: NE→SW, Roads: E+W → BRIDGE expected");
     }
 
     /// <summary>
-    /// Scenario 2: Curved river with road crossing at the curve.
-    /// Uses cell (7,7) on showcase river which has a TIGHT curve (Config 3).
-    /// At (7,7): IncomingRiver=W, OutgoingRiver=NW (W == NW.Previous(), so Config 3)
+    /// Test 1.2: Straight river E→W axis with NE-SW roads.
+    /// Expected: Bridge appears spanning the perpendicular roads.
     /// </summary>
-    private static void GenerateCurvedRiverWithBridge(Func<int, int, HexCell?> getCell)
+    private static void GenerateStraightRiver_E_W_WithBridge(Func<int, int, HexCell?> getCell)
     {
-        GD.Print("  Creating curved river bridge on showcase river (tight curve)...");
+        int x = TestAreaStartX + 5;
+        int z = TestAreaStartZ;
+        GD.Print($"  Test 1.2: E-W river with NE-SW roads at ({x}, {z})");
 
-        // Use existing showcase river cell at offset (7,7)
-        // This cell has river: incoming W, outgoing NW - a TIGHT left curve (Config 3)
-        int bridgeX = 7;
-        int bridgeZ = 7;
+        var center = getCell(x, z);
+        var upstream = center?.GetNeighbor(HexDirection.E);
+        var downstream = center?.GetNeighbor(HexDirection.W);
+        var ne = center?.GetNeighbor(HexDirection.NE);
+        var sw = center?.GetNeighbor(HexDirection.SW);
 
-        var bridgeCell = getCell(bridgeX, bridgeZ);
-        if (bridgeCell == null)
-        {
-            GD.PrintErr($"  Bridge cell ({bridgeX}, {bridgeZ}) is NULL!");
-            return;
-        }
+        SetupCell(center);
+        SetupCell(upstream);
+        SetupCell(downstream);
+        SetupCell(ne);
+        SetupCell(sw);
 
-        GD.Print($"    Bridge cell ({bridgeX}, {bridgeZ}) = {bridgeCell.Coordinates}");
-        GD.Print($"    HasIncoming={bridgeCell.HasIncomingRiver} from {bridgeCell.IncomingRiver}");
-        GD.Print($"    HasOutgoing={bridgeCell.HasOutgoingRiver} to {bridgeCell.OutgoingRiver}");
+        // Create straight river: E → center → W
+        upstream?.SetOutgoingRiver(HexDirection.W);
+        center?.SetOutgoingRiver(HexDirection.W);
 
-        // Check if this is Config 3: IncomingRiver == OutgoingRiver.Previous()
-        bool isConfig3 = bridgeCell.IncomingRiver == bridgeCell.OutgoingRiver.Previous();
-        GD.Print($"    IsConfig3 (tight left)? {bridgeCell.IncomingRiver}=={bridgeCell.OutgoingRiver}.Previous()={bridgeCell.OutgoingRiver.Previous()} -> {isConfig3}");
+        // Add roads perpendicular to river
+        ne?.AddRoad(HexDirection.SW);
+        sw?.AddRoad(HexDirection.NE);
 
-        // For Config 3, bridge is placed when direction == IncomingRiver.Next()
-        // IncomingRiver = W, so bridge direction = W.Next() = NW
-        // Road must be at direction.Opposite() = NW.Opposite() = SE
-        HexDirection bridgeDir = bridgeCell.IncomingRiver.Next();
-        HexDirection roadDir = bridgeDir.Opposite();
-        GD.Print($"    Bridge needs: direction={bridgeDir}, road at {roadDir}");
-
-        // Add road through SE edge (from SE neighbor into bridge cell)
-        var seNeighbor = bridgeCell.GetNeighbor(HexDirection.SE);
-        if (seNeighbor != null)
-        {
-            seNeighbor.Elevation = bridgeCell.Elevation;
-            seNeighbor.AddRoad(HexDirection.NW);
-            GD.Print($"    Road: SE neighbor -> NW into bridge cell");
-        }
-
-        // Also add road on opposite side to complete the crossing
-        var nwNeighbor = bridgeCell.GetNeighbor(HexDirection.NW);
-        if (nwNeighbor != null)
-        {
-            nwNeighbor.Elevation = bridgeCell.Elevation;
-            nwNeighbor.AddRoad(HexDirection.SE);
-            GD.Print($"    Road: NW neighbor -> SE into bridge cell");
-        }
-
-        GD.Print($"    BridgeCell HasRoads={bridgeCell.HasRoads}");
-        for (int d = 0; d < 6; d++)
-        {
-            if (bridgeCell.HasRoadThroughEdge((HexDirection)d))
-            {
-                GD.Print($"      Road through {(HexDirection)d}");
-            }
-        }
-        GD.Print($"  Curved river bridge test created at ({bridgeX}, {bridgeZ})");
+        GD.Print($"    River: E→W, Roads: NE+SW → BRIDGE expected");
     }
 
     /// <summary>
-    /// Scenario 3: River with multiple bridge crossings.
-    /// Tests multiple bridges on the same river.
+    /// Test 1.3: Straight river NW→SE axis with perpendicular roads.
+    /// Expected: Bridge appears.
     /// </summary>
-    private static void GenerateMultipleBridges(Func<int, int, HexCell?> getCell)
+    private static void GenerateStraightRiver_NW_SE_WithBridge(Func<int, int, HexCell?> getCell)
     {
-        GD.Print("  Creating river with multiple bridges...");
+        int x = TestAreaStartX + 10;
+        int z = TestAreaStartZ;
+        GD.Print($"  Test 1.3: NW-SE river with perpendicular roads at ({x}, {z})");
 
-        // Create a river at (16, 3) going down with road crossings
-        int startX = 16;
-        int startZ = 2;
+        var center = getCell(x, z);
+        var upstream = center?.GetNeighbor(HexDirection.NW);
+        var downstream = center?.GetNeighbor(HexDirection.SE);
+        var ne = center?.GetNeighbor(HexDirection.NE);
+        var sw = center?.GetNeighbor(HexDirection.SW);
 
-        // Set up cells along river path - use valid coordinates
-        var riverCells = new HexCell?[4];
-        for (int i = 0; i < 4; i++)
+        SetupCell(center);
+        SetupCell(upstream);
+        SetupCell(downstream);
+        SetupCell(ne);
+        SetupCell(sw);
+
+        // Create straight river: NW → center → SE
+        upstream?.SetOutgoingRiver(HexDirection.SE);
+        center?.SetOutgoingRiver(HexDirection.SE);
+
+        // Add roads perpendicular
+        ne?.AddRoad(HexDirection.SW);
+        sw?.AddRoad(HexDirection.NE);
+
+        GD.Print($"    River: NW→SE, Roads: NE+SW → BRIDGE expected");
+    }
+
+    // ========================================================================
+    // SECTION 2: STRAIGHT RIVERS - NO BRIDGE (missing road on one side)
+    // ========================================================================
+
+    /// <summary>
+    /// Test 2.1: Straight river with road on only ONE side.
+    /// Expected: NO bridge (need roads on BOTH sides).
+    /// </summary>
+    private static void GenerateStraightRiver_OneRoadOnly(Func<int, int, HexCell?> getCell)
+    {
+        int x = TestAreaStartX + 14;
+        int z = TestAreaStartZ;
+        GD.Print($"  Test 2.1: NE-SW river with E road ONLY at ({x}, {z})");
+
+        var center = getCell(x, z);
+        var upstream = center?.GetNeighbor(HexDirection.NE);
+        var downstream = center?.GetNeighbor(HexDirection.SW);
+        var east = center?.GetNeighbor(HexDirection.E);
+
+        SetupCell(center);
+        SetupCell(upstream);
+        SetupCell(downstream);
+        SetupCell(east);
+
+        // Create straight river
+        upstream?.SetOutgoingRiver(HexDirection.SW);
+        center?.SetOutgoingRiver(HexDirection.SW);
+
+        // Add road on ONLY the east side - no bridge should appear
+        east?.AddRoad(HexDirection.W);
+
+        GD.Print($"    River: NE→SW, Roads: E only → NO bridge expected");
+    }
+
+    // ========================================================================
+    // SECTION 3: CURVED RIVERS - NO BRIDGES
+    // ========================================================================
+
+    /// <summary>
+    /// Test 3.1: Sharp left curve - NO bridge.
+    /// Config 3: IncomingRiver == OutgoingRiver.Previous()
+    /// </summary>
+    private static void GenerateSharpLeftCurve_NoBridge(Func<int, int, HexCell?> getCell)
+    {
+        int x = TestAreaStartX;
+        int z = TestAreaStartZ + 4;
+        GD.Print($"  Test 3.1: Sharp LEFT curve (NE in, E out) at ({x}, {z})");
+
+        var center = getCell(x, z);
+        var incoming = center?.GetNeighbor(HexDirection.NE);
+        var outgoing = center?.GetNeighbor(HexDirection.E);
+        var se = center?.GetNeighbor(HexDirection.SE);
+        var w = center?.GetNeighbor(HexDirection.W);
+
+        SetupCell(center);
+        SetupCell(incoming);
+        SetupCell(outgoing);
+        SetupCell(se);
+        SetupCell(w);
+
+        // Create sharp left curve: NE → center → E (NE == E.Previous())
+        incoming?.SetOutgoingRiver(HexDirection.SW);  // flows into center from NE
+        center?.SetOutgoingRiver(HexDirection.E);     // flows out to E
+
+        // Add roads that would cross IF bridges were supported
+        se?.AddRoad(HexDirection.NW);
+        w?.AddRoad(HexDirection.E);
+
+        GD.Print($"    River: NE→E (sharp left), Roads: SE+W → NO bridge expected");
+    }
+
+    /// <summary>
+    /// Test 3.2: Sharp right curve - NO bridge.
+    /// Config 4: IncomingRiver == OutgoingRiver.Next()
+    /// </summary>
+    private static void GenerateSharpRightCurve_NoBridge(Func<int, int, HexCell?> getCell)
+    {
+        int x = TestAreaStartX + 5;
+        int z = TestAreaStartZ + 4;
+        GD.Print($"  Test 3.2: Sharp RIGHT curve (E in, NE out) at ({x}, {z})");
+
+        var center = getCell(x, z);
+        var incoming = center?.GetNeighbor(HexDirection.E);
+        var outgoing = center?.GetNeighbor(HexDirection.NE);
+        var nw = center?.GetNeighbor(HexDirection.NW);
+        var sw = center?.GetNeighbor(HexDirection.SW);
+
+        SetupCell(center);
+        SetupCell(incoming);
+        SetupCell(outgoing);
+        SetupCell(nw);
+        SetupCell(sw);
+
+        // Create sharp right curve: E → center → NE (E == NE.Next())
+        incoming?.SetOutgoingRiver(HexDirection.W);   // flows into center from E
+        center?.SetOutgoingRiver(HexDirection.NE);    // flows out to NE
+
+        // Add roads
+        nw?.AddRoad(HexDirection.SE);
+        sw?.AddRoad(HexDirection.NE);
+
+        GD.Print($"    River: E→NE (sharp right), Roads: NW+SW → NO bridge expected");
+    }
+
+    /// <summary>
+    /// Test 3.3: Gentle curve (2 steps apart) - BRIDGE expected!
+    /// Gentle curves have 1 empty hex side between river entry and exit.
+    /// </summary>
+    private static void GenerateGentleCurve_WithBridge(Func<int, int, HexCell?> getCell)
+    {
+        int x = TestAreaStartX + 10;
+        int z = TestAreaStartZ + 4;
+        GD.Print($"  Test 3.3: Gentle curve (NE in, SE out) at ({x}, {z})");
+
+        var center = getCell(x, z);
+        var incoming = center?.GetNeighbor(HexDirection.NE);
+        var outgoing = center?.GetNeighbor(HexDirection.SE);
+        var e = center?.GetNeighbor(HexDirection.E);
+        var w = center?.GetNeighbor(HexDirection.W);
+
+        SetupCell(center);
+        SetupCell(incoming);
+        SetupCell(outgoing);
+        SetupCell(e);
+        SetupCell(w);
+
+        // Create gentle curve: NE → center → SE (2 steps clockwise)
+        incoming?.SetOutgoingRiver(HexDirection.SW);
+        center?.SetOutgoingRiver(HexDirection.SE);
+
+        // Add roads on both sides - SHOULD create bridge
+        e?.AddRoad(HexDirection.W);
+        w?.AddRoad(HexDirection.E);
+
+        GD.Print($"    River: NE→SE (gentle curve), Roads: E+W → BRIDGE expected");
+    }
+
+    // ========================================================================
+    // SECTION 4: RIVER BEGIN/END - NO BRIDGES
+    // ========================================================================
+
+    /// <summary>
+    /// Test 4.1: River source (outgoing only) - NO bridge.
+    /// </summary>
+    private static void GenerateRiverSource_NoBridge(Func<int, int, HexCell?> getCell)
+    {
+        int x = TestAreaStartX + 14;
+        int z = TestAreaStartZ + 4;
+        GD.Print($"  Test 4.1: River SOURCE (outgoing only) at ({x}, {z})");
+
+        var center = getCell(x, z);
+        var downstream = center?.GetNeighbor(HexDirection.SW);
+        var e = center?.GetNeighbor(HexDirection.E);
+        var w = center?.GetNeighbor(HexDirection.W);
+
+        SetupCell(center);
+        SetupCell(downstream);
+        SetupCell(e);
+        SetupCell(w);
+
+        // River starts here - only outgoing, no incoming
+        center?.SetOutgoingRiver(HexDirection.SW);
+
+        // Add roads on both sides
+        e?.AddRoad(HexDirection.W);
+        w?.AddRoad(HexDirection.E);
+
+        GD.Print($"    River: SOURCE→SW, Roads: E+W → NO bridge expected");
+    }
+
+    /// <summary>
+    /// Test 4.2: River mouth (incoming only) - NO bridge.
+    /// </summary>
+    private static void GenerateRiverMouth_NoBridge(Func<int, int, HexCell?> getCell)
+    {
+        int x = TestAreaStartX + 18;
+        int z = TestAreaStartZ + 4;
+        GD.Print($"  Test 4.2: River MOUTH (incoming only) at ({x}, {z})");
+
+        var center = getCell(x, z);
+        var upstream = center?.GetNeighbor(HexDirection.NE);
+        var e = center?.GetNeighbor(HexDirection.E);
+        var w = center?.GetNeighbor(HexDirection.W);
+
+        SetupCell(center);
+        SetupCell(upstream);
+        SetupCell(e);
+        SetupCell(w);
+
+        // River ends here - incoming from NE, no outgoing
+        upstream?.SetOutgoingRiver(HexDirection.SW);
+        // Don't set outgoing on center - it's a river mouth
+
+        // Add roads on both sides
+        e?.AddRoad(HexDirection.W);
+        w?.AddRoad(HexDirection.E);
+
+        GD.Print($"    River: NE→MOUTH, Roads: E+W → NO bridge expected");
+    }
+
+    // ========================================================================
+    // SECTION 5: MULTIPLE BRIDGES ON SAME RIVER
+    // ========================================================================
+
+    /// <summary>
+    /// Test 5.1: Long straight river with multiple road crossings.
+    /// Expected: Multiple bridges, one at each crossing.
+    /// </summary>
+    private static void GenerateMultipleBridgesOnRiver(Func<int, int, HexCell?> getCell)
+    {
+        int startX = TestAreaStartX;
+        int z = TestAreaStartZ + 8;
+        GD.Print($"  Test 5.1: Multiple bridges on straight river at row {z}");
+
+        // Create a long straight river flowing SW through multiple cells
+        HexCell?[] riverCells = new HexCell?[5];
+        for (int i = 0; i < 5; i++)
         {
-            riverCells[i] = getCell(startX, startZ + i);
-            if (riverCells[i] != null)
-            {
-                riverCells[i].Elevation = 1;
-                riverCells[i].Color = new Color(0.4f, 0.6f, 0.5f);
-            }
+            riverCells[i] = getCell(startX + i * 2, z);
+            SetupCell(riverCells[i]);
+
+            // Also setup upstream/downstream neighbors
+            var ne = riverCells[i]?.GetNeighbor(HexDirection.NE);
+            var sw = riverCells[i]?.GetNeighbor(HexDirection.SW);
+            SetupCell(ne);
+            SetupCell(sw);
         }
 
-        // Create river flowing NE->SW through each cell
-        for (int i = 0; i < riverCells.Length - 1; i++)
-        {
-            if (riverCells[i] != null)
-            {
-                riverCells[i].SetOutgoingRiver(HexDirection.SW);
-            }
-        }
-
-        GD.Print($"    River created from ({startX}, {startZ}) to ({startX}, {startZ + 3})");
-
-        // Add road crossings at cells 1 and 2 (middle cells)
-        for (int i = 1; i <= 2; i++)
+        // Create continuous straight river through all cells
+        for (int i = 0; i < 5; i++)
         {
             var cell = riverCells[i];
-            if (cell == null) continue;
+            var upstream = cell?.GetNeighbor(HexDirection.NE);
 
-            var eastNeighbor = cell.GetNeighbor(HexDirection.E);
-            var westNeighbor = cell.GetNeighbor(HexDirection.W);
-
-            if (eastNeighbor != null)
-            {
-                eastNeighbor.Elevation = 1;
-                eastNeighbor.Color = new Color(0.5f, 0.4f, 0.3f);
-                eastNeighbor.AddRoad(HexDirection.W);
-                GD.Print($"    Road crossing {i}: eastNeighbor -> W");
-            }
-            if (westNeighbor != null)
-            {
-                westNeighbor.Elevation = 1;
-                westNeighbor.Color = new Color(0.5f, 0.4f, 0.3f);
-                westNeighbor.AddRoad(HexDirection.E);
-            }
-
-            GD.Print($"    Cell {i} roads: E={cell.HasRoadThroughEdge(HexDirection.E)}, W={cell.HasRoadThroughEdge(HexDirection.W)}");
+            // Set incoming river from NE
+            upstream?.SetOutgoingRiver(HexDirection.SW);
+            // Set outgoing river to SW
+            cell?.SetOutgoingRiver(HexDirection.SW);
         }
 
-        GD.Print($"  Multiple bridges scenario created");
+        // Add road crossings at alternating cells (cells 0, 2, 4)
+        for (int i = 0; i < 5; i += 2)
+        {
+            var cell = riverCells[i];
+            var east = cell?.GetNeighbor(HexDirection.E);
+            var west = cell?.GetNeighbor(HexDirection.W);
+
+            SetupCell(east);
+            SetupCell(west);
+
+            east?.AddRoad(HexDirection.W);
+            west?.AddRoad(HexDirection.E);
+
+            GD.Print($"    Bridge {i/2 + 1} at cell {i}: E+W roads");
+        }
+
+        GD.Print($"    Expected: 3 bridges at cells 0, 2, 4");
     }
 }

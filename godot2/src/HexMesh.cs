@@ -677,7 +677,8 @@ public partial class HexMesh : MeshInstance3D
         }
         else if (previousHasRiver && nextHasRiver)
         {
-            // Config 5: V-shaped river bend - river on both adjacent sides
+            // Config 5: V-shaped river bend - inside of gentle curve (2 steps apart)
+            // River on both adjacent sides of this direction
             if (!hasRoadThroughEdge)
             {
                 return;
@@ -685,6 +686,38 @@ public partial class HexMesh : MeshInstance3D
             Vector3 offset = HexMetrics.GetSolidEdgeMiddle(direction) * HexMetrics.InnerToOuter;
             roadCenter += offset * 0.7f;
             center += offset * 0.5f;
+
+            // Tutorial 11: Add bridge across gentle curve
+            // Bridge connects from this side (inside of curve) to opposite side
+            if (_features != null &&
+                cell.HasRoadThroughEdge(direction.Opposite()) &&
+                (int)direction < (int)direction.Opposite())
+            {
+                // Bridge endpoint geometry for gentle curve (river on both adjacent sides):
+                //
+                // At this point in the code:
+                //   offset = GetSolidEdgeMiddle(direction) * InnerToOuter
+                //   center = originalCenter + offset * 1.0 (0.5 from caller + 0.5 here)
+                //   roadCenter = originalCenter + offset * 1.2 (0.5 from caller + 0.7 here)
+                //
+                // Near endpoint (inside curve, this direction):
+                //   Uses 'center' at offset * 1.0, which matches where the road terminates
+                //
+                // Far endpoint (outside curve, opposite direction):
+                //   The opposite road (Config 6) applies: roadCenter += GetSolidEdgeMiddle(dir) * 0.25
+                //   From our perspective, their direction points opposite, so:
+                //     oppositeRoadCenter = originalCenter - GetSolidEdgeMiddle(E) * 0.25
+                //                        = originalCenter - (offset / InnerToOuter) * 0.25
+                //                        = originalCenter - offset * (0.25 / 1.1547)
+                //                        = originalCenter - offset * 0.217
+                //
+                //   Since center = originalCenter + offset:
+                //     oppositeRoadCenter = center - offset * 1.217
+                //
+                // Using 1.2 as a clean approximation (0.25 / InnerToOuter ≈ 0.217)
+                Vector3 oppositeRoadCenter = center - offset * 1.2f;
+                _features.AddBridge(center, oppositeRoadCenter);
+            }
         }
         else if (previousHasRiver)
         {
