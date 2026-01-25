@@ -50,6 +50,10 @@ public static class TestBridgeGenerator
         GD.Print("\n--- Section 6: River Loop with 8 Bridges ---");
         GenerateRiverLoopWithAllBridges(getCell);             // Row 22+, Column 8+
 
+        // SECTION 7: Waterfall test - rivers with elevation changes
+        GD.Print("\n--- Section 7: Waterfall Test ---");
+        GenerateWaterfallTest(getCell);                       // Column 20, Row 2-6
+
         GD.Print("\n=== Bridge Test Patterns Complete ===");
     }
 
@@ -600,5 +604,114 @@ public static class TestBridgeGenerator
         {
             neighbor2.AddRoad(dir2.Opposite());
         }
+    }
+
+    // ========================================================================
+    // SECTION 7: WATERFALL TEST
+    // ========================================================================
+
+    /// <summary>
+    /// Creates a river with elevation changes to demonstrate waterfall rendering.
+    /// Located at offset (20, 2-6) to avoid overlap with other tests.
+    /// Rivers flowing between cells of different elevations create waterfalls.
+    /// </summary>
+    private static void GenerateWaterfallTest(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating waterfall demonstration...");
+
+        // Waterfall path: descending from mountain (elevation 5) to lowland (elevation 1)
+        // Each step creates a visible waterfall
+        var waterfallPath = new (int x, int z, int elevation)[]
+        {
+            (20, 2, 5),   // Mountain peak - SOURCE
+            (20, 3, 4),   // Waterfall 1: drop 5->4
+            (20, 4, 3),   // Waterfall 2: drop 4->3
+            (20, 5, 2),   // Waterfall 3: drop 3->2
+            (20, 6, 1),   // Waterfall 4: drop 2->1 - TERMINUS
+        };
+
+        // Set up the waterfall path cells with elevations
+        foreach (var (x, z, elevation) in waterfallPath)
+        {
+            var cell = getCell(x, z);
+            if (cell == null)
+            {
+                GD.PrintErr($"    Failed to get cell at ({x}, {z})");
+                continue;
+            }
+
+            cell.Elevation = elevation;
+            cell.PlantLevel = 0;
+            cell.FarmLevel = 0;
+            cell.UrbanLevel = 0;
+            cell.SpecialIndex = 0;
+            cell.WaterLevel = 0;
+
+            // Color gradient: brown (mountain) to green (lowland)
+            float t = (5f - elevation) / 4f;
+            cell.Color = new Color(
+                0.6f - t * 0.2f,  // R: brown to green
+                0.4f + t * 0.3f,  // G: more green at lower elevation
+                0.3f - t * 0.1f   // B: slight decrease
+            );
+        }
+
+        // Set up riverbank neighbors at matching elevations
+        foreach (var (x, z, elevation) in waterfallPath)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+
+            // E and W neighbors form the riverbanks
+            var eastNeighbor = cell.GetNeighbor(HexDirection.E);
+            var westNeighbor = cell.GetNeighbor(HexDirection.W);
+
+            if (eastNeighbor != null)
+            {
+                eastNeighbor.Elevation = elevation;
+                eastNeighbor.PlantLevel = 0;
+                eastNeighbor.FarmLevel = 0;
+                eastNeighbor.UrbanLevel = 0;
+                eastNeighbor.Color = new Color(0.5f, 0.55f, 0.4f); // Muted green riverbank
+            }
+
+            if (westNeighbor != null)
+            {
+                westNeighbor.Elevation = elevation;
+                westNeighbor.PlantLevel = 0;
+                westNeighbor.FarmLevel = 0;
+                westNeighbor.UrbanLevel = 0;
+                westNeighbor.Color = new Color(0.5f, 0.55f, 0.4f); // Muted green riverbank
+            }
+        }
+
+        // Create river flowing downhill (SW direction based on hex geometry)
+        // Rivers automatically create waterfalls when flowing between different elevations
+        for (int i = 0; i < waterfallPath.Length - 1; i++)
+        {
+            var (x, z, elev) = waterfallPath[i];
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+
+            // Find direction to next cell in path
+            var (nextX, nextZ, nextElev) = waterfallPath[i + 1];
+            var nextCell = getCell(nextX, nextZ);
+            if (nextCell == null) continue;
+
+            // Find which direction leads to next cell
+            for (int d = 0; d < 6; d++)
+            {
+                var dir = (HexDirection)d;
+                if (cell.GetNeighbor(dir) == nextCell)
+                {
+                    cell.SetOutgoingRiver(dir);
+                    GD.Print($"    Waterfall: elevation {elev} -> {nextElev} (drop of {elev - nextElev})");
+                    break;
+                }
+            }
+        }
+
+        GD.Print($"    Waterfall test complete at offset (20, 2-6)");
+        GD.Print($"    Navigate to this area to see 4 sequential waterfalls");
     }
 }
