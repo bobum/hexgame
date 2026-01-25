@@ -46,6 +46,14 @@ public static class TestBridgeGenerator
         GD.Print("\n--- Section 5: Multiple Bridges ---");
         GenerateMultipleBridgesOnRiver(getCell);              // Row 18, Column 2-8
 
+        // SECTION 6: Complete river loop with all 8 bridge types (matching reference image)
+        GD.Print("\n--- Section 6: River Loop with 8 Bridges ---");
+        GenerateRiverLoopWithAllBridges(getCell);             // Row 22+, Column 8+
+
+        // SECTION 7: Waterfall test - rivers with elevation changes
+        GD.Print("\n--- Section 7: Waterfall Test ---");
+        GenerateWaterfallTest(getCell);                       // Column 20, Row 2-6
+
         GD.Print("\n=== Bridge Test Patterns Complete ===");
     }
 
@@ -424,5 +432,412 @@ public static class TestBridgeGenerator
         }
 
         GD.Print($"    Expected: 3 bridges at cells 0, 2, 4");
+    }
+
+    // ========================================================================
+    // SECTION 6: RIVER LOOP WITH ALL 8 BRIDGE TYPES
+    // ========================================================================
+
+    /// <summary>
+    /// Creates a closed river loop matching the reference image with 8 bridges.
+    /// Uses GetNeighbor to ensure cells are actually adjacent.
+    /// Flattens a large area first with consistent elevation and color.
+    /// </summary>
+    private static void GenerateRiverLoopWithAllBridges(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating river loop with 8 bridges...");
+
+        // Start cell - use offset coords, will report cube coords
+        // Using offset (8, 6) as starting point for the loop
+        var startCell = getCell(8, 6);
+        if (startCell == null)
+        {
+            GD.PrintErr("    Failed to get start cell!");
+            return;
+        }
+
+        GD.Print($"    Start cell cube coords: {startCell.Coordinates}");
+
+        // First, flatten a large area around the loop (7x7 cells)
+        // Set all to elevation 1, beige color, no features
+        var beige = new Color(0.93f, 0.87f, 0.73f); // Sand/beige color
+        // Extended west to include Cell 6's W neighbor at offset (5, 7)
+        // Keep original east boundary but restore highland lake cliff terrain after
+        FlattenArea(getCell, 4, 4, 14, 12, beige);
+
+        // Restore cliff terrain around highland lake to prevent floating water
+        // Highland lake is at water level 4, so surrounding terrain needs elevation 4+
+        var cliffColor = new Color(0.6f, 0.55f, 0.45f); // Rocky cliff color
+        var cliffCells = new (int x, int z)[]
+        {
+            // Row Z=3: cube (13,-16,3) to (16,-19,3)
+            (14, 3), (15, 3), (16, 3), (17, 3),
+            // Row Z=4: cube (12,-16,4), (15,-19,4), (16,-20,4)
+            (14, 4), (17, 4), (18, 4),
+            // Row Z=5: cube (12,-17,5), (16,-21,5)
+            (14, 5), (18, 5),
+            // Row Z=6: cube (13,-19,6) to (15,-21,6)
+            (16, 6), (17, 6), (18, 6),
+        };
+        foreach (var (x, z) in cliffCells)
+        {
+            var cell = getCell(x, z);
+            if (cell != null)
+            {
+                cell.Elevation = 4;
+                cell.Color = cliffColor;
+                cell.Walled = false; // Remove walls
+            }
+        }
+
+        // Set up waterfall path: (15,5) -> (15,6) -> (14,7) -> lake
+        var cell_15_5 = getCell(15, 5);
+        var cell_15_6 = getCell(15, 6);
+        var cell_14_7 = getCell(14, 7);
+
+        // (15,5) cube (13,-18,5) - elevation 3, keep river from TestWaterGenerator
+        if (cell_15_5 != null)
+        {
+            cell_15_5.Elevation = 3;
+            cell_15_5.Color = new Color(0.4f, 0.5f, 0.4f);
+            cell_15_5.Walled = false;
+        }
+
+        // Create river outflow from highland lake: (15,4) -> (14,4) -> (13,5)
+        var cell_15_4 = getCell(15, 4);
+        var cell_14_4 = getCell(14, 4);
+        var cell_13_5 = getCell(13, 5);
+
+        // (15,4) cube (13,-17,4) - elevation 3, river to (14,4)
+        if (cell_15_4 != null)
+        {
+            cell_15_4.Elevation = 3; // Lowered
+            cell_15_4.Walled = false;
+
+            if (cell_14_4 != null)
+            {
+                for (int d = 0; d < 6; d++)
+                {
+                    if (cell_15_4.GetNeighbor((HexDirection)d) == cell_14_4)
+                    {
+                        cell_15_4.SetOutgoingRiver((HexDirection)d);
+                        GD.Print($"    River: (15,4) -> (14,4) dir={(HexDirection)d}");
+                        break;
+                    }
+                }
+            }
+        }
+
+        // (14,4) cube (12,-16,4) - river to (13,5)
+        if (cell_14_4 != null)
+        {
+            cell_14_4.Walled = false;
+
+            if (cell_13_5 != null)
+            {
+                for (int d = 0; d < 6; d++)
+                {
+                    if (cell_14_4.GetNeighbor((HexDirection)d) == cell_13_5)
+                    {
+                        cell_14_4.SetOutgoingRiver((HexDirection)d);
+                        GD.Print($"    River: (14,4) -> (13,5) dir={(HexDirection)d}");
+                        break;
+                    }
+                }
+            }
+        }
+
+        // (15,6) cube (12,-18,6) - river continues to (14,7)
+        if (cell_15_6 != null)
+        {
+            cell_15_6.Elevation = 3;
+            cell_15_6.Color = new Color(0.4f, 0.5f, 0.4f);
+            cell_15_6.Walled = false;
+
+            if (cell_14_7 != null)
+            {
+                for (int d = 0; d < 6; d++)
+                {
+                    if (cell_15_6.GetNeighbor((HexDirection)d) == cell_14_7)
+                    {
+                        cell_15_6.SetOutgoingRiver((HexDirection)d);
+                        GD.Print($"    River: (15,6) -> (14,7) dir={(HexDirection)d}");
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (cell_14_7 != null)
+        {
+            cell_14_7.Elevation = 2; // Lower - waterfall drop
+            cell_14_7.Color = new Color(0.4f, 0.5f, 0.4f);
+            cell_14_7.Walled = false; // Remove wall
+
+            // River continues to (14,8) cube (10,-18,8)
+            var cell_14_8 = getCell(14, 8);
+            if (cell_14_8 != null)
+            {
+                for (int d = 0; d < 6; d++)
+                {
+                    if (cell_14_7.GetNeighbor((HexDirection)d) == cell_14_8)
+                    {
+                        cell_14_7.SetOutgoingRiver((HexDirection)d);
+                        GD.Print($"    River: (14,7) -> (14,8) dir={(HexDirection)d}");
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Build the 8-cell loop using GetNeighbor to ensure adjacency
+        // Loop layout (clockwise):
+        //
+        //     [0] -E-> [1]
+        //      ^        |
+        //     NE       SE
+        //      |        v
+        //     [7]      [2]
+        //      ^        |
+        //     NW       SW
+        //      |        v
+        //     [6] <-W- [5] <-W- [4] <-W- [3]
+        //
+        // Rivers flow: 0->1->2->3->4->5->6->7->0
+
+        var loop = new HexCell?[8];
+
+        // Build loop by following neighbors
+        loop[0] = startCell;
+        loop[1] = loop[0]?.GetNeighbor(HexDirection.E);
+        loop[2] = loop[1]?.GetNeighbor(HexDirection.SE);
+        loop[3] = loop[2]?.GetNeighbor(HexDirection.SW);
+        loop[4] = loop[3]?.GetNeighbor(HexDirection.W);
+        loop[5] = loop[4]?.GetNeighbor(HexDirection.W);
+        loop[6] = loop[5]?.GetNeighbor(HexDirection.NW);
+        loop[7] = loop[6]?.GetNeighbor(HexDirection.NE);
+
+        // Verify loop closes (cell 7's E neighbor should be cell 0)
+        var loopCheck = loop[7]?.GetNeighbor(HexDirection.E);
+        if (loopCheck != loop[0])
+        {
+            GD.PrintErr("    WARNING: Loop doesn't close properly!");
+        }
+
+        // Print cube coordinates of all loop cells
+        for (int i = 0; i < 8; i++)
+        {
+            if (loop[i] != null)
+            {
+                GD.Print($"    Loop[{i}]: {loop[i].Coordinates}");
+            }
+        }
+
+        // Set river flow around the loop (clockwise)
+        // Direction from each cell to the next
+        HexDirection[] riverDirs = {
+            HexDirection.E,   // 0 -> 1
+            HexDirection.SE,  // 1 -> 2
+            HexDirection.SW,  // 2 -> 3
+            HexDirection.W,   // 3 -> 4
+            HexDirection.W,   // 4 -> 5
+            HexDirection.NW,  // 5 -> 6
+            HexDirection.NE,  // 6 -> 7
+            HexDirection.E    // 7 -> 0 (closes loop)
+        };
+
+        for (int i = 0; i < 8; i++)
+        {
+            loop[i]?.SetOutgoingRiver(riverDirs[i]);
+        }
+
+        GD.Print("    River loop created");
+
+        // Add roads crossing the river at each cell
+        // For each cell, determine perpendicular road directions based on river flow
+        // River in->out determines which directions are "across" the river
+
+        // Cell 0: River W->E (straight), Config 2 at dir SE needs road through NW
+        AddRoadCrossing(loop[0], HexDirection.NW, HexDirection.SE);
+
+        // Cell 1: River W->SE, free edges: NE,E,SW,NW, crossing: NE-SW
+        AddRoadCrossing(loop[1], HexDirection.NE, HexDirection.SW);
+
+        // Cell 2: River NW->SW, free edges: NE,E,SE,W, crossing: E-W
+        AddRoadCrossing(loop[2], HexDirection.E, HexDirection.W);
+
+        // Cell 3: River NE->W, free edges: E,SE,SW,NW, crossing: SE-NW
+        AddRoadCrossing(loop[3], HexDirection.SE, HexDirection.NW);
+
+        // Cell 4: River E->W (straight), free edges: NE,SE,SW,NW, crossing: NW-SE
+        AddRoadCrossing(loop[4], HexDirection.NW, HexDirection.SE);
+
+        // Cell 5: River E->NW, free edges: NE,SE,SW,W, crossing: NE-SW
+        AddRoadCrossing(loop[5], HexDirection.NE, HexDirection.SW);
+
+        // Cell 6: River SE->NE, free edges: E,SW,W,NW, crossing: E-W
+        AddRoadCrossing(loop[6], HexDirection.E, HexDirection.W);
+
+        // Cell 7: River SW->E, free edges: NE,SE,W,NW, crossing: NW-SE
+        AddRoadCrossing(loop[7], HexDirection.NW, HexDirection.SE);
+
+        GD.Print("    Roads added - check for 8 bridges");
+    }
+
+    /// <summary>
+    /// Flattens a rectangular area to consistent elevation and color.
+    /// </summary>
+    private static void FlattenArea(Func<int, int, HexCell?> getCell,
+        int minX, int minZ, int maxX, int maxZ, Color color)
+    {
+        for (int x = minX; x <= maxX; x++)
+        {
+            for (int z = minZ; z <= maxZ; z++)
+            {
+                var cell = getCell(x, z);
+                if (cell != null)
+                {
+                    cell.Elevation = 1;
+                    cell.WaterLevel = 0;
+                    cell.Color = color;
+                    cell.PlantLevel = 0;
+                    cell.FarmLevel = 0;
+                    cell.UrbanLevel = 0;
+                    cell.SpecialIndex = 0;
+                    // Clear any existing rivers
+                    cell.RemoveRiver();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Helper to add a road crossing through a cell in two directions.
+    /// </summary>
+    private static void AddRoadCrossing(HexCell? cell, HexDirection dir1, HexDirection dir2)
+    {
+        if (cell == null) return;
+
+        var neighbor1 = cell.GetNeighbor(dir1);
+        var neighbor2 = cell.GetNeighbor(dir2);
+
+        if (neighbor1 != null)
+        {
+            neighbor1.AddRoad(dir1.Opposite());
+        }
+
+        if (neighbor2 != null)
+        {
+            neighbor2.AddRoad(dir2.Opposite());
+        }
+    }
+
+    // ========================================================================
+    // SECTION 7: WATERFALL TEST
+    // ========================================================================
+
+    /// <summary>
+    /// Creates a river with elevation changes to demonstrate waterfall rendering.
+    /// Located at offset (20, 2-6) to avoid overlap with other tests.
+    /// Rivers flowing between cells of different elevations create waterfalls.
+    /// </summary>
+    private static void GenerateWaterfallTest(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating waterfall demonstration...");
+
+        // Waterfall path: descending from mountain (elevation 5) to lowland (elevation 1)
+        // Each step creates a visible waterfall
+        var waterfallPath = new (int x, int z, int elevation)[]
+        {
+            (20, 2, 5),   // Mountain peak - SOURCE
+            (20, 3, 4),   // Waterfall 1: drop 5->4
+            (20, 4, 3),   // Waterfall 2: drop 4->3
+            (20, 5, 2),   // Waterfall 3: drop 3->2
+            (20, 6, 1),   // Waterfall 4: drop 2->1 - TERMINUS
+        };
+
+        // Set up the waterfall path cells with elevations
+        foreach (var (x, z, elevation) in waterfallPath)
+        {
+            var cell = getCell(x, z);
+            if (cell == null)
+            {
+                GD.PrintErr($"    Failed to get cell at ({x}, {z})");
+                continue;
+            }
+
+            cell.Elevation = elevation;
+            cell.PlantLevel = 0;
+            cell.FarmLevel = 0;
+            cell.UrbanLevel = 0;
+            cell.SpecialIndex = 0;
+            cell.WaterLevel = 0;
+
+            // Color gradient: brown (mountain) to green (lowland)
+            float t = (5f - elevation) / 4f;
+            cell.Color = new Color(
+                0.6f - t * 0.2f,  // R: brown to green
+                0.4f + t * 0.3f,  // G: more green at lower elevation
+                0.3f - t * 0.1f   // B: slight decrease
+            );
+        }
+
+        // Set up riverbank neighbors at matching elevations
+        foreach (var (x, z, elevation) in waterfallPath)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+
+            // E and W neighbors form the riverbanks
+            var eastNeighbor = cell.GetNeighbor(HexDirection.E);
+            var westNeighbor = cell.GetNeighbor(HexDirection.W);
+
+            if (eastNeighbor != null)
+            {
+                eastNeighbor.Elevation = elevation;
+                eastNeighbor.PlantLevel = 0;
+                eastNeighbor.FarmLevel = 0;
+                eastNeighbor.UrbanLevel = 0;
+                eastNeighbor.Color = new Color(0.5f, 0.55f, 0.4f); // Muted green riverbank
+            }
+
+            if (westNeighbor != null)
+            {
+                westNeighbor.Elevation = elevation;
+                westNeighbor.PlantLevel = 0;
+                westNeighbor.FarmLevel = 0;
+                westNeighbor.UrbanLevel = 0;
+                westNeighbor.Color = new Color(0.5f, 0.55f, 0.4f); // Muted green riverbank
+            }
+        }
+
+        // Create river flowing downhill (SW direction based on hex geometry)
+        // Rivers automatically create waterfalls when flowing between different elevations
+        for (int i = 0; i < waterfallPath.Length - 1; i++)
+        {
+            var (x, z, elev) = waterfallPath[i];
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+
+            // Find direction to next cell in path
+            var (nextX, nextZ, nextElev) = waterfallPath[i + 1];
+            var nextCell = getCell(nextX, nextZ);
+            if (nextCell == null) continue;
+
+            // Find which direction leads to next cell
+            for (int d = 0; d < 6; d++)
+            {
+                var dir = (HexDirection)d;
+                if (cell.GetNeighbor(dir) == nextCell)
+                {
+                    cell.SetOutgoingRiver(dir);
+                    GD.Print($"    Waterfall: elevation {elev} -> {nextElev} (drop of {elev - nextElev})");
+                    break;
+                }
+            }
+        }
+
+        GD.Print($"    Waterfall test complete at offset (20, 2-6)");
+        GD.Print($"    Navigate to this area to see 4 sequential waterfalls");
     }
 }
