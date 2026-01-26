@@ -64,4 +64,15 @@ public struct HexCoordinates
     {
         return X + "\n" + Y + "\n" + Z;
     }
+
+    /// <summary>
+    /// Calculates the distance to another hex cell in cube coordinates.
+    /// Tutorial 15: Uses the formula (|x1-x2| + |y1-y2| + |z1-z2|) / 2
+    /// </summary>
+    public int DistanceTo(HexCoordinates other)
+    {
+        return ((X < other.X ? other.X - X : X - other.X) +
+                (Y < other.Y ? other.Y - Y : Y - other.Y) +
+                (Z < other.Z ? other.Z - Z : Z - other.Z)) / 2;
+    }
 }

@@ -3,10 +3,15 @@ shader_type spatial;
 // Tutorial 14: Terrain Textures shader
 // Implements splat mapping with texture array for hex terrain
 // Ported from Catlike Coding Hex Map Tutorial 14
+// Tutorial 15: Added grid overlay support
 
 // Terrain texture array containing all terrain types
 // Index 0 = sand, 1 = grass, 2 = mud, 3 = stone, 4 = snow
 uniform sampler2DArray terrain_textures : source_color, filter_linear_mipmap, repeat_enable;
+
+// Tutorial 15: Grid overlay texture
+uniform sampler2D grid_texture : source_color, filter_linear_mipmap, repeat_enable;
+uniform bool show_grid = false;
 
 // Flag to use textures or fallback to colors
 uniform bool use_textures = false;
@@ -25,6 +30,8 @@ uniform float texture_scale : hint_range(0.001, 0.1) = 0.02;
 varying vec3 terrain_indices;
 // World position for UV calculation (passed from vertex to fragment)
 varying vec3 world_position;
+// Tutorial 15: Cell-local UV for grid overlay (passed via UV)
+varying vec2 grid_uv;
 
 // Get fallback color for a terrain type index
 vec3 get_terrain_color(float index) {
@@ -42,10 +49,12 @@ void vertex() {
     terrain_indices = CUSTOM0.rgb;
     // Calculate world position for seamless UV mapping
     world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+    // Tutorial 15: Pass UV coordinates for grid overlay
+    grid_uv = UV;
 }
 
 // Debug mode: 0=normal, 1=show splat weights, 2=show terrain indices
-uniform int debug_mode : hint_range(0, 2) = 1;
+uniform int debug_mode : hint_range(0, 2) = 0;
 
 void fragment() {
     // Get splat weights from vertex color
@@ -78,6 +87,18 @@ void fragment() {
 
         // Weighted blend of colors
         blended = col1 * splat.r + col2 * splat.g + col3 * splat.b;
+    }
+
+    // Tutorial 15: Apply grid overlay if enabled
+    // Uses world-space UV like the tutorial (not mesh UVs)
+    // HexMetrics: OuterRadius=10, InnerRadius=8.66
+    if (show_grid) {
+        vec2 gridUV;
+        gridUV.x = world_position.x * (1.0 / (4.0 * 8.66025404));  // 4 * innerRadius
+        gridUV.y = world_position.z * (1.0 / (2.0 * 10.0 * 1.5));  // 2 * outerRadius * 1.5 = 30
+        vec4 grid = texture(grid_texture, gridUV);
+        // Multiplicative blend like tutorial (darken where grid lines are)
+        blended = blended * grid.rgb;
     }
 
     ALBEDO = blended;

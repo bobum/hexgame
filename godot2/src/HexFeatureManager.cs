@@ -31,6 +31,90 @@ public partial class HexFeatureManager : Node3D
     // Level 1 threshold = 0.4, Level 2 = 0.6, Level 3 = 0.8
     private static readonly float[] FeatureThresholds = { 0.0f, 0.4f, 0.6f, 0.8f };
 
+    // Static prefab cache - loaded once at startup to avoid repeated directory scans
+    private static bool _prefabsPreloaded;
+    private static PackedScene[][]? _urbanPrefabsCache;
+    private static PackedScene[][]? _farmPrefabsCache;
+    private static PackedScene[][]? _plantPrefabsCache;
+    private static PackedScene? _wallTowerPrefabCache;
+    private static PackedScene? _bridgePrefabCache;
+    private static PackedScene[]? _specialPrefabsCache;
+
+    /// <summary>
+    /// Pre-loads all feature prefabs into static cache.
+    /// Call once at startup before creating chunks for better performance.
+    /// </summary>
+    public static void PreloadPrefabs()
+    {
+        if (_prefabsPreloaded) return;
+
+        HexDebug.PrintFeature("[PRELOAD] Pre-loading feature prefabs...");
+
+        // Urban prefabs (3 levels)
+        _urbanPrefabsCache = new PackedScene[3][];
+        _urbanPrefabsCache[0] = LoadPrefabArrayStatic("res://prefabs/features/urban/level1/");
+        _urbanPrefabsCache[1] = LoadPrefabArrayStatic("res://prefabs/features/urban/level2/");
+        _urbanPrefabsCache[2] = LoadPrefabArrayStatic("res://prefabs/features/urban/level3/");
+
+        // Farm prefabs (3 levels)
+        _farmPrefabsCache = new PackedScene[3][];
+        _farmPrefabsCache[0] = LoadPrefabArrayStatic("res://prefabs/features/farm/level1/");
+        _farmPrefabsCache[1] = LoadPrefabArrayStatic("res://prefabs/features/farm/level2/");
+        _farmPrefabsCache[2] = LoadPrefabArrayStatic("res://prefabs/features/farm/level3/");
+
+        // Plant prefabs (3 levels)
+        _plantPrefabsCache = new PackedScene[3][];
+        _plantPrefabsCache[0] = LoadPrefabArrayStatic("res://prefabs/features/plant/level1/");
+        _plantPrefabsCache[1] = LoadPrefabArrayStatic("res://prefabs/features/plant/level2/");
+        _plantPrefabsCache[2] = LoadPrefabArrayStatic("res://prefabs/features/plant/level3/");
+
+        // Special prefabs
+        _wallTowerPrefabCache = GD.Load<PackedScene>("res://prefabs/features/wall_tower.tscn");
+        _bridgePrefabCache = GD.Load<PackedScene>("res://prefabs/features/bridge.tscn");
+        _specialPrefabsCache = new PackedScene[3];
+        _specialPrefabsCache[0] = GD.Load<PackedScene>("res://prefabs/features/special/castle.tscn");
+        _specialPrefabsCache[1] = GD.Load<PackedScene>("res://prefabs/features/special/ziggurat.tscn");
+        _specialPrefabsCache[2] = GD.Load<PackedScene>("res://prefabs/features/special/megaflora.tscn");
+
+        _prefabsPreloaded = true;
+        HexDebug.PrintFeature("[PRELOAD] Feature prefabs pre-loaded");
+    }
+
+    /// <summary>
+    /// Static version of LoadPrefabArray for use during preloading.
+    /// </summary>
+    private static PackedScene[] LoadPrefabArrayStatic(string directoryPath)
+    {
+        var scenes = new List<PackedScene>();
+
+        if (!DirAccess.DirExistsAbsolute(directoryPath))
+        {
+            return scenes.ToArray();
+        }
+
+        var dir = DirAccess.Open(directoryPath);
+        if (dir != null)
+        {
+            dir.ListDirBegin();
+            string fileName = dir.GetNext();
+            while (fileName != "")
+            {
+                if (!dir.CurrentIsDir() && fileName.EndsWith(".tscn"))
+                {
+                    var scene = GD.Load<PackedScene>(directoryPath + fileName);
+                    if (scene != null)
+                    {
+                        scenes.Add(scene);
+                    }
+                }
+                fileName = dir.GetNext();
+            }
+            dir.ListDirEnd();
+        }
+
+        return scenes.ToArray();
+    }
+
     /// <summary>
     /// Initializes feature collections programmatically.
     /// Called after manager is added to scene tree.
@@ -42,8 +126,31 @@ public partial class HexFeatureManager : Node3D
         _farmCollections = new HexFeatureCollection[3];
         _plantCollections = new HexFeatureCollection[3];
 
-        // Load prefabs programmatically
-        LoadFeaturePrefabs();
+        // Use pre-loaded prefabs from static cache if available, otherwise load on demand
+        if (_prefabsPreloaded)
+        {
+            // Use cached prefabs (fast path)
+            for (int i = 0; i < 3; i++)
+            {
+                _urbanCollections[i] = new HexFeatureCollection { Prefabs = _urbanPrefabsCache![i] };
+                _farmCollections[i] = new HexFeatureCollection { Prefabs = _farmPrefabsCache![i] };
+                _plantCollections[i] = new HexFeatureCollection { Prefabs = _plantPrefabsCache![i] };
+            }
+            _wallTowerPrefab = _wallTowerPrefabCache;
+            _bridgePrefab = _bridgePrefabCache;
+            _specialPrefabs = _specialPrefabsCache!;
+        }
+        else
+        {
+            // Fallback: load prefabs on demand (slower, but works without preloading)
+            LoadFeaturePrefabs();
+            _wallTowerPrefab = GD.Load<PackedScene>("res://prefabs/features/wall_tower.tscn");
+            _bridgePrefab = GD.Load<PackedScene>("res://prefabs/features/bridge.tscn");
+            _specialPrefabs = new PackedScene[3];
+            _specialPrefabs[0] = GD.Load<PackedScene>("res://prefabs/features/special/castle.tscn");
+            _specialPrefabs[1] = GD.Load<PackedScene>("res://prefabs/features/special/ziggurat.tscn");
+            _specialPrefabs[2] = GD.Load<PackedScene>("res://prefabs/features/special/megaflora.tscn");
+        }
 
         // Tutorial 10: Create wall mesh
         _walls = new HexMesh();
@@ -59,24 +166,7 @@ public partial class HexFeatureManager : Node3D
         wallMaterial.CullMode = BaseMaterial3D.CullModeEnum.Disabled; // Show both sides
         _walls.MaterialOverride = wallMaterial;
 
-        // Tutorial 11: Load wall tower prefab
-        _wallTowerPrefab = GD.Load<PackedScene>("res://prefabs/features/wall_tower.tscn");
-
-        // Tutorial 11: Load bridge prefab
-        _bridgePrefab = GD.Load<PackedScene>("res://prefabs/features/bridge.tscn");
-
-        // Tutorial 11: Load special feature prefabs
-        _specialPrefabs = new PackedScene[3];
-        _specialPrefabs[0] = GD.Load<PackedScene>("res://prefabs/features/special/castle.tscn");
-        _specialPrefabs[1] = GD.Load<PackedScene>("res://prefabs/features/special/ziggurat.tscn");
-        _specialPrefabs[2] = GD.Load<PackedScene>("res://prefabs/features/special/megaflora.tscn");
-
-        GD.Print($"HexFeatureManager.Initialize: Loaded prefabs:");
-        GD.Print($"  Bridge: {(_bridgePrefab != null ? "OK" : "FAILED")}");
-        GD.Print($"  WallTower: {(_wallTowerPrefab != null ? "OK" : "FAILED")}");
-        GD.Print($"  Castle: {(_specialPrefabs[0] != null ? "OK" : "FAILED")}");
-        GD.Print($"  Ziggurat: {(_specialPrefabs[1] != null ? "OK" : "FAILED")}");
-        GD.Print($"  Megaflora: {(_specialPrefabs[2] != null ? "OK" : "FAILED")}");
+        HexDebug.PrintFeature($"HexFeatureManager.Initialize: Prefabs ready (preloaded={_prefabsPreloaded})");
     }
 
     /// <summary>
@@ -592,7 +682,7 @@ public partial class HexFeatureManager : Node3D
     /// <param name="position">World position for placement</param>
     public void AddSpecialFeature(HexCell cell, Vector3 position)
     {
-        GD.Print($"AddSpecialFeature called: cell={cell.Coordinates}, SpecialIndex={cell.SpecialIndex}, pos={position}");
+        HexDebug.PrintFeature($"AddSpecialFeature called: cell={cell.Coordinates}, SpecialIndex={cell.SpecialIndex}, pos={position}");
 
         if (_container == null || _specialPrefabs == null)
         {
@@ -607,7 +697,7 @@ public partial class HexFeatureManager : Node3D
             return;
         }
 
-        GD.Print($"  Instantiating special feature type {index}");
+        HexDebug.PrintFeature($"  Instantiating special feature type {index}");
         HexHash hash = HexMetrics.SampleHashGrid(position);
         var feature = _specialPrefabs[index].Instantiate<Node3D>();
 
@@ -618,6 +708,6 @@ public partial class HexFeatureManager : Node3D
         feature.RotationDegrees = new Vector3(0f, 360f * hash.e, 0f);
 
         _container.AddChild(feature);
-        GD.Print($"  Special feature added at {feature.Position}");
+        HexDebug.PrintFeature($"  Special feature added at {feature.Position}");
     }
 }
