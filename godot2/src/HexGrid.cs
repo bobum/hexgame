@@ -22,10 +22,10 @@ public partial class HexGrid : Node3D
     [Export] public bool GenerateTestData = true;
 
     /// <summary>
-    /// When true, rivers completely block movement without a bridge (default).
+    /// When true, rivers completely block movement without a bridge.
     /// When false, rivers can be crossed but at a higher cost (RiverCrossingCost).
     /// </summary>
-    [Export] public bool RiversBlockMovement = true;
+    [Export] public bool RiversBlockMovement = false;
 
     /// <summary>
     /// Movement cost to cross a river without a bridge (when RiversBlockMovement is false).
