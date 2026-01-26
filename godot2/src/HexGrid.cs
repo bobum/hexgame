@@ -21,6 +21,18 @@ public partial class HexGrid : Node3D
     /// </summary>
     [Export] public bool GenerateTestData = true;
 
+    /// <summary>
+    /// When true, rivers completely block movement without a bridge (default).
+    /// When false, rivers can be crossed but at a higher cost (RiverCrossingCost).
+    /// </summary>
+    [Export] public bool RiversBlockMovement = true;
+
+    /// <summary>
+    /// Movement cost to cross a river without a bridge (when RiversBlockMovement is false).
+    /// Compare to: Road = 1, Flat terrain = 5, Slope = 10.
+    /// </summary>
+    [Export] public int RiverCrossingCost = 20;
+
     private int _cellCountX;
     private int _cellCountZ;
     private HexCell[] _cells = null!;
@@ -737,31 +749,31 @@ public partial class HexGrid : Node3D
             return -1;
         }
 
-        // Custom extension: Rivers block movement (not in original Catlike tutorials)
-        // Check 1: Rivers block movement at edges without road/bridge
+        // Custom extension: Rivers affect movement (not in original Catlike tutorials)
+        // Check 1: River edge crossing
         bool fromHasRiver = fromCell.HasRiverThroughEdge(direction);
         bool toHasRiver = toCell.HasRiverThroughEdge(direction.Opposite());
+        bool crossingRiverEdge = fromHasRiver || toHasRiver;
 
-        if (fromHasRiver || toHasRiver)
-        {
-            return -1; // Cannot cross river edge without bridge
-        }
-
-        // Check 2: Cannot cross river channel inside a cell (custom extension)
-        // If fromCell has a through-flowing river, check if our path crosses it
+        // Check 2: River channel crossing inside a cell
+        bool crossingRiverChannel = false;
         if (fromCell.HasIncomingRiver && fromCell.HasOutgoingRiver && fromCell.PathFrom != null)
         {
-            // Determine how we entered fromCell (from fromCell's perspective)
-            // GetDirectionToNeighbor gives direction FROM PathFrom TO fromCell
-            // We need the opposite: direction FROM fromCell's perspective that PathFrom is at
             HexDirection dirToPathFrom = GetDirectionToNeighbor(fromCell, fromCell.PathFrom);
-            // We entered FROM that direction (PathFrom is in that direction, we came from there)
             HexDirection entryDirection = dirToPathFrom;
-            // Check if path from entry to exit crosses the river channel
-            if (fromCell.WouldCrossRiverChannel(entryDirection, direction))
+            crossingRiverChannel = fromCell.WouldCrossRiverChannel(entryDirection, direction);
+        }
+
+        bool crossingRiver = crossingRiverEdge || crossingRiverChannel;
+
+        if (crossingRiver)
+        {
+            if (RiversBlockMovement)
             {
-                return -1; // Cannot cross river channel without bridge
+                return -1; // Rivers completely block movement without bridge
             }
+            // Rivers don't block but add extra cost
+            return RiverCrossingCost;
         }
 
         // Normal terrain cost
