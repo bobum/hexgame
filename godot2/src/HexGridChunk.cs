@@ -163,7 +163,7 @@ public partial class HexGridChunk : Node3D
             _roadMaterial = GD.Load<Material>("res://materials/road_material.tres");
             if (_roadMaterial != null)
             {
-                GD.Print("[ROAD] Road material loaded successfully");
+                HexDebug.PrintMaterial("[ROAD] Road material loaded successfully");
             }
             else
             {
@@ -220,7 +220,7 @@ public partial class HexGridChunk : Node3D
             _terrainMaterial = GD.Load<Material>("res://materials/terrain_material.tres");
             if (_terrainMaterial != null)
             {
-                GD.Print("[TERRAIN] Terrain material loaded successfully");
+                HexDebug.PrintMaterial("[TERRAIN] Terrain material loaded successfully");
             }
             else
             {
@@ -236,11 +236,11 @@ public partial class HexGridChunk : Node3D
             {
                 shaderMat.SetShaderParameter("terrain_textures", textureArray);
                 shaderMat.SetShaderParameter("use_textures", true);
-                GD.Print("[TERRAIN] Texture array assigned and textures enabled");
+                HexDebug.PrintMaterial("[TERRAIN] Texture array assigned and textures enabled");
             }
             else
             {
-                GD.Print("[TERRAIN] Using color fallback (texture array failed to load)");
+                HexDebug.PrintMaterial("[TERRAIN] Using color fallback (texture array failed to load)");
             }
 
             // Tutorial 15: Load and assign grid texture (always try, regardless of terrain textures)
@@ -252,7 +252,7 @@ public partial class HexGridChunk : Node3D
             {
                 shaderMat.SetShaderParameter("grid_texture", _gridTexture);
                 shaderMat.SetShaderParameter("show_grid", false);  // Off by default
-                GD.Print("[TERRAIN] Grid texture loaded successfully");
+                HexDebug.PrintMaterial("[TERRAIN] Grid texture loaded successfully");
             }
             else
             {
@@ -264,9 +264,25 @@ public partial class HexGridChunk : Node3D
         }
         else if (_terrainMaterial != null && !_terrainTexturesApplied)
         {
-            GD.Print("[TERRAIN] Using color fallback (material is not ShaderMaterial)");
+            HexDebug.PrintMaterial("[TERRAIN] Using color fallback (material is not ShaderMaterial)");
             _terrainTexturesApplied = true;
         }
+    }
+
+    /// <summary>
+    /// Pre-loads all materials at startup for better performance.
+    /// Call this before creating chunks to avoid on-demand loading.
+    /// </summary>
+    public static void PreloadMaterials()
+    {
+        HexDebug.PrintMaterial("[PRELOAD] Pre-loading all materials...");
+        LoadTerrainMaterial();
+        LoadRiverMaterial();
+        LoadRoadMaterial();
+        LoadWaterMaterial();
+        LoadWaterShoreMaterial();
+        LoadEstuaryMaterial();
+        HexDebug.PrintMaterial("[PRELOAD] All materials pre-loaded");
     }
 
     /// <summary>

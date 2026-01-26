@@ -106,11 +106,11 @@ public partial class HexMesh : MeshInstance3D
     {
         if (_vertices.Count == 0)
         {
-            GD.Print($"[Apply] {Name}: No vertices, skipping");
+            HexDebug.PrintTriangulation($"[Apply] {Name}: No vertices, skipping");
             return;
         }
 
-        GD.Print($"[Apply] {Name}: Building mesh with {_vertices.Count} vertices, {_triangles.Count} triangle indices, {_uvs.Count} UVs, UseUVCoordinates={UseUVCoordinates}");
+        HexDebug.PrintTriangulation($"[Apply] {Name}: Building mesh with {_vertices.Count} vertices, {_triangles.Count} triangle indices, {_uvs.Count} UVs, UseUVCoordinates={UseUVCoordinates}");
 
         // Build the mesh using SurfaceTool with flat normals per-triangle
         var st = new SurfaceTool();
@@ -210,11 +210,11 @@ public partial class HexMesh : MeshInstance3D
         {
             var arrays = _hexMesh.SurfaceGetArrays(0);
             var verts = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
-            GD.Print($"[Apply] {Name}: Committed mesh has {verts.Length} vertices, {_hexMesh.GetSurfaceCount()} surfaces");
+            HexDebug.PrintTriangulation($"[Apply] {Name}: Committed mesh has {verts.Length} vertices, {_hexMesh.GetSurfaceCount()} surfaces");
         }
         else
         {
-            GD.Print($"[Apply] {Name}: WARNING - Committed mesh has no surfaces!");
+            HexDebug.PrintTriangulation($"[Apply] {Name}: WARNING - Committed mesh has no surfaces!");
         }
     }
 
@@ -289,9 +289,9 @@ public partial class HexMesh : MeshInstance3D
         }
         if (_roads != null)
         {
-            GD.Print($"[ROAD DEBUG] Before _roads.Apply(): vertices={_roads.VertexCount}");
+            HexDebug.PrintRoad($"[ROAD DEBUG] Before _roads.Apply(): vertices={_roads.VertexCount}");
             _roads.Apply();
-            GD.Print($"[ROAD DEBUG] After _roads.Apply(): Mesh={_roads.Mesh != null}, Material={_roads.MaterialOverride != null}");
+            HexDebug.PrintRoad($"[ROAD DEBUG] After _roads.Apply(): Mesh={_roads.Mesh != null}, Material={_roads.MaterialOverride != null}");
         }
 
         // Tutorial 8: Apply water meshes
@@ -408,7 +408,7 @@ public partial class HexMesh : MeshInstance3D
         // DEBUG: Check what's happening with roads vs rivers
         if (cell.HasRoads)
         {
-            GD.Print($"[TRIANGULATE] Cell {cell.Coordinates} dir={direction} HasRoads=true HasRiver={cell.HasRiver}");
+            HexDebug.PrintRoad($"[TRIANGULATE] Cell {cell.Coordinates} dir={direction} HasRoads=true HasRiver={cell.HasRiver}");
         }
 
         // Tutorial 6-7: Check for rivers and route to appropriate triangulation
@@ -454,7 +454,7 @@ public partial class HexMesh : MeshInstance3D
 
         if (cell.HasRoads)
         {
-            GD.Print($"  [ROAD DEBUG] Cell {cell.Coordinates} dir={direction} HasRoads=true, HasRoadThroughEdge={cell.HasRoadThroughEdge(direction)}");
+            HexDebug.PrintRoad($"  [ROAD DEBUG] Cell {cell.Coordinates} dir={direction} HasRoads=true, HasRoadThroughEdge={cell.HasRoadThroughEdge(direction)}");
             Vector2 interpolators = GetRoadInterpolators(direction, cell);
             TriangulateRoad(
                 center,
@@ -1577,11 +1577,11 @@ public partial class HexMesh : MeshInstance3D
     {
         if (_roads == null)
         {
-            GD.Print($"  [ROAD DEBUG] TriangulateRoad called but _roads is NULL!");
+            HexDebug.PrintRoad($"  [ROAD DEBUG] TriangulateRoad called but _roads is NULL!");
             return;
         }
 
-        GD.Print($"  [ROAD DEBUG] TriangulateRoad: hasRoadThroughCellEdge={hasRoadThroughCellEdge}, _roads vertex count before={_roads.VertexCount}");
+        HexDebug.PrintRoad($"  [ROAD DEBUG] TriangulateRoad: hasRoadThroughCellEdge={hasRoadThroughCellEdge}, _roads vertex count before={_roads.VertexCount}");
 
         if (hasRoadThroughCellEdge)
         {

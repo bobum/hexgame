@@ -40,6 +40,9 @@ public partial class HexGrid : Node3D
         // Tutorial 9: Initialize hash grid for feature placement
         HexMetrics.InitializeHashGrid(1234);
 
+        // Pre-load all materials before creating chunks for better performance
+        HexGridChunk.PreloadMaterials();
+
         _cellCountX = ChunkCountX * HexMetrics.ChunkSizeX;
         _cellCountZ = ChunkCountZ * HexMetrics.ChunkSizeZ;
 
@@ -137,7 +140,7 @@ public partial class HexGrid : Node3D
                 }
             }
         }
-        GD.Print($"[GRID] show_grid = {visible} (updated {updated} chunks)");
+        HexDebug.PrintMaterial($"[GRID] show_grid = {visible} (updated {updated} chunks)");
     }
 
     /// <summary>
@@ -498,7 +501,7 @@ public partial class HexGrid : Node3D
         if (NoiseSource != null)
         {
             HexMetrics.NoiseSource = NoiseSource.GetImage();
-            GD.Print($"Noise texture from export: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
+            HexDebug.PrintMaterial($"Noise texture from export: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
         }
         else
         {
@@ -507,7 +510,7 @@ public partial class HexGrid : Node3D
             if (texture != null)
             {
                 HexMetrics.NoiseSource = texture.GetImage();
-                GD.Print($"Noise texture loaded: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
+                HexDebug.PrintMaterial($"Noise texture loaded: {HexMetrics.NoiseSource.GetWidth()}x{HexMetrics.NoiseSource.GetHeight()}");
             }
             else
             {

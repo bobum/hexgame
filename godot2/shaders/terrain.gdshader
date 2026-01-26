@@ -99,8 +99,6 @@ void fragment() {
         vec4 grid = texture(grid_texture, gridUV);
         // Multiplicative blend like tutorial (darken where grid lines are)
         blended = blended * grid.rgb;
-        // DEBUG: Add slight red tint to verify grid mode is active
-        blended.r = min(blended.r + 0.15, 1.0);
     }
 
     ALBEDO = blended;

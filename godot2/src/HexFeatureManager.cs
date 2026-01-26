@@ -71,12 +71,12 @@ public partial class HexFeatureManager : Node3D
         _specialPrefabs[1] = GD.Load<PackedScene>("res://prefabs/features/special/ziggurat.tscn");
         _specialPrefabs[2] = GD.Load<PackedScene>("res://prefabs/features/special/megaflora.tscn");
 
-        GD.Print($"HexFeatureManager.Initialize: Loaded prefabs:");
-        GD.Print($"  Bridge: {(_bridgePrefab != null ? "OK" : "FAILED")}");
-        GD.Print($"  WallTower: {(_wallTowerPrefab != null ? "OK" : "FAILED")}");
-        GD.Print($"  Castle: {(_specialPrefabs[0] != null ? "OK" : "FAILED")}");
-        GD.Print($"  Ziggurat: {(_specialPrefabs[1] != null ? "OK" : "FAILED")}");
-        GD.Print($"  Megaflora: {(_specialPrefabs[2] != null ? "OK" : "FAILED")}");
+        HexDebug.PrintFeature($"HexFeatureManager.Initialize: Loaded prefabs:");
+        HexDebug.PrintFeature($"  Bridge: {(_bridgePrefab != null ? "OK" : "FAILED")}");
+        HexDebug.PrintFeature($"  WallTower: {(_wallTowerPrefab != null ? "OK" : "FAILED")}");
+        HexDebug.PrintFeature($"  Castle: {(_specialPrefabs[0] != null ? "OK" : "FAILED")}");
+        HexDebug.PrintFeature($"  Ziggurat: {(_specialPrefabs[1] != null ? "OK" : "FAILED")}");
+        HexDebug.PrintFeature($"  Megaflora: {(_specialPrefabs[2] != null ? "OK" : "FAILED")}");
     }
 
     /// <summary>
@@ -592,7 +592,7 @@ public partial class HexFeatureManager : Node3D
     /// <param name="position">World position for placement</param>
     public void AddSpecialFeature(HexCell cell, Vector3 position)
     {
-        GD.Print($"AddSpecialFeature called: cell={cell.Coordinates}, SpecialIndex={cell.SpecialIndex}, pos={position}");
+        HexDebug.PrintFeature($"AddSpecialFeature called: cell={cell.Coordinates}, SpecialIndex={cell.SpecialIndex}, pos={position}");
 
         if (_container == null || _specialPrefabs == null)
         {
@@ -607,7 +607,7 @@ public partial class HexFeatureManager : Node3D
             return;
         }
 
-        GD.Print($"  Instantiating special feature type {index}");
+        HexDebug.PrintFeature($"  Instantiating special feature type {index}");
         HexHash hash = HexMetrics.SampleHashGrid(position);
         var feature = _specialPrefabs[index].Instantiate<Node3D>();
 
@@ -618,6 +618,6 @@ public partial class HexFeatureManager : Node3D
         feature.RotationDegrees = new Vector3(0f, 360f * hash.e, 0f);
 
         _container.AddChild(feature);
-        GD.Print($"  Special feature added at {feature.Position}");
+        HexDebug.PrintFeature($"  Special feature added at {feature.Position}");
     }
 }
