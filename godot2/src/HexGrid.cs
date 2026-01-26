@@ -15,6 +15,12 @@ public partial class HexGrid : Node3D
     [Export] public Texture2D? NoiseSource;
     [Export] public Material? HexMaterial;
 
+    /// <summary>
+    /// When true, generates test patterns (rivers, roads, water, features, etc.) at startup.
+    /// Set to false for production or when loading saved maps.
+    /// </summary>
+    [Export] public bool GenerateTestData = true;
+
     private int _cellCountX;
     private int _cellCountZ;
     private HexCell[] _cells = null!;
@@ -40,35 +46,71 @@ public partial class HexGrid : Node3D
         // Tutorial 9: Initialize hash grid for feature placement
         HexMetrics.InitializeHashGrid(1234);
 
-        // Pre-load all materials before creating chunks for better performance
+        // Pre-load all materials and prefabs before creating chunks for better performance
         HexGridChunk.PreloadMaterials();
+        HexFeatureManager.PreloadPrefabs();
 
         _cellCountX = ChunkCountX * HexMetrics.ChunkSizeX;
         _cellCountZ = ChunkCountZ * HexMetrics.ChunkSizeZ;
 
         CreateChunks();
+
+        // Suppress chunk refreshes during batch initialization
+        // This prevents ~1800+ redundant mesh rebuilds during setup
+        SetChunkRefreshSuppression(true);
+
         CreateCells();
 
-        // Tutorial 6: Generate test rivers for visual verification
-        GenerateTestRivers();
+        if (GenerateTestData)
+        {
+            // Tutorial 6: Generate test rivers for visual verification
+            GenerateTestRivers();
 
-        // Tutorial 7: Generate test roads for visual verification
-        GenerateTestRoads();
+            // Tutorial 7: Generate test roads for visual verification
+            GenerateTestRoads();
 
-        // Tutorial 8: Generate test water bodies for visual verification
-        GenerateTestWater();
+            // Tutorial 8: Generate test water bodies for visual verification
+            GenerateTestWater();
 
-        // Tutorial 9: Generate test features for visual verification
-        GenerateTestFeatures();
+            // Tutorial 9: Generate test features for visual verification
+            GenerateTestFeatures();
 
-        // Tutorial 10: Generate test walls for visual verification
-        GenerateTestWalls();
+            // Tutorial 10: Generate test walls for visual verification
+            GenerateTestWalls();
 
-        // Tutorial 11: Generate test bridges for visual verification
-        GenerateTestBridges();
+            // Tutorial 11: Generate test bridges for visual verification
+            GenerateTestBridges();
 
-        // Tutorial 11: Generate test special features for visual verification
-        GenerateTestSpecialFeatures();
+            // Tutorial 11: Generate test special features for visual verification
+            GenerateTestSpecialFeatures();
+        }
+
+        // Re-enable refreshes and trigger one final refresh per chunk
+        SetChunkRefreshSuppression(false);
+        RefreshAllChunks();
+    }
+
+    /// <summary>
+    /// Sets the refresh suppression state for all chunks.
+    /// Used during batch initialization to prevent redundant mesh rebuilds.
+    /// </summary>
+    private void SetChunkRefreshSuppression(bool suppress)
+    {
+        for (int i = 0; i < _chunks.Length; i++)
+        {
+            _chunks[i].SuppressRefresh = suppress;
+        }
+    }
+
+    /// <summary>
+    /// Triggers a refresh on all chunks. Called once after batch initialization.
+    /// </summary>
+    private void RefreshAllChunks()
+    {
+        for (int i = 0; i < _chunks.Length; i++)
+        {
+            _chunks[i].Refresh();
+        }
     }
 
     public override void _UnhandledInput(InputEvent @event)

@@ -309,11 +309,18 @@ public partial class HexGridChunk : Node3D
     }
 
     /// <summary>
+    /// When true, suppresses chunk refreshes for batch operations during initialization.
+    /// Set to true before bulk cell modifications, then false and call Refresh() once when done.
+    /// </summary>
+    public bool SuppressRefresh { get; set; }
+
+    /// <summary>
     /// Marks this chunk for mesh refresh on next frame.
     /// Uses Godot's SetProcess pattern as equivalent to Unity's LateUpdate.
     /// </summary>
     public void Refresh()
     {
+        if (SuppressRefresh) return;
         _needsRefresh = true;
         SetProcess(true);
     }
