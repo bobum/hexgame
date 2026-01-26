@@ -43,6 +43,17 @@ public partial class HexGrid : Node3D
     private HexCell? _searchToCell;
     private bool _currentPathExists;
 
+    // Tutorial 16: Ground plane for navigation raycasting
+    private StaticBody3D? _groundPlane;
+
+    // Debug: On-screen label for debugging
+    private Label? _debugLabel;
+
+    // Debug: Simple highlight box (temporary until cell highlighting works)
+    private MeshInstance3D? _startHighlight;
+    private MeshInstance3D? _endHighlight;
+    private List<MeshInstance3D> _pathHighlights = new List<MeshInstance3D>();
+
     public override void _Ready()
     {
         // Initialize noise texture for perturbation
@@ -93,6 +104,62 @@ public partial class HexGrid : Node3D
         // Re-enable refreshes and trigger one final refresh per chunk
         SetChunkRefreshSuppression(false);
         RefreshAllChunks();
+
+        // Tutorial 16: Create ground plane for navigation raycasting
+        CreateGroundPlane();
+
+        // Debug: Create on-screen debug label
+        CreateDebugLabel();
+    }
+
+    /// <summary>
+    /// Creates an invisible ground plane for navigation mode raycasting.
+    /// Tutorial 16: Required for mouse picking in pathfinding.
+    /// </summary>
+    private void CreateGroundPlane()
+    {
+        _groundPlane = new StaticBody3D();
+        _groundPlane.Name = "NavigationGroundPlane";
+        AddChild(_groundPlane);
+
+        var collisionShape = new CollisionShape3D();
+        var shape = new WorldBoundaryShape3D();
+        shape.Plane = new Plane(Vector3.Up, 0f);
+        collisionShape.Shape = shape;
+        _groundPlane.AddChild(collisionShape);
+
+        GD.Print("[HexGrid] Navigation ground plane created for raycasting");
+    }
+
+    /// <summary>
+    /// Creates an on-screen debug label for visual feedback.
+    /// </summary>
+    private void CreateDebugLabel()
+    {
+        var canvas = new CanvasLayer();
+        canvas.Name = "DebugCanvas";
+        AddChild(canvas);
+
+        _debugLabel = new Label();
+        _debugLabel.Name = "DebugLabel";
+        _debugLabel.Position = new Vector2(10, 10);
+        _debugLabel.Size = new Vector2(600, 200);
+        _debugLabel.AddThemeColorOverride("font_color", new Color(1, 1, 0)); // Yellow
+        _debugLabel.AddThemeFontSizeOverride("font_size", 18);
+        _debugLabel.Text = "Debug: Ready (Press E for Nav mode, then Shift+Click)";
+        canvas.AddChild(_debugLabel);
+    }
+
+    /// <summary>
+    /// Updates the on-screen debug label.
+    /// </summary>
+    private void DebugLog(string message)
+    {
+        GD.Print(message);
+        if (_debugLabel != null)
+        {
+            _debugLabel.Text = message;
+        }
     }
 
     /// <summary>
@@ -118,8 +185,14 @@ public partial class HexGrid : Node3D
         }
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _Input(InputEvent @event)
     {
+        // Debug: Log all mouse button events
+        if (@event is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
+        {
+            DebugLog($"Click! editMode={_editMode}, shift={mb.ShiftPressed}");
+        }
+
         if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
         {
             if (keyEvent.Keycode == Key.L)
@@ -132,7 +205,7 @@ public partial class HexGrid : Node3D
             {
                 _editMode = !_editMode;
                 SetEditMode(_editMode);
-                GD.Print($"Mode: {(_editMode ? "Edit" : "Navigation")}");
+                DebugLog($"Mode: {(_editMode ? "EDIT" : "NAVIGATION")} - Now {(_editMode ? "press E again" : "Shift+Click to set start")}");
             }
         }
         // Tutorial 15: Handle mouse clicks for navigation mode
@@ -158,12 +231,36 @@ public partial class HexGrid : Node3D
 
         if (editMode)
         {
-            // Tutorial 16: Clear path and selection when returning to edit mode
+            // Returning to edit mode
             ClearPath();
             _searchFromCell = null;
             _searchToCell = null;
-            // Clear distance labels
+            // Restore coordinate labels
+            RestoreCoordinateLabels();
+            // Hide start/end highlights
+            if (_startHighlight != null) _startHighlight.Visible = false;
+            if (_endHighlight != null) _endHighlight.Visible = false;
+        }
+        else
+        {
+            // Entering navigation mode - clear coordinate labels (distances will fill them)
             ClearDistances();
+        }
+    }
+
+    /// <summary>
+    /// Restores coordinate labels on all cells.
+    /// Called when returning to edit mode.
+    /// </summary>
+    private void RestoreCoordinateLabels()
+    {
+        for (int i = 0; i < _cells.Length; i++)
+        {
+            var cell = _cells[i];
+            if (cell.UiLabel != null)
+            {
+                cell.UiLabel.Text = cell.Coordinates.ToStringOnSeparateLines();
+            }
         }
     }
 
@@ -200,9 +297,15 @@ public partial class HexGrid : Node3D
     /// </summary>
     private void HandleNavigationClick(InputEventMouseButton mouseEvent)
     {
+        DebugLog($"NavClick: Shift={mouseEvent.ShiftPressed}");
+
         // Get camera for raycasting
         var camera = GetViewport().GetCamera3D();
-        if (camera == null) return;
+        if (camera == null)
+        {
+            DebugLog("ERROR: No camera!");
+            return;
+        }
 
         // Raycast from mouse position
         var from = camera.ProjectRayOrigin(mouseEvent.Position);
@@ -213,39 +316,85 @@ public partial class HexGrid : Node3D
         var query = PhysicsRayQueryParameters3D.Create(from, to);
         var result = spaceState.IntersectRay(query);
 
-        if (result.Count > 0)
+        if (result.Count == 0)
         {
-            Vector3 hitPos = (Vector3)result["position"];
-            HexCell? cell = GetCell(hitPos);
-            if (cell != null)
-            {
-                // Tutorial 16: Shift+Click for start cell, regular click for destination
-                if (Input.IsKeyPressed(Key.Shift))
-                {
-                    // Set start cell
-                    if (_searchFromCell != cell)
-                    {
-                        if (_searchFromCell != null)
-                        {
-                            _searchFromCell.DisableHighlight();
-                        }
-                        _searchFromCell = cell;
-                        _searchFromCell.EnableHighlight(new Color(0, 0, 1)); // Blue
+            DebugLog("Raycast hit nothing!");
+            return;
+        }
 
-                        if (_searchToCell != null)
-                        {
-                            FindPath(_searchFromCell, _searchToCell);
-                        }
-                    }
-                }
-                else if (_searchFromCell != null && _searchFromCell != cell)
-                {
-                    // Set destination cell
-                    _searchToCell = cell;
-                    FindPath(_searchFromCell, _searchToCell);
-                }
+        Vector3 hitPos = (Vector3)result["position"];
+        HexCell? cell = GetCell(hitPos);
+        if (cell == null)
+        {
+            DebugLog($"No cell at {hitPos}");
+            return;
+        }
+
+        // Tutorial 16: Shift+Click for start cell, regular click for destination
+        bool shiftHeld = mouseEvent.ShiftPressed;
+
+        if (shiftHeld)
+        {
+            // Set start cell
+            DebugLog($"START: {cell.Coordinates}");
+            _searchFromCell = cell;
+
+            // Create/move start highlight using cell's stored position (has correct elevation)
+            if (_startHighlight == null)
+            {
+                _startHighlight = CreateHighlightBox(new Color(0, 0, 1)); // Blue
+                AddChild(_startHighlight);
+            }
+            Vector3 startPos = cell.Position;
+            _startHighlight.GlobalPosition = new Vector3(startPos.X, startPos.Y + 3f, startPos.Z);
+            _startHighlight.Visible = true;
+
+            if (_searchToCell != null)
+            {
+                FindPath(_searchFromCell, _searchToCell);
             }
         }
+        else if (_searchFromCell != null && _searchFromCell != cell)
+        {
+            // Set destination cell
+            DebugLog($"END: {cell.Coordinates}");
+            _searchToCell = cell;
+
+            // Create/move end highlight using cell's stored position (has correct elevation)
+            if (_endHighlight == null)
+            {
+                _endHighlight = CreateHighlightBox(new Color(1, 0, 0)); // Red
+                AddChild(_endHighlight);
+            }
+            Vector3 endPos = cell.Position;
+            _endHighlight.GlobalPosition = new Vector3(endPos.X, endPos.Y + 3f, endPos.Z);
+            _endHighlight.Visible = true;
+
+            FindPath(_searchFromCell, _searchToCell);
+        }
+        else
+        {
+            DebugLog($"Click ignored - Shift+Click first to set start");
+        }
+    }
+
+    /// <summary>
+    /// Creates a simple box mesh for highlighting cells.
+    /// </summary>
+    private MeshInstance3D CreateHighlightBox(Color color)
+    {
+        var meshInstance = new MeshInstance3D();
+        var box = new BoxMesh();
+        box.Size = new Vector3(10f, 6f, 10f);  // Big obvious box
+        meshInstance.Mesh = box;
+
+        var material = new StandardMaterial3D();
+        material.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        material.AlbedoColor = color;
+        meshInstance.MaterialOverride = material;
+
+        meshInstance.Visible = false;
+        return meshInstance;
     }
 
     // Tutorial 16: Two-point pathfinding methods
@@ -259,9 +408,7 @@ public partial class HexGrid : Node3D
         // Clear any previous path
         ClearPath();
 
-        // Highlight start and end cells
-        fromCell.EnableHighlight(new Color(0, 0, 1)); // Blue
-        toCell.EnableHighlight(new Color(1, 0, 0));   // Red
+        DebugLog($"FindPath: {fromCell.Coordinates} -> {toCell.Coordinates}");
 
         // Run A* search
         _currentPathExists = Search(fromCell, toCell);
@@ -269,7 +416,14 @@ public partial class HexGrid : Node3D
         // Show the path if found
         if (_currentPathExists)
         {
-            ShowPath();
+            // Debug: Check PathFrom chain
+            DebugLog($"Path exists! toCell.PathFrom = {toCell.PathFrom?.Coordinates}");
+            int pathLength = ShowPathWithBoxes();
+            DebugLog($"PATH: {pathLength} cells, {_pathHighlights.Count} boxes");
+        }
+        else
+        {
+            DebugLog($"NO PATH: {fromCell.Coordinates} to {toCell.Coordinates}");
         }
     }
 
@@ -287,13 +441,16 @@ public partial class HexGrid : Node3D
         fromCell.SearchPhase = _searchFrontierPhase;
         _searchFrontier.Enqueue(fromCell);
 
+        int explored = 0;
         while (_searchFrontier.Count > 0)
         {
             HexCell current = _searchFrontier.Dequeue();
+            explored++;
 
             // Early exit when destination reached
             if (current == toCell)
             {
+                DebugLog($"Search: found after {explored} cells");
                 return true;
             }
 
@@ -341,55 +498,69 @@ public partial class HexGrid : Node3D
             }
         }
 
+        DebugLog($"Search: exhausted after {explored} cells, no path");
         return false; // No path found
     }
 
     /// <summary>
-    /// Highlights the found path from destination back to start.
-    /// Tutorial 16: Path cells are highlighted in white.
+    /// Highlights the found path using visible boxes.
+    /// Returns the path length.
     /// </summary>
-    private void ShowPath()
+    private int ShowPathWithBoxes()
     {
         if (_searchToCell == null || _searchFromCell == null)
         {
-            return;
+            DebugLog("ShowPath: null cells!");
+            return 0;
         }
 
-        // Backtrace from destination to start
+        int pathLength = 0;
+
+        // Backtrace from destination to start, creating white boxes
         HexCell? current = _searchToCell.PathFrom;
+        DebugLog($"ShowPath: starting from PathFrom={current?.Coordinates}");
+
         while (current != null && current != _searchFromCell)
         {
-            current.EnableHighlight(new Color(1, 1, 1)); // White
+            DebugLog($"ShowPath: box at {current.Coordinates}");
+            // Create a white box at this cell's position
+            var box = CreateHighlightBox(new Color(1, 1, 1)); // White
+            AddChild(box);
+
+            // Use cell.Position directly - it has correct elevation with noise
+            Vector3 cellPos = current.Position;
+            box.GlobalPosition = new Vector3(cellPos.X, cellPos.Y + 3f, cellPos.Z);
+            box.Visible = true;
+
+            _pathHighlights.Add(box);
+            pathLength++;
             current = current.PathFrom;
+
+            // Safety check to prevent infinite loops
+            if (pathLength > 100)
+            {
+                DebugLog("ShowPath: too many steps, breaking");
+                break;
+            }
         }
+
+        DebugLog($"ShowPath: created {pathLength} boxes");
+        return pathLength + 2; // +2 for start and end cells
     }
 
     /// <summary>
     /// Clears the current path visualization.
-    /// Tutorial 16: Disables highlights on all cells that were part of the path.
     /// </summary>
     private void ClearPath()
     {
-        if (_currentPathExists && _searchToCell != null && _searchFromCell != null)
+        // Clear path box highlights
+        foreach (var box in _pathHighlights)
         {
-            // Clear path highlights
-            HexCell? current = _searchToCell;
-            while (current != null && current != _searchFromCell)
-            {
-                current.DisableHighlight();
-                current = current.PathFrom;
-            }
-            _searchFromCell.DisableHighlight();
-            _currentPathExists = false;
+            box.QueueFree();
         }
-        else if (_searchFromCell != null)
-        {
-            _searchFromCell.DisableHighlight();
-        }
-        if (_searchToCell != null)
-        {
-            _searchToCell.DisableHighlight();
-        }
+        _pathHighlights.Clear();
+
+        _currentPathExists = false;
     }
 
     /// <summary>

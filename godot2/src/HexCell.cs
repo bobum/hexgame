@@ -20,9 +20,9 @@ public partial class HexCell : Node3D
     /// </summary>
     public Label3D? UiLabel;
 
-    // Tutorial 16: Highlight sprite for pathfinding visualization
-    private Sprite3D? _highlight;
-    private static Material? _highlightMaterial;
+    // Tutorial 16: Highlight mesh for pathfinding visualization
+    private MeshInstance3D? _highlight;
+    private StandardMaterial3D? _highlightMaterial;
 
     private HexCell[] _neighbors = new HexCell[6];
 
@@ -587,19 +587,22 @@ public partial class HexCell : Node3D
     /// </summary>
     public void EnableHighlight(Color color)
     {
+        GD.Print($"[HIGHLIGHT] EnableHighlight({color}) on cell {Coordinates}");
         if (_highlight == null)
         {
             CreateHighlight();
         }
 
-        if (_highlight != null)
+        if (_highlight != null && _highlightMaterial != null)
         {
-            // Set the highlight color via shader parameter
-            if (_highlight.MaterialOverride is ShaderMaterial shaderMat)
-            {
-                shaderMat.SetShaderParameter("highlight_color", color);
-            }
+            // Set the highlight color with transparency
+            _highlightMaterial.AlbedoColor = new Color(color.R, color.G, color.B, 0.5f);
             _highlight.Visible = true;
+            GD.Print($"[HIGHLIGHT] Made visible at {_highlight.GlobalPosition}");
+        }
+        else
+        {
+            GD.Print($"[HIGHLIGHT] WARNING: _highlight or material is null");
         }
     }
 
@@ -616,49 +619,41 @@ public partial class HexCell : Node3D
     }
 
     /// <summary>
-    /// Creates the highlight sprite for this cell.
+    /// Creates the highlight for this cell using a simple visible mesh.
     /// Tutorial 16: Lazily created on first EnableHighlight call.
     /// </summary>
     private void CreateHighlight()
     {
-        // Load material if not already loaded
-        if (_highlightMaterial == null)
-        {
-            _highlightMaterial = GD.Load<Material>("res://materials/highlight_material.tres");
-        }
+        GD.Print($"[HIGHLIGHT] CreateHighlight for cell {Coordinates}, cell GlobalPos={GlobalPosition}");
 
-        if (_highlightMaterial == null)
-        {
-            GD.PrintErr("[HexCell] Failed to load highlight material");
-            return;
-        }
+        // Create a simple MeshInstance3D with a box to mark the cell
+        var meshInstance = new MeshInstance3D();
+        meshInstance.Name = $"Highlight_{Coordinates}";
 
-        _highlight = new Sprite3D();
-        _highlight.Name = "Highlight";
+        // Create a box mesh - very visible
+        var box = new BoxMesh();
+        box.Size = new Vector3(8f, 5f, 8f);  // Big obvious box
+        meshInstance.Mesh = box;
 
-        // Load the texture
-        var texture = GD.Load<Texture2D>("res://textures/cell-outline.png");
-        if (texture != null)
-        {
-            _highlight.Texture = texture;
-        }
+        // Create a bright solid material - no transparency
+        var material = new StandardMaterial3D();
+        material.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        material.AlbedoColor = new Color(0, 0, 1, 1f); // Solid blue
+        meshInstance.MaterialOverride = material;
 
-        // Each cell needs its own material instance to have independent colors
-        _highlight.MaterialOverride = (Material)_highlightMaterial.Duplicate();
+        // Position at cell's world position + height offset
+        // Add to scene root instead of as child to ensure visibility
+        meshInstance.GlobalPosition = new Vector3(GlobalPosition.X, GlobalPosition.Y + 3f, GlobalPosition.Z);
 
-        // Position at cell center, slightly above terrain to avoid z-fighting
-        // The sprite is positioned relative to the cell's position
-        _highlight.Position = new Vector3(0, 0.01f, 0);
+        meshInstance.Visible = false;
 
-        // Rotate to lay flat on the ground (face up)
-        _highlight.RotationDegrees = new Vector3(-90, 0, 0);
+        // Add to scene root instead of this cell
+        GetTree().Root.AddChild(meshInstance);
 
-        // Scale to match hex cell size using PixelSize
-        // PixelSize controls how many world units each pixel occupies
-        _highlight.PixelSize = 0.2f; // Adjust for proper world scale
+        _highlight = meshInstance;
+        _highlightMaterial = material;
 
-        _highlight.Visible = false;
-        AddChild(_highlight);
+        GD.Print($"[HIGHLIGHT] Box created at GlobalPos={meshInstance.GlobalPosition}");
     }
 
 }
