@@ -3,6 +3,7 @@ using Godot;
 /// <summary>
 /// Represents a single hexagonal cell.
 /// Ported from Catlike Coding Hex Map Tutorials 1-5.
+/// Tutorial 16: Added cell highlighting for pathfinding visualization.
 /// </summary>
 public partial class HexCell : Node3D
 {
@@ -18,6 +19,10 @@ public partial class HexCell : Node3D
     /// Reference to the coordinate label for this cell.
     /// </summary>
     public Label3D? UiLabel;
+
+    // Tutorial 16: Highlight sprite for pathfinding visualization
+    private Sprite3D? _highlight;
+    private static Material? _highlightMaterial;
 
     private HexCell[] _neighbors = new HexCell[6];
 
@@ -572,6 +577,88 @@ public partial class HexCell : Node3D
                 neighbor.Chunk.Refresh();
             }
         }
+    }
+
+    // Tutorial 16: Cell highlighting methods
+
+    /// <summary>
+    /// Enables the cell highlight with the specified color.
+    /// Tutorial 16: Used for pathfinding visualization (blue=start, red=end, white=path).
+    /// </summary>
+    public void EnableHighlight(Color color)
+    {
+        if (_highlight == null)
+        {
+            CreateHighlight();
+        }
+
+        if (_highlight != null)
+        {
+            // Set the highlight color via shader parameter
+            if (_highlight.MaterialOverride is ShaderMaterial shaderMat)
+            {
+                shaderMat.SetShaderParameter("highlight_color", color);
+            }
+            _highlight.Visible = true;
+        }
+    }
+
+    /// <summary>
+    /// Disables the cell highlight.
+    /// Tutorial 16.
+    /// </summary>
+    public void DisableHighlight()
+    {
+        if (_highlight != null)
+        {
+            _highlight.Visible = false;
+        }
+    }
+
+    /// <summary>
+    /// Creates the highlight sprite for this cell.
+    /// Tutorial 16: Lazily created on first EnableHighlight call.
+    /// </summary>
+    private void CreateHighlight()
+    {
+        // Load material if not already loaded
+        if (_highlightMaterial == null)
+        {
+            _highlightMaterial = GD.Load<Material>("res://materials/highlight_material.tres");
+        }
+
+        if (_highlightMaterial == null)
+        {
+            GD.PrintErr("[HexCell] Failed to load highlight material");
+            return;
+        }
+
+        _highlight = new Sprite3D();
+        _highlight.Name = "Highlight";
+
+        // Load the texture
+        var texture = GD.Load<Texture2D>("res://textures/cell-outline.png");
+        if (texture != null)
+        {
+            _highlight.Texture = texture;
+        }
+
+        // Each cell needs its own material instance to have independent colors
+        _highlight.MaterialOverride = (Material)_highlightMaterial.Duplicate();
+
+        // Position at cell center, slightly above terrain to avoid z-fighting
+        // The sprite is positioned relative to the cell's position
+        _highlight.Position = new Vector3(0, 0.01f, 0);
+
+        // Rotate to lay flat on the ground (face up)
+        _highlight.RotationDegrees = new Vector3(-90, 0, 0);
+
+        // Scale to match hex cell size using PixelSize
+        // PixelSize controls how many world units each pixel occupies
+        _highlight.PixelSize = 0.2f; // Adjust for proper world scale
+
+        _highlight.Visible = false;
+        AddChild(_highlight);
     }
 
 }

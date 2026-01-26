@@ -34,9 +34,14 @@ public partial class HexGrid : Node3D
     private bool _editMode = true;
     private HexCell? _selectedCell;
 
-    // Tutorial 15: Priority queue for Dijkstra's algorithm
+    // Tutorial 15/16: Priority queue for pathfinding
     private HexCellPriorityQueue _searchFrontier = new HexCellPriorityQueue();
     private int _searchFrontierPhase;
+
+    // Tutorial 16: Two-point pathfinding
+    private HexCell? _searchFromCell;
+    private HexCell? _searchToCell;
+    private bool _currentPathExists;
 
     public override void _Ready()
     {
@@ -142,7 +147,7 @@ public partial class HexGrid : Node3D
 
     /// <summary>
     /// Sets the grid to edit or navigation mode.
-    /// Tutorial 15: Navigation mode shows grid overlay and enables pathfinding.
+    /// Tutorial 15/16: Navigation mode shows grid overlay and enables pathfinding.
     /// </summary>
     private void SetEditMode(bool editMode)
     {
@@ -153,7 +158,11 @@ public partial class HexGrid : Node3D
 
         if (editMode)
         {
-            // Clear distance labels when returning to edit mode
+            // Tutorial 16: Clear path and selection when returning to edit mode
+            ClearPath();
+            _searchFromCell = null;
+            _searchToCell = null;
+            // Clear distance labels
             ClearDistances();
         }
     }
@@ -187,7 +196,7 @@ public partial class HexGrid : Node3D
 
     /// <summary>
     /// Handles mouse clicks in navigation mode.
-    /// Tutorial 15: Calculates distances from clicked cell.
+    /// Tutorial 16: Shift+Click sets start cell, regular click sets destination.
     /// </summary>
     private void HandleNavigationClick(InputEventMouseButton mouseEvent)
     {
@@ -210,9 +219,176 @@ public partial class HexGrid : Node3D
             HexCell? cell = GetCell(hitPos);
             if (cell != null)
             {
-                _selectedCell = cell;
-                FindDistancesTo(cell);
+                // Tutorial 16: Shift+Click for start cell, regular click for destination
+                if (Input.IsKeyPressed(Key.Shift))
+                {
+                    // Set start cell
+                    if (_searchFromCell != cell)
+                    {
+                        if (_searchFromCell != null)
+                        {
+                            _searchFromCell.DisableHighlight();
+                        }
+                        _searchFromCell = cell;
+                        _searchFromCell.EnableHighlight(new Color(0, 0, 1)); // Blue
+
+                        if (_searchToCell != null)
+                        {
+                            FindPath(_searchFromCell, _searchToCell);
+                        }
+                    }
+                }
+                else if (_searchFromCell != null && _searchFromCell != cell)
+                {
+                    // Set destination cell
+                    _searchToCell = cell;
+                    FindPath(_searchFromCell, _searchToCell);
+                }
             }
+        }
+    }
+
+    // Tutorial 16: Two-point pathfinding methods
+
+    /// <summary>
+    /// Finds a path between two cells using A* algorithm.
+    /// Tutorial 16: Highlights start (blue), end (red), and path (white).
+    /// </summary>
+    public void FindPath(HexCell fromCell, HexCell toCell)
+    {
+        // Clear any previous path
+        ClearPath();
+
+        // Highlight start and end cells
+        fromCell.EnableHighlight(new Color(0, 0, 1)); // Blue
+        toCell.EnableHighlight(new Color(1, 0, 0));   // Red
+
+        // Run A* search
+        _currentPathExists = Search(fromCell, toCell);
+
+        // Show the path if found
+        if (_currentPathExists)
+        {
+            ShowPath();
+        }
+    }
+
+    /// <summary>
+    /// Performs A* search from start to destination.
+    /// Tutorial 16: Uses SearchHeuristic for informed search.
+    /// </summary>
+    /// <returns>True if a path was found, false otherwise.</returns>
+    private bool Search(HexCell fromCell, HexCell toCell)
+    {
+        _searchFrontierPhase++;
+        _searchFrontier.Clear();
+
+        fromCell.Distance = 0;
+        fromCell.SearchPhase = _searchFrontierPhase;
+        _searchFrontier.Enqueue(fromCell);
+
+        while (_searchFrontier.Count > 0)
+        {
+            HexCell current = _searchFrontier.Dequeue();
+
+            // Early exit when destination reached
+            if (current == toCell)
+            {
+                return true;
+            }
+
+            for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+            {
+                HexCell? neighbor = current.GetNeighbor(d);
+                if (neighbor == null)
+                {
+                    continue;
+                }
+
+                // Skip cells already fully processed in this search
+                if (neighbor.SearchPhase > _searchFrontierPhase)
+                {
+                    continue;
+                }
+
+                // Calculate movement cost
+                int moveCost = GetMoveCost(current, neighbor, d);
+                if (moveCost < 0)
+                {
+                    continue; // Impassable
+                }
+
+                int distance = current.Distance + moveCost;
+
+                if (neighbor.SearchPhase < _searchFrontierPhase)
+                {
+                    // First time visiting this cell
+                    neighbor.Distance = distance;
+                    neighbor.PathFrom = current;
+                    neighbor.SearchHeuristic =
+                        neighbor.Coordinates.DistanceTo(toCell.Coordinates);
+                    neighbor.SearchPhase = _searchFrontierPhase;
+                    _searchFrontier.Enqueue(neighbor);
+                }
+                else if (distance < neighbor.Distance)
+                {
+                    // Found a shorter path to this cell
+                    int oldPriority = neighbor.SearchPriority;
+                    neighbor.Distance = distance;
+                    neighbor.PathFrom = current;
+                    _searchFrontier.Change(neighbor, oldPriority);
+                }
+            }
+        }
+
+        return false; // No path found
+    }
+
+    /// <summary>
+    /// Highlights the found path from destination back to start.
+    /// Tutorial 16: Path cells are highlighted in white.
+    /// </summary>
+    private void ShowPath()
+    {
+        if (_searchToCell == null || _searchFromCell == null)
+        {
+            return;
+        }
+
+        // Backtrace from destination to start
+        HexCell? current = _searchToCell.PathFrom;
+        while (current != null && current != _searchFromCell)
+        {
+            current.EnableHighlight(new Color(1, 1, 1)); // White
+            current = current.PathFrom;
+        }
+    }
+
+    /// <summary>
+    /// Clears the current path visualization.
+    /// Tutorial 16: Disables highlights on all cells that were part of the path.
+    /// </summary>
+    private void ClearPath()
+    {
+        if (_currentPathExists && _searchToCell != null && _searchFromCell != null)
+        {
+            // Clear path highlights
+            HexCell? current = _searchToCell;
+            while (current != null && current != _searchFromCell)
+            {
+                current.DisableHighlight();
+                current = current.PathFrom;
+            }
+            _searchFromCell.DisableHighlight();
+            _currentPathExists = false;
+        }
+        else if (_searchFromCell != null)
+        {
+            _searchFromCell.DisableHighlight();
+        }
+        if (_searchToCell != null)
+        {
+            _searchToCell.DisableHighlight();
         }
     }
 
