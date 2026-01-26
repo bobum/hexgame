@@ -288,6 +288,61 @@ public partial class HexCell : Node3D
     }
 
     /// <summary>
+    /// Checks if movement through this cell from entryDirection to exitDirection
+    /// would cross the river channel.
+    /// Custom extension: Rivers divide cells - movement must stay on one side.
+    /// (Not from Catlike Coding tutorials - rivers are visual-only in the original)
+    /// </summary>
+    /// <param name="entryDirection">Direction we entered this cell from</param>
+    /// <param name="exitDirection">Direction we want to exit this cell to</param>
+    /// <returns>True if this movement would cross the river channel</returns>
+    public bool WouldCrossRiverChannel(HexDirection entryDirection, HexDirection exitDirection)
+    {
+        // Only applies to cells with a through-flowing river (not begin/end)
+        if (!_hasIncomingRiver || !_hasOutgoingRiver) return false;
+
+        // Check if entry/exit are river edges
+        bool entryIsRiverEdge = (entryDirection == _incomingRiver || entryDirection == _outgoingRiver);
+        bool exitIsRiverEdge = (exitDirection == _incomingRiver || exitDirection == _outgoingRiver);
+
+        // If entering or exiting through a river edge, don't apply crossing check
+        // Check 1 in GetMoveCost already handles river edge crossings (requires road/bridge)
+        // If we got here via a river edge, it means we have a road, so allow it
+        if (entryIsRiverEdge || exitIsRiverEdge)
+        {
+            return false;
+        }
+
+        // For non-river edges, check if they're on different sides of the river
+        bool entryOnSideA = IsDirectionOnClockwiseSide(entryDirection);
+        bool exitOnSideA = IsDirectionOnClockwiseSide(exitDirection);
+
+        // If on different sides, we'd have to cross the river channel
+        return entryOnSideA != exitOnSideA;
+    }
+
+    /// <summary>
+    /// Determines if a direction is on the "clockwise side" of the river channel.
+    /// The clockwise side is defined as directions in the clockwise arc from
+    /// outgoing river to incoming river (exclusive of both river edges).
+    /// </summary>
+    private bool IsDirectionOnClockwiseSide(HexDirection direction)
+    {
+        int d = (int)direction;
+        int outD = (int)_outgoingRiver;
+        int inD = (int)_incomingRiver;
+
+        // Clockwise steps from outgoing to direction
+        int stepsToDir = ((d - outD) + 6) % 6;
+        // Clockwise steps from outgoing to incoming
+        int stepsToIn = ((inD - outD) + 6) % 6;
+
+        // Direction is on clockwise side if it's between outgoing and incoming
+        // (exclusively - 0 would be outgoing itself, stepsToIn would be incoming)
+        return stepsToDir > 0 && stepsToDir < stepsToIn;
+    }
+
+    /// <summary>
     /// Y position of the stream bed (channel floor).
     /// </summary>
     public float StreamBedY =>

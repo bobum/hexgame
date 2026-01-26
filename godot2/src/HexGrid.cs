@@ -516,6 +516,7 @@ public partial class HexGrid : Node3D
         _searchFrontier.Clear();
 
         fromCell.Distance = 0;
+        fromCell.PathFrom = null; // Starting cell has no entry direction
         fromCell.SearchPhase = _searchFrontierPhase;
         _searchFrontier.Enqueue(fromCell);
 
@@ -736,11 +737,55 @@ public partial class HexGrid : Node3D
             return -1;
         }
 
+        // Custom extension: Rivers block movement (not in original Catlike tutorials)
+        // Check 1: Rivers block movement at edges without road/bridge
+        bool fromHasRiver = fromCell.HasRiverThroughEdge(direction);
+        bool toHasRiver = toCell.HasRiverThroughEdge(direction.Opposite());
+
+        if (fromHasRiver || toHasRiver)
+        {
+            return -1; // Cannot cross river edge without bridge
+        }
+
+        // Check 2: Cannot cross river channel inside a cell (custom extension)
+        // If fromCell has a through-flowing river, check if our path crosses it
+        if (fromCell.HasIncomingRiver && fromCell.HasOutgoingRiver && fromCell.PathFrom != null)
+        {
+            // Determine how we entered fromCell (from fromCell's perspective)
+            // GetDirectionToNeighbor gives direction FROM PathFrom TO fromCell
+            // We need the opposite: direction FROM fromCell's perspective that PathFrom is at
+            HexDirection dirToPathFrom = GetDirectionToNeighbor(fromCell, fromCell.PathFrom);
+            // We entered FROM that direction (PathFrom is in that direction, we came from there)
+            HexDirection entryDirection = dirToPathFrom;
+            // Check if path from entry to exit crosses the river channel
+            if (fromCell.WouldCrossRiverChannel(entryDirection, direction))
+            {
+                return -1; // Cannot cross river channel without bridge
+            }
+        }
+
         // Normal terrain cost
         int moveCost = edgeType == HexEdgeType.Flat ? 5 : 10;
         // Add cost for features in destination cell
         moveCost += toCell.UrbanLevel + toCell.FarmLevel + toCell.PlantLevel;
         return moveCost;
+    }
+
+    /// <summary>
+    /// Gets the direction from a cell to one of its neighbors.
+    /// Used to determine entry direction for river crossing checks.
+    /// </summary>
+    private HexDirection GetDirectionToNeighbor(HexCell cell, HexCell neighbor)
+    {
+        for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+        {
+            if (cell.GetNeighbor(d) == neighbor)
+            {
+                return d;
+            }
+        }
+        // Fallback (should never happen with valid neighbors)
+        return HexDirection.NE;
     }
 
     /// <summary>

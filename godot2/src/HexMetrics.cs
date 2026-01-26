@@ -124,6 +124,11 @@ public static class HexMetrics
     /// <summary>
     /// Corner positions for pointy-top hexagons.
     /// 7 elements: index 6 duplicates index 0 for easy wraparound when triangulating.
+    ///
+    /// NOTE: Direction names (NE, SE, etc.) are relative to Unity's coordinate system
+    /// where +Z is forward. In Godot where -Z is forward/north, the visual directions
+    /// are rotated 180° from the names (code's "SE" appears visually as "NE", etc.)
+    /// The code is internally consistent - just the names don't match visual reality.
     /// </summary>
     public static Vector3[] Corners =
     {
