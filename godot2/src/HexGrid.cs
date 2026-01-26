@@ -49,10 +49,15 @@ public partial class HexGrid : Node3D
     // Debug: On-screen label for debugging
     private Label? _debugLabel;
 
-    // Debug: Simple highlight box (temporary until cell highlighting works)
+    // Tutorial 16: Cell highlighting using hex outline texture
+    // Blue = start cell, Red = destination cell, White = path cells
     private MeshInstance3D? _startHighlight;
     private MeshInstance3D? _endHighlight;
-    private List<MeshInstance3D> _pathHighlights = new List<MeshInstance3D>();
+    private List<MeshInstance3D> _pathHighlights = new();
+
+    // Tutorial 16: Cached hex mesh and material for highlights (shared across instances)
+    private static ArrayMesh? _hexHighlightMesh;
+    private static ShaderMaterial? _highlightBaseMaterial;
 
     public override void _Ready()
     {
@@ -342,11 +347,11 @@ public partial class HexGrid : Node3D
             // Create/move start highlight using cell's stored position (has correct elevation)
             if (_startHighlight == null)
             {
-                _startHighlight = CreateHighlightBox(new Color(0, 0, 1)); // Blue
+                _startHighlight = CreateHighlightHex(new Color(0, 0, 1)); // Blue
                 AddChild(_startHighlight);
             }
             Vector3 startPos = cell.Position;
-            _startHighlight.GlobalPosition = new Vector3(startPos.X, startPos.Y + 3f, startPos.Z);
+            _startHighlight.GlobalPosition = new Vector3(startPos.X, startPos.Y + 0.1f, startPos.Z);
             _startHighlight.Visible = true;
 
             if (_searchToCell != null)
@@ -363,11 +368,11 @@ public partial class HexGrid : Node3D
             // Create/move end highlight using cell's stored position (has correct elevation)
             if (_endHighlight == null)
             {
-                _endHighlight = CreateHighlightBox(new Color(1, 0, 0)); // Red
+                _endHighlight = CreateHighlightHex(new Color(1, 0, 0)); // Red
                 AddChild(_endHighlight);
             }
             Vector3 endPos = cell.Position;
-            _endHighlight.GlobalPosition = new Vector3(endPos.X, endPos.Y + 3f, endPos.Z);
+            _endHighlight.GlobalPosition = new Vector3(endPos.X, endPos.Y + 0.1f, endPos.Z);
             _endHighlight.Visible = true;
 
             FindPath(_searchFromCell, _searchToCell);
@@ -379,22 +384,95 @@ public partial class HexGrid : Node3D
     }
 
     /// <summary>
-    /// Creates a simple box mesh for highlighting cells.
+    /// Creates a hex-shaped mesh for highlighting cells.
+    /// Tutorial 16: Uses the cell-outline texture with proper UV mapping.
     /// </summary>
-    private MeshInstance3D CreateHighlightBox(Color color)
+    private MeshInstance3D CreateHighlightHex(Color color)
     {
-        var meshInstance = new MeshInstance3D();
-        var box = new BoxMesh();
-        box.Size = new Vector3(10f, 6f, 10f);  // Big obvious box
-        meshInstance.Mesh = box;
+        // Ensure hex mesh is created (once, shared by all highlights)
+        if (_hexHighlightMesh == null)
+        {
+            _hexHighlightMesh = CreateHexHighlightMesh();
+        }
 
-        var material = new StandardMaterial3D();
-        material.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
-        material.AlbedoColor = color;
+        // Load base material if not already loaded
+        if (_highlightBaseMaterial == null)
+        {
+            _highlightBaseMaterial = GD.Load<ShaderMaterial>("res://materials/highlight_material.tres");
+        }
+
+        var meshInstance = new MeshInstance3D();
+        meshInstance.Mesh = _hexHighlightMesh;
+
+        // Duplicate material so each highlight can have its own color
+        var material = (ShaderMaterial)_highlightBaseMaterial.Duplicate();
+        material.SetShaderParameter("highlight_color", color);
         meshInstance.MaterialOverride = material;
 
+        // Rotate to lie flat on the ground (hex mesh is created in XZ plane)
         meshInstance.Visible = false;
         return meshInstance;
+    }
+
+    /// <summary>
+    /// Creates a flat hexagonal mesh with UV coordinates for the outline texture.
+    /// Tutorial 16: Matches Catlike Coding's hex cell outline approach.
+    /// </summary>
+    private static ArrayMesh CreateHexHighlightMesh()
+    {
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+
+        // Use slightly smaller radius so outline fits within cell
+        float radius = HexMetrics.OuterRadius * 0.95f;
+        var center = Vector3.Zero;
+
+        // Create 6 triangles forming a hexagon
+        // Hex corners are at 30, 90, 150, 210, 270, 330 degrees (pointy-top hex)
+        for (int i = 0; i < 6; i++)
+        {
+            // Angles for pointy-top hex (starts at 30 degrees = PI/6)
+            float angle1 = Mathf.Pi / 6f + (Mathf.Pi / 3f) * i;
+            float angle2 = Mathf.Pi / 6f + (Mathf.Pi / 3f) * (i + 1);
+
+            var corner1 = new Vector3(
+                Mathf.Cos(angle1) * radius,
+                0,
+                Mathf.Sin(angle1) * radius
+            );
+            var corner2 = new Vector3(
+                Mathf.Cos(angle2) * radius,
+                0,
+                Mathf.Sin(angle2) * radius
+            );
+
+            // UV coordinates map the hex to the texture
+            // Center of texture is (0.5, 0.5), corners map to hex edges
+            var uvCenter = new Vector2(0.5f, 0.5f);
+            var uv1 = new Vector2(
+                0.5f + 0.5f * Mathf.Cos(angle1),
+                0.5f + 0.5f * Mathf.Sin(angle1)
+            );
+            var uv2 = new Vector2(
+                0.5f + 0.5f * Mathf.Cos(angle2),
+                0.5f + 0.5f * Mathf.Sin(angle2)
+            );
+
+            // Add triangle (center, corner1, corner2)
+            st.SetNormal(Vector3.Up);
+            st.SetUV(uvCenter);
+            st.AddVertex(center);
+
+            st.SetNormal(Vector3.Up);
+            st.SetUV(uv1);
+            st.AddVertex(corner1);
+
+            st.SetNormal(Vector3.Up);
+            st.SetUV(uv2);
+            st.AddVertex(corner2);
+        }
+
+        return st.Commit();
     }
 
     // Tutorial 16: Two-point pathfinding methods
@@ -516,23 +594,23 @@ public partial class HexGrid : Node3D
 
         int pathLength = 0;
 
-        // Backtrace from destination to start, creating white boxes
+        // Backtrace from destination to start, creating white hex highlights
         HexCell? current = _searchToCell.PathFrom;
         DebugLog($"ShowPath: starting from PathFrom={current?.Coordinates}");
 
         while (current != null && current != _searchFromCell)
         {
-            DebugLog($"ShowPath: box at {current.Coordinates}");
-            // Create a white box at this cell's position
-            var box = CreateHighlightBox(new Color(1, 1, 1)); // White
-            AddChild(box);
+            DebugLog($"ShowPath: hex at {current.Coordinates}");
+            // Create a white hex highlight at this cell's position
+            var hex = CreateHighlightHex(new Color(1, 1, 1)); // White
+            AddChild(hex);
 
             // Use cell.Position directly - it has correct elevation with noise
             Vector3 cellPos = current.Position;
-            box.GlobalPosition = new Vector3(cellPos.X, cellPos.Y + 3f, cellPos.Z);
-            box.Visible = true;
+            hex.GlobalPosition = new Vector3(cellPos.X, cellPos.Y + 0.1f, cellPos.Z);
+            hex.Visible = true;
 
-            _pathHighlights.Add(box);
+            _pathHighlights.Add(hex);
             pathLength++;
             current = current.PathFrom;
 
@@ -544,7 +622,7 @@ public partial class HexGrid : Node3D
             }
         }
 
-        DebugLog($"ShowPath: created {pathLength} boxes");
+        DebugLog($"ShowPath: created {pathLength} hexes");
         return pathLength + 2; // +2 for start and end cells
     }
 
@@ -553,10 +631,10 @@ public partial class HexGrid : Node3D
     /// </summary>
     private void ClearPath()
     {
-        // Clear path box highlights
-        foreach (var box in _pathHighlights)
+        // Clear path hex highlights
+        foreach (var hex in _pathHighlights)
         {
-            box.QueueFree();
+            hex.QueueFree();
         }
         _pathHighlights.Clear();
 
