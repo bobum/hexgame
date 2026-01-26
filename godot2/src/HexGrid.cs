@@ -21,6 +21,18 @@ public partial class HexGrid : Node3D
     /// </summary>
     [Export] public bool GenerateTestData = true;
 
+    /// <summary>
+    /// When true, rivers completely block movement without a bridge.
+    /// When false, rivers can be crossed but at a higher cost (RiverCrossingCost).
+    /// </summary>
+    [Export] public bool RiversBlockMovement = false;
+
+    /// <summary>
+    /// Movement cost to cross a river without a bridge (when RiversBlockMovement is false).
+    /// Compare to: Road = 1, Flat terrain = 5, Slope = 10.
+    /// </summary>
+    [Export] public int RiverCrossingCost = 20;
+
     private int _cellCountX;
     private int _cellCountZ;
     private HexCell[] _cells = null!;
@@ -34,9 +46,30 @@ public partial class HexGrid : Node3D
     private bool _editMode = true;
     private HexCell? _selectedCell;
 
-    // Tutorial 15: Priority queue for Dijkstra's algorithm
+    // Tutorial 15/16: Priority queue for pathfinding
     private HexCellPriorityQueue _searchFrontier = new HexCellPriorityQueue();
     private int _searchFrontierPhase;
+
+    // Tutorial 16: Two-point pathfinding
+    private HexCell? _searchFromCell;
+    private HexCell? _searchToCell;
+    private bool _currentPathExists;
+
+    // Tutorial 16: Ground plane for navigation raycasting
+    private StaticBody3D? _groundPlane;
+
+    // Debug: On-screen label for debugging
+    private Label? _debugLabel;
+
+    // Tutorial 16: Cell highlighting using hex outline texture
+    // Blue = start cell, Red = destination cell, White = path cells
+    private MeshInstance3D? _startHighlight;
+    private MeshInstance3D? _endHighlight;
+    private List<MeshInstance3D> _pathHighlights = new();
+
+    // Tutorial 16: Cached hex mesh and material for highlights (shared across instances)
+    private static ArrayMesh? _hexHighlightMesh;
+    private static ShaderMaterial? _highlightBaseMaterial;
 
     public override void _Ready()
     {
@@ -88,6 +121,62 @@ public partial class HexGrid : Node3D
         // Re-enable refreshes and trigger one final refresh per chunk
         SetChunkRefreshSuppression(false);
         RefreshAllChunks();
+
+        // Tutorial 16: Create ground plane for navigation raycasting
+        CreateGroundPlane();
+
+        // Debug: Create on-screen debug label
+        CreateDebugLabel();
+    }
+
+    /// <summary>
+    /// Creates an invisible ground plane for navigation mode raycasting.
+    /// Tutorial 16: Required for mouse picking in pathfinding.
+    /// </summary>
+    private void CreateGroundPlane()
+    {
+        _groundPlane = new StaticBody3D();
+        _groundPlane.Name = "NavigationGroundPlane";
+        AddChild(_groundPlane);
+
+        var collisionShape = new CollisionShape3D();
+        var shape = new WorldBoundaryShape3D();
+        shape.Plane = new Plane(Vector3.Up, 0f);
+        collisionShape.Shape = shape;
+        _groundPlane.AddChild(collisionShape);
+
+        GD.Print("[HexGrid] Navigation ground plane created for raycasting");
+    }
+
+    /// <summary>
+    /// Creates an on-screen debug label for visual feedback.
+    /// </summary>
+    private void CreateDebugLabel()
+    {
+        var canvas = new CanvasLayer();
+        canvas.Name = "DebugCanvas";
+        AddChild(canvas);
+
+        _debugLabel = new Label();
+        _debugLabel.Name = "DebugLabel";
+        _debugLabel.Position = new Vector2(10, 10);
+        _debugLabel.Size = new Vector2(600, 200);
+        _debugLabel.AddThemeColorOverride("font_color", new Color(1, 1, 0)); // Yellow
+        _debugLabel.AddThemeFontSizeOverride("font_size", 18);
+        _debugLabel.Text = "Debug: Ready (Press E for Nav mode, then Shift+Click)";
+        canvas.AddChild(_debugLabel);
+    }
+
+    /// <summary>
+    /// Updates the on-screen debug label.
+    /// </summary>
+    private void DebugLog(string message)
+    {
+        GD.Print(message);
+        if (_debugLabel != null)
+        {
+            _debugLabel.Text = message;
+        }
     }
 
     /// <summary>
@@ -113,8 +202,14 @@ public partial class HexGrid : Node3D
         }
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _Input(InputEvent @event)
     {
+        // Debug: Log all mouse button events
+        if (@event is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
+        {
+            DebugLog($"Click! editMode={_editMode}, shift={mb.ShiftPressed}");
+        }
+
         if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
         {
             if (keyEvent.Keycode == Key.L)
@@ -127,7 +222,7 @@ public partial class HexGrid : Node3D
             {
                 _editMode = !_editMode;
                 SetEditMode(_editMode);
-                GD.Print($"Mode: {(_editMode ? "Edit" : "Navigation")}");
+                DebugLog($"Mode: {(_editMode ? "EDIT" : "NAVIGATION")} - Now {(_editMode ? "press E again" : "Shift+Click to set start")}");
             }
         }
         // Tutorial 15: Handle mouse clicks for navigation mode
@@ -142,7 +237,7 @@ public partial class HexGrid : Node3D
 
     /// <summary>
     /// Sets the grid to edit or navigation mode.
-    /// Tutorial 15: Navigation mode shows grid overlay and enables pathfinding.
+    /// Tutorial 15/16: Navigation mode shows grid overlay and enables pathfinding.
     /// </summary>
     private void SetEditMode(bool editMode)
     {
@@ -153,8 +248,36 @@ public partial class HexGrid : Node3D
 
         if (editMode)
         {
-            // Clear distance labels when returning to edit mode
+            // Returning to edit mode
+            ClearPath();
+            _searchFromCell = null;
+            _searchToCell = null;
+            // Restore coordinate labels
+            RestoreCoordinateLabels();
+            // Hide start/end highlights
+            if (_startHighlight != null) _startHighlight.Visible = false;
+            if (_endHighlight != null) _endHighlight.Visible = false;
+        }
+        else
+        {
+            // Entering navigation mode - clear coordinate labels (distances will fill them)
             ClearDistances();
+        }
+    }
+
+    /// <summary>
+    /// Restores coordinate labels on all cells.
+    /// Called when returning to edit mode.
+    /// </summary>
+    private void RestoreCoordinateLabels()
+    {
+        for (int i = 0; i < _cells.Length; i++)
+        {
+            var cell = _cells[i];
+            if (cell.UiLabel != null)
+            {
+                cell.UiLabel.Text = cell.Coordinates.ToStringOnSeparateLines();
+            }
         }
     }
 
@@ -187,13 +310,19 @@ public partial class HexGrid : Node3D
 
     /// <summary>
     /// Handles mouse clicks in navigation mode.
-    /// Tutorial 15: Calculates distances from clicked cell.
+    /// Tutorial 16: Shift+Click sets start cell, regular click sets destination.
     /// </summary>
     private void HandleNavigationClick(InputEventMouseButton mouseEvent)
     {
+        DebugLog($"NavClick: Shift={mouseEvent.ShiftPressed}");
+
         // Get camera for raycasting
         var camera = GetViewport().GetCamera3D();
-        if (camera == null) return;
+        if (camera == null)
+        {
+            DebugLog("ERROR: No camera!");
+            return;
+        }
 
         // Raycast from mouse position
         var from = camera.ProjectRayOrigin(mouseEvent.Position);
@@ -204,16 +333,325 @@ public partial class HexGrid : Node3D
         var query = PhysicsRayQueryParameters3D.Create(from, to);
         var result = spaceState.IntersectRay(query);
 
-        if (result.Count > 0)
+        if (result.Count == 0)
         {
-            Vector3 hitPos = (Vector3)result["position"];
-            HexCell? cell = GetCell(hitPos);
-            if (cell != null)
+            DebugLog("Raycast hit nothing!");
+            return;
+        }
+
+        Vector3 hitPos = (Vector3)result["position"];
+        HexCell? cell = GetCell(hitPos);
+        if (cell == null)
+        {
+            DebugLog($"No cell at {hitPos}");
+            return;
+        }
+
+        // Tutorial 16: Shift+Click for start cell, regular click for destination
+        bool shiftHeld = mouseEvent.ShiftPressed;
+
+        if (shiftHeld)
+        {
+            // Set start cell
+            DebugLog($"START: {cell.Coordinates}");
+            _searchFromCell = cell;
+
+            // Create/move start highlight using cell's stored position (has correct elevation)
+            if (_startHighlight == null)
             {
-                _selectedCell = cell;
-                FindDistancesTo(cell);
+                _startHighlight = CreateHighlightHex(new Color(0, 0, 1)); // Blue
+                AddChild(_startHighlight);
+            }
+            Vector3 startPos = cell.Position;
+            _startHighlight.GlobalPosition = new Vector3(startPos.X, startPos.Y + 0.1f, startPos.Z);
+            _startHighlight.Visible = true;
+
+            if (_searchToCell != null)
+            {
+                FindPath(_searchFromCell, _searchToCell);
             }
         }
+        else if (_searchFromCell != null && _searchFromCell != cell)
+        {
+            // Set destination cell
+            DebugLog($"END: {cell.Coordinates}");
+            _searchToCell = cell;
+
+            // Create/move end highlight using cell's stored position (has correct elevation)
+            if (_endHighlight == null)
+            {
+                _endHighlight = CreateHighlightHex(new Color(1, 0, 0)); // Red
+                AddChild(_endHighlight);
+            }
+            Vector3 endPos = cell.Position;
+            _endHighlight.GlobalPosition = new Vector3(endPos.X, endPos.Y + 0.1f, endPos.Z);
+            _endHighlight.Visible = true;
+
+            FindPath(_searchFromCell, _searchToCell);
+        }
+        else
+        {
+            DebugLog($"Click ignored - Shift+Click first to set start");
+        }
+    }
+
+    /// <summary>
+    /// Creates a hex-shaped mesh for highlighting cells.
+    /// Tutorial 16: Uses the cell-outline texture with proper UV mapping.
+    /// </summary>
+    private MeshInstance3D CreateHighlightHex(Color color)
+    {
+        // Ensure hex mesh is created (once, shared by all highlights)
+        if (_hexHighlightMesh == null)
+        {
+            _hexHighlightMesh = CreateHexHighlightMesh();
+        }
+
+        // Load base material if not already loaded
+        if (_highlightBaseMaterial == null)
+        {
+            _highlightBaseMaterial = GD.Load<ShaderMaterial>("res://materials/highlight_material.tres");
+        }
+
+        var meshInstance = new MeshInstance3D();
+        meshInstance.Mesh = _hexHighlightMesh;
+
+        // Duplicate material so each highlight can have its own color
+        var material = (ShaderMaterial)_highlightBaseMaterial.Duplicate();
+        material.SetShaderParameter("highlight_color", color);
+        meshInstance.MaterialOverride = material;
+
+        // Rotate to lie flat on the ground (hex mesh is created in XZ plane)
+        meshInstance.Visible = false;
+        return meshInstance;
+    }
+
+    /// <summary>
+    /// Creates a flat hexagonal mesh with UV coordinates for the outline texture.
+    /// Tutorial 16: Matches Catlike Coding's hex cell outline approach.
+    /// </summary>
+    private static ArrayMesh CreateHexHighlightMesh()
+    {
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+
+        // Use slightly smaller radius so outline fits within cell
+        float radius = HexMetrics.OuterRadius * 0.95f;
+        var center = Vector3.Zero;
+
+        // Create 6 triangles forming a hexagon
+        // Hex corners are at 30, 90, 150, 210, 270, 330 degrees (pointy-top hex)
+        for (int i = 0; i < 6; i++)
+        {
+            // Angles for pointy-top hex (starts at 30 degrees = PI/6)
+            float angle1 = Mathf.Pi / 6f + (Mathf.Pi / 3f) * i;
+            float angle2 = Mathf.Pi / 6f + (Mathf.Pi / 3f) * (i + 1);
+
+            var corner1 = new Vector3(
+                Mathf.Cos(angle1) * radius,
+                0,
+                Mathf.Sin(angle1) * radius
+            );
+            var corner2 = new Vector3(
+                Mathf.Cos(angle2) * radius,
+                0,
+                Mathf.Sin(angle2) * radius
+            );
+
+            // UV coordinates map the hex to the texture
+            // Center of texture is (0.5, 0.5), corners map to hex edges
+            var uvCenter = new Vector2(0.5f, 0.5f);
+            var uv1 = new Vector2(
+                0.5f + 0.5f * Mathf.Cos(angle1),
+                0.5f + 0.5f * Mathf.Sin(angle1)
+            );
+            var uv2 = new Vector2(
+                0.5f + 0.5f * Mathf.Cos(angle2),
+                0.5f + 0.5f * Mathf.Sin(angle2)
+            );
+
+            // Add triangle (center, corner1, corner2)
+            st.SetNormal(Vector3.Up);
+            st.SetUV(uvCenter);
+            st.AddVertex(center);
+
+            st.SetNormal(Vector3.Up);
+            st.SetUV(uv1);
+            st.AddVertex(corner1);
+
+            st.SetNormal(Vector3.Up);
+            st.SetUV(uv2);
+            st.AddVertex(corner2);
+        }
+
+        return st.Commit();
+    }
+
+    // Tutorial 16: Two-point pathfinding methods
+
+    /// <summary>
+    /// Finds a path between two cells using A* algorithm.
+    /// Tutorial 16: Highlights start (blue), end (red), and path (white).
+    /// </summary>
+    public void FindPath(HexCell fromCell, HexCell toCell)
+    {
+        // Clear any previous path
+        ClearPath();
+
+        DebugLog($"FindPath: {fromCell.Coordinates} -> {toCell.Coordinates}");
+
+        // Run A* search
+        _currentPathExists = Search(fromCell, toCell);
+
+        // Show the path if found
+        if (_currentPathExists)
+        {
+            // Debug: Check PathFrom chain
+            DebugLog($"Path exists! toCell.PathFrom = {toCell.PathFrom?.Coordinates}");
+            int pathLength = ShowPathWithBoxes();
+            DebugLog($"PATH: {pathLength} cells, {_pathHighlights.Count} boxes");
+        }
+        else
+        {
+            DebugLog($"NO PATH: {fromCell.Coordinates} to {toCell.Coordinates}");
+        }
+    }
+
+    /// <summary>
+    /// Performs A* search from start to destination.
+    /// Tutorial 16: Uses SearchHeuristic for informed search.
+    /// </summary>
+    /// <returns>True if a path was found, false otherwise.</returns>
+    private bool Search(HexCell fromCell, HexCell toCell)
+    {
+        _searchFrontierPhase++;
+        _searchFrontier.Clear();
+
+        fromCell.Distance = 0;
+        fromCell.PathFrom = null; // Starting cell has no entry direction
+        fromCell.SearchPhase = _searchFrontierPhase;
+        _searchFrontier.Enqueue(fromCell);
+
+        int explored = 0;
+        while (_searchFrontier.Count > 0)
+        {
+            HexCell current = _searchFrontier.Dequeue();
+            explored++;
+
+            // Early exit when destination reached
+            if (current == toCell)
+            {
+                DebugLog($"Search: found after {explored} cells");
+                return true;
+            }
+
+            for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+            {
+                HexCell? neighbor = current.GetNeighbor(d);
+                if (neighbor == null)
+                {
+                    continue;
+                }
+
+                // Skip cells already fully processed in this search
+                if (neighbor.SearchPhase > _searchFrontierPhase)
+                {
+                    continue;
+                }
+
+                // Calculate movement cost
+                int moveCost = GetMoveCost(current, neighbor, d);
+                if (moveCost < 0)
+                {
+                    continue; // Impassable
+                }
+
+                int distance = current.Distance + moveCost;
+
+                if (neighbor.SearchPhase < _searchFrontierPhase)
+                {
+                    // First time visiting this cell
+                    neighbor.Distance = distance;
+                    neighbor.PathFrom = current;
+                    neighbor.SearchHeuristic =
+                        neighbor.Coordinates.DistanceTo(toCell.Coordinates);
+                    neighbor.SearchPhase = _searchFrontierPhase;
+                    _searchFrontier.Enqueue(neighbor);
+                }
+                else if (distance < neighbor.Distance)
+                {
+                    // Found a shorter path to this cell
+                    int oldPriority = neighbor.SearchPriority;
+                    neighbor.Distance = distance;
+                    neighbor.PathFrom = current;
+                    _searchFrontier.Change(neighbor, oldPriority);
+                }
+            }
+        }
+
+        DebugLog($"Search: exhausted after {explored} cells, no path");
+        return false; // No path found
+    }
+
+    /// <summary>
+    /// Highlights the found path using visible boxes.
+    /// Returns the path length.
+    /// </summary>
+    private int ShowPathWithBoxes()
+    {
+        if (_searchToCell == null || _searchFromCell == null)
+        {
+            DebugLog("ShowPath: null cells!");
+            return 0;
+        }
+
+        int pathLength = 0;
+
+        // Backtrace from destination to start, creating white hex highlights
+        HexCell? current = _searchToCell.PathFrom;
+        DebugLog($"ShowPath: starting from PathFrom={current?.Coordinates}");
+
+        while (current != null && current != _searchFromCell)
+        {
+            DebugLog($"ShowPath: hex at {current.Coordinates}");
+            // Create a white hex highlight at this cell's position
+            var hex = CreateHighlightHex(new Color(1, 1, 1)); // White
+            AddChild(hex);
+
+            // Use cell.Position directly - it has correct elevation with noise
+            Vector3 cellPos = current.Position;
+            hex.GlobalPosition = new Vector3(cellPos.X, cellPos.Y + 0.1f, cellPos.Z);
+            hex.Visible = true;
+
+            _pathHighlights.Add(hex);
+            pathLength++;
+            current = current.PathFrom;
+
+            // Safety check to prevent infinite loops
+            if (pathLength > 100)
+            {
+                DebugLog("ShowPath: too many steps, breaking");
+                break;
+            }
+        }
+
+        DebugLog($"ShowPath: created {pathLength} hexes");
+        return pathLength + 2; // +2 for start and end cells
+    }
+
+    /// <summary>
+    /// Clears the current path visualization.
+    /// </summary>
+    private void ClearPath()
+    {
+        // Clear path hex highlights
+        foreach (var hex in _pathHighlights)
+        {
+            hex.QueueFree();
+        }
+        _pathHighlights.Clear();
+
+        _currentPathExists = false;
     }
 
     /// <summary>
@@ -311,11 +749,55 @@ public partial class HexGrid : Node3D
             return -1;
         }
 
+        // Custom extension: Rivers affect movement (not in original Catlike tutorials)
+        // Check 1: River edge crossing
+        bool fromHasRiver = fromCell.HasRiverThroughEdge(direction);
+        bool toHasRiver = toCell.HasRiverThroughEdge(direction.Opposite());
+        bool crossingRiverEdge = fromHasRiver || toHasRiver;
+
+        // Check 2: River channel crossing inside a cell
+        bool crossingRiverChannel = false;
+        if (fromCell.HasIncomingRiver && fromCell.HasOutgoingRiver && fromCell.PathFrom != null)
+        {
+            HexDirection dirToPathFrom = GetDirectionToNeighbor(fromCell, fromCell.PathFrom);
+            HexDirection entryDirection = dirToPathFrom;
+            crossingRiverChannel = fromCell.WouldCrossRiverChannel(entryDirection, direction);
+        }
+
+        bool crossingRiver = crossingRiverEdge || crossingRiverChannel;
+
+        if (crossingRiver)
+        {
+            if (RiversBlockMovement)
+            {
+                return -1; // Rivers completely block movement without bridge
+            }
+            // Rivers don't block but add extra cost
+            return RiverCrossingCost;
+        }
+
         // Normal terrain cost
         int moveCost = edgeType == HexEdgeType.Flat ? 5 : 10;
         // Add cost for features in destination cell
         moveCost += toCell.UrbanLevel + toCell.FarmLevel + toCell.PlantLevel;
         return moveCost;
+    }
+
+    /// <summary>
+    /// Gets the direction from a cell to one of its neighbors.
+    /// Used to determine entry direction for river crossing checks.
+    /// </summary>
+    private HexDirection GetDirectionToNeighbor(HexCell cell, HexCell neighbor)
+    {
+        for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+        {
+            if (cell.GetNeighbor(d) == neighbor)
+            {
+                return d;
+            }
+        }
+        // Fallback (should never happen with valid neighbors)
+        return HexDirection.NE;
     }
 
     /// <summary>

@@ -3,6 +3,7 @@ using Godot;
 /// <summary>
 /// Represents a single hexagonal cell.
 /// Ported from Catlike Coding Hex Map Tutorials 1-5.
+/// Tutorial 16: Added cell highlighting for pathfinding visualization.
 /// </summary>
 public partial class HexCell : Node3D
 {
@@ -18,6 +19,10 @@ public partial class HexCell : Node3D
     /// Reference to the coordinate label for this cell.
     /// </summary>
     public Label3D? UiLabel;
+
+    // Tutorial 16: Highlight mesh for pathfinding visualization
+    private MeshInstance3D? _highlight;
+    private StandardMaterial3D? _highlightMaterial;
 
     private HexCell[] _neighbors = new HexCell[6];
 
@@ -280,6 +285,61 @@ public partial class HexCell : Node3D
     {
         return (_hasIncomingRiver && _incomingRiver == direction) ||
                (_hasOutgoingRiver && _outgoingRiver == direction);
+    }
+
+    /// <summary>
+    /// Checks if movement through this cell from entryDirection to exitDirection
+    /// would cross the river channel.
+    /// Custom extension: Rivers divide cells - movement must stay on one side.
+    /// (Not from Catlike Coding tutorials - rivers are visual-only in the original)
+    /// </summary>
+    /// <param name="entryDirection">Direction we entered this cell from</param>
+    /// <param name="exitDirection">Direction we want to exit this cell to</param>
+    /// <returns>True if this movement would cross the river channel</returns>
+    public bool WouldCrossRiverChannel(HexDirection entryDirection, HexDirection exitDirection)
+    {
+        // Only applies to cells with a through-flowing river (not begin/end)
+        if (!_hasIncomingRiver || !_hasOutgoingRiver) return false;
+
+        // Check if entry/exit are river edges
+        bool entryIsRiverEdge = (entryDirection == _incomingRiver || entryDirection == _outgoingRiver);
+        bool exitIsRiverEdge = (exitDirection == _incomingRiver || exitDirection == _outgoingRiver);
+
+        // If entering or exiting through a river edge, don't apply crossing check
+        // Check 1 in GetMoveCost already handles river edge crossings (requires road/bridge)
+        // If we got here via a river edge, it means we have a road, so allow it
+        if (entryIsRiverEdge || exitIsRiverEdge)
+        {
+            return false;
+        }
+
+        // For non-river edges, check if they're on different sides of the river
+        bool entryOnSideA = IsDirectionOnClockwiseSide(entryDirection);
+        bool exitOnSideA = IsDirectionOnClockwiseSide(exitDirection);
+
+        // If on different sides, we'd have to cross the river channel
+        return entryOnSideA != exitOnSideA;
+    }
+
+    /// <summary>
+    /// Determines if a direction is on the "clockwise side" of the river channel.
+    /// The clockwise side is defined as directions in the clockwise arc from
+    /// outgoing river to incoming river (exclusive of both river edges).
+    /// </summary>
+    private bool IsDirectionOnClockwiseSide(HexDirection direction)
+    {
+        int d = (int)direction;
+        int outD = (int)_outgoingRiver;
+        int inD = (int)_incomingRiver;
+
+        // Clockwise steps from outgoing to direction
+        int stepsToDir = ((d - outD) + 6) % 6;
+        // Clockwise steps from outgoing to incoming
+        int stepsToIn = ((inD - outD) + 6) % 6;
+
+        // Direction is on clockwise side if it's between outgoing and incoming
+        // (exclusively - 0 would be outgoing itself, stepsToIn would be incoming)
+        return stepsToDir > 0 && stepsToDir < stepsToIn;
     }
 
     /// <summary>
@@ -572,6 +632,83 @@ public partial class HexCell : Node3D
                 neighbor.Chunk.Refresh();
             }
         }
+    }
+
+    // Tutorial 16: Cell highlighting methods
+
+    /// <summary>
+    /// Enables the cell highlight with the specified color.
+    /// Tutorial 16: Used for pathfinding visualization (blue=start, red=end, white=path).
+    /// </summary>
+    public void EnableHighlight(Color color)
+    {
+        GD.Print($"[HIGHLIGHT] EnableHighlight({color}) on cell {Coordinates}");
+        if (_highlight == null)
+        {
+            CreateHighlight();
+        }
+
+        if (_highlight != null && _highlightMaterial != null)
+        {
+            // Set the highlight color with transparency
+            _highlightMaterial.AlbedoColor = new Color(color.R, color.G, color.B, 0.5f);
+            _highlight.Visible = true;
+            GD.Print($"[HIGHLIGHT] Made visible at {_highlight.GlobalPosition}");
+        }
+        else
+        {
+            GD.Print($"[HIGHLIGHT] WARNING: _highlight or material is null");
+        }
+    }
+
+    /// <summary>
+    /// Disables the cell highlight.
+    /// Tutorial 16.
+    /// </summary>
+    public void DisableHighlight()
+    {
+        if (_highlight != null)
+        {
+            _highlight.Visible = false;
+        }
+    }
+
+    /// <summary>
+    /// Creates the highlight for this cell using a simple visible mesh.
+    /// Tutorial 16: Lazily created on first EnableHighlight call.
+    /// </summary>
+    private void CreateHighlight()
+    {
+        GD.Print($"[HIGHLIGHT] CreateHighlight for cell {Coordinates}, cell GlobalPos={GlobalPosition}");
+
+        // Create a simple MeshInstance3D with a box to mark the cell
+        var meshInstance = new MeshInstance3D();
+        meshInstance.Name = $"Highlight_{Coordinates}";
+
+        // Create a box mesh - very visible
+        var box = new BoxMesh();
+        box.Size = new Vector3(8f, 5f, 8f);  // Big obvious box
+        meshInstance.Mesh = box;
+
+        // Create a bright solid material - no transparency
+        var material = new StandardMaterial3D();
+        material.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        material.AlbedoColor = new Color(0, 0, 1, 1f); // Solid blue
+        meshInstance.MaterialOverride = material;
+
+        // Position at cell's world position + height offset
+        // Add to scene root instead of as child to ensure visibility
+        meshInstance.GlobalPosition = new Vector3(GlobalPosition.X, GlobalPosition.Y + 3f, GlobalPosition.Z);
+
+        meshInstance.Visible = false;
+
+        // Add to scene root instead of this cell
+        GetTree().Root.AddChild(meshInstance);
+
+        _highlight = meshInstance;
+        _highlightMaterial = material;
+
+        GD.Print($"[HIGHLIGHT] Box created at GlobalPos={meshInstance.GlobalPosition}");
     }
 
 }

@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://main001"]
+[gd_scene load_steps=9 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://src/HexGrid.cs" id="1_hexgrid"]
 [ext_resource type="PackedScene" uid="uid://cell001" path="res://scenes/HexCell.tscn" id="4_cellprefab"]
@@ -6,6 +6,7 @@
 [ext_resource type="Shader" path="res://shaders/vertex_color.gdshader" id="6_shader"]
 [ext_resource type="Script" path="res://src/MapCamera.cs" id="7_camera"]
 [ext_resource type="Script" path="res://src/HexMapEditor.cs" id="8_editor"]
+[ext_resource type="Script" path="res://src/CompassUI.cs" id="9_compass"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_1"]
 shader = ExtResource("6_shader")
@@ -34,3 +35,47 @@ Colors = PackedColorArray(1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1)
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 50, 0)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="Compass" type="Control" parent="CanvasLayer"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -100.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 110.0
+grow_horizontal = 0
+script = ExtResource("9_compass")
+
+[node name="Background" type="ColorRect" parent="CanvasLayer/Compass"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.5)
+
+[node name="Arrow" type="Label" parent="CanvasLayer/Compass"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_font_sizes/font_size = 48
+text = "▲"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NLabel" type="Label" parent="CanvasLayer/Compass"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -10.0
+offset_top = 5.0
+offset_right = 10.0
+offset_bottom = 25.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 16
+text = "N"
+horizontal_alignment = 1
