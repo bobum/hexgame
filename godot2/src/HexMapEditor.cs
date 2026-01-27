@@ -1,10 +1,15 @@
 using Godot;
+using HexGame.Generation;
 
 /// <summary>
 /// Handles mouse input for editing hex cells.
 /// Ported from Catlike Coding Hex Map Tutorial 5.
 /// Tutorial 14: Updated to use terrain type indices instead of colors.
 /// Uses a collision plane for raycasting.
+///
+/// Keyboard controls:
+/// - Spacebar: Generate new random map
+/// - G: Regenerate map with same seed (for debugging)
 /// </summary>
 public partial class HexMapEditor : Node3D
 {
@@ -22,6 +27,10 @@ public partial class HexMapEditor : Node3D
     private StaticBody3D _groundPlane = null!;
     private CollisionShape3D _groundShape = null!;
 
+    // Map generation
+    private MapGenerator? _mapGenerator;
+    private int _lastSeed;
+
     public override void _Ready()
     {
         _hexGrid = GetNode<HexGrid>(HexGridPath);
@@ -36,10 +45,32 @@ public partial class HexMapEditor : Node3D
         shape.Plane = new Plane(Vector3.Up, 0f);
         _groundShape.Shape = shape;
         _groundPlane.AddChild(_groundShape);
+
+        // Initialize map generator
+        _mapGenerator = new MapGenerator();
+        _mapGenerator.GenerationStarted += () => GD.Print("Map generation started...");
+        _mapGenerator.GenerationProgress += (stage, progress) => GD.Print($"  {stage}: {progress:P0}");
+        _mapGenerator.GenerationCompleted += (success) => GD.Print($"Map generation {(success ? "completed" : "failed")}");
     }
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        // Handle keyboard input for map generation
+        if (@event is InputEventKey key && key.Pressed && !key.Echo)
+        {
+            switch (key.Keycode)
+            {
+                case Key.Space:
+                    // Generate new map with random seed
+                    GenerateMap(0);
+                    break;
+                case Key.G:
+                    // Regenerate with same seed (for debugging)
+                    GenerateMap(_lastSeed);
+                    break;
+            }
+        }
+
         // Tutorial 6: Disabled mouse interaction for programmatic-only testing
         // Uncomment to re-enable editing:
         // if (@event is InputEventMouseButton mb && mb.Pressed)
@@ -49,6 +80,18 @@ public partial class HexMapEditor : Node3D
         //         HandleInput();
         //     }
         // }
+    }
+
+    private void GenerateMap(int seed)
+    {
+        if (_mapGenerator == null || _mapGenerator.IsGenerating)
+            return;
+
+        // If seed is 0, a random seed will be used
+        _lastSeed = seed != 0 ? seed : (int)GD.Randi();
+
+        GD.Print($"Generating map with seed: {_lastSeed}");
+        _mapGenerator.Generate(_hexGrid, _lastSeed);
     }
 
     private void HandleInput()

@@ -207,29 +207,7 @@ public class MapGenerator : IMapGenerator
 
     #endregion
 
-    #region Intermediate Data Structure
-
-    /// <summary>
-    /// Thread-safe cell data for async generation.
-    /// Plain C# struct with no Godot dependencies.
-    /// </summary>
-    private struct CellData
-    {
-        public int X;
-        public int Z;
-        public int Elevation;
-        public int WaterLevel;
-        public int TerrainTypeIndex;
-        public int UrbanLevel;
-        public int FarmLevel;
-        public int PlantLevel;
-        public int SpecialIndex;
-        public bool Walled;
-        // River data would be added in Sprint 4
-        // Road data would be added if needed
-    }
-
-    #endregion
+    // CellData is defined in LandGenerator.cs and shared across generators
 
     #region Synchronous Generation Pipeline
 
@@ -284,56 +262,37 @@ public class MapGenerator : IMapGenerator
         if (_grid == null) return;
 
         int totalCells = _gridWidth * _gridHeight;
-        int landBudget = (int)(totalCells * GenerationConfig.LandPercentage);
+        GD.Print($"[MapGenerator] Starting land generation for {totalCells} cells");
 
-        GD.Print($"[MapGenerator] Land budget: {landBudget} of {totalCells} cells");
-
-        int iterations = 0;
-        int cellsRaised = 0;
-
-        while (landBudget > 0 && iterations < GenerationConfig.MaxChunkIterations)
+        // Create intermediate data array
+        var data = new CellData[totalCells];
+        for (int z = 0; z < _gridHeight; z++)
         {
-            iterations++;
-
-            HexCell? startCell = GetRandomCellSync();
-            if (startCell == null) continue;
-
-            int chunkSize = _rng.Next(GenerationConfig.MinChunkSize, GenerationConfig.MaxChunkSize + 1);
-            int raised = RaiseLandChunkSync(startCell, chunkSize);
-            landBudget -= raised;
-            cellsRaised += raised;
-        }
-
-        GD.Print($"[MapGenerator] Land generation: {cellsRaised} cells raised in {iterations} iterations");
-    }
-
-    private int RaiseLandChunkSync(HexCell center, int budget)
-    {
-        // TODO: Implement full chunk expansion in Sprint 2
-        // For now, just raise the center cell
-        if (center.Elevation < GenerationConfig.WaterLevel)
-        {
-            center.Elevation = GenerationConfig.WaterLevel;
-            return 1;
-        }
-        else if (_rng.NextDouble() < GenerationConfig.ElevationRaiseChance)
-        {
-            // Sometimes raise land cells higher
-            if (center.Elevation < GenerationConfig.MaxElevation)
+            for (int x = 0; x < _gridWidth; x++)
             {
-                center.Elevation++;
-                return 1;
+                int index = z * _gridWidth + x;
+                data[index] = new CellData(x, z);
             }
         }
-        return 0;
-    }
 
-    private HexCell? GetRandomCellSync()
-    {
-        if (_grid == null || _gridWidth == 0 || _gridHeight == 0) return null;
-        int x = _rng.Next(_gridWidth);
-        int z = _rng.Next(_gridHeight);
-        return _grid.GetCellByOffset(x, z);
+        // Use LandGenerator for chunk-based land creation
+        var landGenerator = new LandGenerator(_rng, _gridWidth, _gridHeight);
+        landGenerator.Generate(data, GenerationConfig.LandPercentage);
+
+        // Apply results to grid
+        int landCells = 0;
+        foreach (var cellData in data)
+        {
+            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
+            if (cell != null)
+            {
+                cell.Elevation = cellData.Elevation;
+                if (cellData.Elevation >= GenerationConfig.WaterLevel)
+                    landCells++;
+            }
+        }
+
+        GD.Print($"[MapGenerator] Land generation complete: {landCells} land cells ({100f * landCells / totalCells:F1}%)");
     }
 
     private void GenerateMoistureSync()
@@ -405,19 +364,7 @@ public class MapGenerator : IMapGenerator
             for (int x = 0; x < _gridWidth; x++)
             {
                 int index = z * _gridWidth + x;
-                data[index] = new CellData
-                {
-                    X = x,
-                    Z = z,
-                    Elevation = GenerationConfig.MinElevation,
-                    WaterLevel = GenerationConfig.WaterLevel,
-                    TerrainTypeIndex = 0,
-                    UrbanLevel = 0,
-                    FarmLevel = 0,
-                    PlantLevel = 0,
-                    SpecialIndex = 0,
-                    Walled = false
-                };
+                data[index] = new CellData(x, z);
             }
         }
 
@@ -448,35 +395,11 @@ public class MapGenerator : IMapGenerator
 
     private void GenerateLandAsync(CellData[] data, CancellationToken ct)
     {
-        int totalCells = data.Length;
-        int landBudget = (int)(totalCells * GenerationConfig.LandPercentage);
+        ct.ThrowIfCancellationRequested();
 
-        int iterations = 0;
-        while (landBudget > 0 && iterations < GenerationConfig.MaxChunkIterations)
-        {
-            ct.ThrowIfCancellationRequested();
-            iterations++;
-
-            int x = _rng.Next(_gridWidth);
-            int z = _rng.Next(_gridHeight);
-            int index = z * _gridWidth + x;
-
-            ref CellData cell = ref data[index];
-
-            if (cell.Elevation < GenerationConfig.WaterLevel)
-            {
-                cell.Elevation = GenerationConfig.WaterLevel;
-                landBudget--;
-            }
-            else if (_rng.NextDouble() < GenerationConfig.ElevationRaiseChance)
-            {
-                if (cell.Elevation < GenerationConfig.MaxElevation)
-                {
-                    cell.Elevation++;
-                    landBudget--;
-                }
-            }
-        }
+        // Use LandGenerator for chunk-based land creation
+        var landGenerator = new LandGenerator(_rng, _gridWidth, _gridHeight);
+        landGenerator.Generate(data, GenerationConfig.LandPercentage);
     }
 
     private void GenerateMoistureAsync(CellData[] data, CancellationToken ct)

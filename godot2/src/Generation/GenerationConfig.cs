@@ -42,6 +42,22 @@ public static class GenerationConfig
 
     #endregion
 
+    #region Erosion
+
+    /// <summary>
+    /// Minimum ratio of land neighbors for a land cell to remain land.
+    /// Land cells with fewer land neighbors are eroded to water.
+    /// </summary>
+    public const float ErosionLandThreshold = 0.3f;
+
+    /// <summary>
+    /// Minimum ratio of land neighbors for a water cell to become land.
+    /// Water cells with more land neighbors are filled in.
+    /// </summary>
+    public const float ErosionWaterThreshold = 0.7f;
+
+    #endregion
+
     #region Elevation
 
     /// <summary>

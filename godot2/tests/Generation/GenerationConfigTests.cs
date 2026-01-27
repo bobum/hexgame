@@ -53,6 +53,33 @@ public class GenerationConfigTests
 
     #endregion
 
+    #region Erosion Tests
+
+    [Fact]
+    public void ErosionLandThreshold_IsWithinValidRange()
+    {
+        GenerationConfig.ErosionLandThreshold.Should().BeGreaterOrEqualTo(0f);
+        GenerationConfig.ErosionLandThreshold.Should().BeLessOrEqualTo(1f);
+    }
+
+    [Fact]
+    public void ErosionWaterThreshold_IsWithinValidRange()
+    {
+        GenerationConfig.ErosionWaterThreshold.Should().BeGreaterOrEqualTo(0f);
+        GenerationConfig.ErosionWaterThreshold.Should().BeLessOrEqualTo(1f);
+    }
+
+    [Fact]
+    public void ErosionThresholds_LandIsLessThanWater()
+    {
+        // Land threshold should be lower than water threshold
+        // This ensures there's a buffer zone where neither erosion nor filling occurs
+        GenerationConfig.ErosionLandThreshold.Should()
+            .BeLessThan(GenerationConfig.ErosionWaterThreshold);
+    }
+
+    #endregion
+
     #region Elevation Tests
 
     [Fact]

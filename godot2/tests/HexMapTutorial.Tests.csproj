@@ -30,6 +30,7 @@
     <Compile Include="..\src\HexDirection.cs" Link="Source\HexDirection.cs" />
     <Compile Include="..\src\EdgeVertices.cs" Link="Source\EdgeVertices.cs" />
     <Compile Include="..\src\Generation\GenerationConfig.cs" Link="Source\GenerationConfig.cs" />
+    <Compile Include="..\src\Generation\LandGenerator.cs" Link="Source\LandGenerator.cs" />
   </ItemGroup>
 
 </Project>
