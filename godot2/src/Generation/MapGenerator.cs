@@ -297,8 +297,74 @@ public class MapGenerator : IMapGenerator
 
     private void GenerateRiversSync()
     {
-        // TODO: Implement in Sprint 4
-        GD.Print("[MapGenerator] River generation (stub)");
+        if (_syncData == null) return;
+
+        // Debug: count land cells and check moisture
+        int landCells = 0;
+        int cellsWithMoisture = 0;
+        float maxMoisture = 0f;
+        int maxElevation = 0;
+        foreach (var cell in _syncData)
+        {
+            if (cell.Elevation >= GenerationConfig.WaterLevel)
+            {
+                landCells++;
+                if (cell.Moisture > 0) cellsWithMoisture++;
+                if (cell.Moisture > maxMoisture) maxMoisture = cell.Moisture;
+                if (cell.Elevation > maxElevation) maxElevation = cell.Elevation;
+            }
+        }
+        GD.Print($"[RiverDebug] Land cells: {landCells}, with moisture: {cellsWithMoisture}, maxMoisture: {maxMoisture:F2}, maxElevation: {maxElevation}");
+
+        var riverGenerator = new RiverGenerator(_rng, _gridWidth, _gridHeight);
+
+        // Debug: check sources before generation
+        var sources = riverGenerator.FindRiverSources(_syncData);
+        GD.Print($"[RiverDebug] Found {sources.Count} candidate river sources");
+
+        if (sources.Count > 0)
+        {
+            // Show fitness of first few sources
+            for (int i = 0; i < Math.Min(3, sources.Count); i++)
+            {
+                var idx = sources[i];
+                var cell = _syncData[idx];
+                float fitness = (float)(cell.Elevation - GenerationConfig.WaterLevel) /
+                               (GenerationConfig.MaxElevation - GenerationConfig.WaterLevel) * cell.Moisture;
+                GD.Print($"[RiverDebug]   Source {idx}: elevation={cell.Elevation}, moisture={cell.Moisture:F2}, fitness={fitness:F2}");
+            }
+        }
+
+        riverGenerator.Generate(_syncData);
+
+        int riverCells = 0;
+        var riverLocations = new System.Collections.Generic.List<string>();
+        foreach (var cell in _syncData)
+        {
+            if (cell.HasOutgoingRiver || cell.HasIncomingRiver)
+            {
+                riverCells++;
+                // Convert offset coords to cube coords
+                int x = cell.X;
+                int z = cell.Z;
+                int cubeX = x - z / 2;
+                int cubeZ = z;
+                int cubeY = -cubeX - cubeZ;
+                string riverType = cell.HasOutgoingRiver && cell.HasIncomingRiver ? "through" :
+                                   cell.HasOutgoingRiver ? "source" : "end";
+                riverLocations.Add($"({cubeX},{cubeY},{cubeZ}) [{riverType}]");
+            }
+        }
+
+        GD.Print($"[MapGenerator] Rivers: {riverCells} cells with rivers");
+        if (riverLocations.Count > 0)
+        {
+            GD.Print($"[RiverCells] Locations (cube coords):");
+            foreach (var loc in riverLocations)
+            {
+                GD.Print($"  {loc}");
+            }
+        }
     }
 
     private void PlaceFeaturesSync()
@@ -309,11 +375,14 @@ public class MapGenerator : IMapGenerator
 
     /// <summary>
     /// Applies generated data to the HexGrid.
+    /// Uses two passes: first set all cell properties, then apply rivers.
+    /// This ensures neighbor elevations are correct when validating rivers.
     /// </summary>
     private void ApplySyncDataToGrid()
     {
         if (_grid == null || _syncData == null) return;
 
+        // Pass 1: Apply all cell properties (elevation, terrain, etc.)
         foreach (var cellData in _syncData)
         {
             var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
@@ -331,7 +400,38 @@ public class MapGenerator : IMapGenerator
             cell.RemoveRoads();
         }
 
-        GD.Print("[MapGenerator] Applied data to grid");
+        // Pass 2: Apply rivers (now that all elevations are set correctly)
+        int riversApplied = 0;
+        int riversFailed = 0;
+        foreach (var cellData in _syncData)
+        {
+            if (!cellData.HasOutgoingRiver) continue;
+
+            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
+            if (cell == null) continue;
+
+            var direction = (HexDirection)cellData.OutgoingRiverDirection;
+            var neighbor = cell.GetNeighbor(direction);
+            if (neighbor != null)
+            {
+                bool hadRiverBefore = cell.HasOutgoingRiver;
+                cell.SetOutgoingRiver(direction);
+                if (cell.HasOutgoingRiver && !hadRiverBefore)
+                {
+                    riversApplied++;
+                }
+                else if (!cell.HasOutgoingRiver)
+                {
+                    riversFailed++;
+                    if (riversFailed <= 5)
+                    {
+                        GD.Print($"[RiverApply] Failed: cell({cellData.X},{cellData.Z}) elev={cell.Elevation} -> neighbor elev={neighbor.Elevation}, dir={direction}");
+                    }
+                }
+            }
+        }
+
+        GD.Print($"[MapGenerator] Applied data to grid: {riversApplied} rivers applied, {riversFailed} failed validation");
     }
 
     #endregion
@@ -397,6 +497,12 @@ public class MapGenerator : IMapGenerator
 
         ct.ThrowIfCancellationRequested();
 
+        // Generate rivers
+        QueueProgress("Generating rivers", 0.6f);
+        GenerateRiversAsync(data, ct);
+
+        ct.ThrowIfCancellationRequested();
+
         QueueProgress("Finalizing", 0.9f);
 
         return data;
@@ -418,9 +524,19 @@ public class MapGenerator : IMapGenerator
         climateGenerator.Generate(data, ct);
     }
 
+    private void GenerateRiversAsync(CellData[] data, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        // Use RiverGenerator for river creation
+        var riverGenerator = new RiverGenerator(_rng, _gridWidth, _gridHeight);
+        riverGenerator.Generate(data, ct);
+    }
+
     /// <summary>
     /// Applies generated data to the HexGrid.
     /// Must be called from main thread only.
+    /// Uses two passes: first set all cell properties, then apply rivers.
     /// </summary>
     private void ApplyGeneratedDataToGrid()
     {
@@ -428,6 +544,7 @@ public class MapGenerator : IMapGenerator
 
         _grid.SetChunkRefreshSuppression(true);
 
+        // Pass 1: Apply all cell properties (elevation, terrain, etc.)
         foreach (var cellData in _generatedData)
         {
             var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
@@ -441,7 +558,23 @@ public class MapGenerator : IMapGenerator
             cell.PlantLevel = cellData.PlantLevel;
             cell.SpecialIndex = cellData.SpecialIndex;
             cell.Walled = cellData.Walled;
-            // Rivers and roads would be applied here in later sprints
+            cell.RemoveRiver();
+        }
+
+        // Pass 2: Apply rivers (now that all elevations are set correctly)
+        foreach (var cellData in _generatedData)
+        {
+            if (!cellData.HasOutgoingRiver) continue;
+
+            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
+            if (cell == null) continue;
+
+            var direction = (HexDirection)cellData.OutgoingRiverDirection;
+            var neighbor = cell.GetNeighbor(direction);
+            if (neighbor != null)
+            {
+                cell.SetOutgoingRiver(direction);
+            }
         }
 
         _grid.SetChunkRefreshSuppression(false);

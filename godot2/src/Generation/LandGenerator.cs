@@ -70,8 +70,42 @@ public class LandGenerator
 
         ct.ThrowIfCancellationRequested();
 
-        // Phase 2: Apply erosion to smooth coastlines
+        // Phase 2: Build up elevation with multiple passes
+        ApplyElevationPasses(data, ct);
+
+        ct.ThrowIfCancellationRequested();
+
+        // Phase 3: Apply erosion to smooth coastlines
         ApplyErosion(data);
+    }
+
+    /// <summary>
+    /// Applies multiple passes to raise land cell elevations.
+    /// Creates hills and mountains by iterating through land cells multiple times.
+    /// </summary>
+    private void ApplyElevationPasses(CellData[] data, CancellationToken ct)
+    {
+        for (int pass = 0; pass < GenerationConfig.ElevationPasses; pass++)
+        {
+            if ((pass & 0x1) == 0)
+                ct.ThrowIfCancellationRequested();
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                ref CellData cell = ref data[i];
+
+                // Only raise land cells
+                if (cell.Elevation >= GenerationConfig.WaterLevel)
+                {
+                    // Probabilistically raise elevation
+                    if (_rng.NextDouble() < GenerationConfig.ElevationRaiseChance &&
+                        cell.Elevation < GenerationConfig.MaxElevation)
+                    {
+                        cell.Elevation++;
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -205,6 +239,70 @@ public class LandGenerator
 public static class HexNeighborHelper
 {
     /// <summary>
+    /// Gets the neighbor index for a specific direction.
+    /// Returns -1 if the neighbor is outside grid bounds.
+    /// </summary>
+    /// <param name="index">Linear index of the cell</param>
+    /// <param name="direction">Direction (0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW)</param>
+    /// <param name="gridWidth">Width of the grid</param>
+    /// <param name="gridHeight">Height of the grid</param>
+    /// <returns>Neighbor index or -1 if invalid</returns>
+    public static int GetNeighborByDirection(int index, int direction, int gridWidth, int gridHeight)
+    {
+        if (gridWidth <= 0 || gridHeight <= 0)
+            return -1;
+
+        int x = index % gridWidth;
+        int z = index / gridWidth;
+
+        bool evenRow = (z & 1) == 0;
+
+        int nx, nz;
+        switch (direction)
+        {
+            case 0: // NE
+                nz = z + 1;
+                nx = evenRow ? x : x + 1;
+                break;
+            case 1: // E
+                nz = z;
+                nx = x + 1;
+                break;
+            case 2: // SE
+                nz = z - 1;
+                nx = evenRow ? x : x + 1;
+                break;
+            case 3: // SW
+                nz = z - 1;
+                nx = evenRow ? x - 1 : x;
+                break;
+            case 4: // W
+                nz = z;
+                nx = x - 1;
+                break;
+            case 5: // NW
+                nz = z + 1;
+                nx = evenRow ? x - 1 : x;
+                break;
+            default:
+                return -1;
+        }
+
+        if (nx < 0 || nx >= gridWidth || nz < 0 || nz >= gridHeight)
+            return -1;
+
+        return nz * gridWidth + nx;
+    }
+
+    /// <summary>
+    /// Gets the opposite direction (0-5 maps to 3-5,0-2).
+    /// </summary>
+    public static int GetOppositeDirection(int direction)
+    {
+        return (direction + 3) % 6;
+    }
+
+    /// <summary>
     /// Gets the indices of all valid neighbors for a cell in a hex grid.
     /// Uses offset coordinates where odd rows are shifted right.
     /// </summary>
@@ -298,6 +396,15 @@ public struct CellData
     public int SpecialIndex;
     public bool Walled;
 
+    // River tracking
+    public bool HasIncomingRiver;
+    public bool HasOutgoingRiver;
+    public int IncomingRiverDirection;  // 0-5 (HexDirection enum values)
+    public int OutgoingRiverDirection;  // 0-5
+
+    // Moisture storage (from ClimateGenerator)
+    public float Moisture;
+
     public CellData(int x, int z)
     {
         X = x;
@@ -310,5 +417,10 @@ public struct CellData
         PlantLevel = 0;
         SpecialIndex = 0;
         Walled = false;
+        HasIncomingRiver = false;
+        HasOutgoingRiver = false;
+        IncomingRiverDirection = 0;
+        OutgoingRiverDirection = 0;
+        Moisture = 0f;
     }
 }

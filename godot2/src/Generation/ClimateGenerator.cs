@@ -196,6 +196,7 @@ public class ClimateGenerator
 
     /// <summary>
     /// Assigns biomes (terrain types) based on elevation and moisture.
+    /// Also stores moisture in CellData for river generation.
     /// </summary>
     private void AssignBiomes(CellData[] data, float[] moistureMap, CancellationToken ct)
     {
@@ -205,6 +206,7 @@ public class ClimateGenerator
             if ((i & 0xFF) == 0)
                 ct.ThrowIfCancellationRequested();
 
+            data[i].Moisture = moistureMap[i];  // Store for river generation
             data[i].TerrainTypeIndex = GetBiome(data[i].Elevation, moistureMap[i]);
         }
     }

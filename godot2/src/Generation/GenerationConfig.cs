@@ -32,8 +32,16 @@ public static class GenerationConfig
     /// <summary>
     /// Probability that a cell is raised above water level (0.0 to 1.0).
     /// Creates elevation variation in land areas.
+    /// Higher values create more hills/mountains and longer rivers.
     /// </summary>
-    public const float ElevationRaiseChance = 0.3f;
+    public const float ElevationRaiseChance = 0.5f;
+
+    /// <summary>
+    /// Number of additional passes to raise land cell elevations.
+    /// Each pass iterates through all land cells and may raise them.
+    /// More passes = taller mountains and longer rivers.
+    /// </summary>
+    public const int ElevationPasses = 4;
 
     /// <summary>
     /// Safety limit for chunk generation iterations.
