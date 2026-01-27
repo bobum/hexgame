@@ -1,5 +1,7 @@
 using System;
 
+namespace HexGame.Generation;
+
 /// <summary>
 /// Interface for procedural map generators.
 /// Supports both synchronous and asynchronous generation with progress reporting.

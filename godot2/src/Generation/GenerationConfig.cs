@@ -1,3 +1,5 @@
+namespace HexGame.Generation;
+
 /// <summary>
 /// Centralized configuration constants for procedural map generation.
 /// Tuning these values affects the generated terrain characteristics.

@@ -39,6 +39,21 @@ public partial class HexGrid : Node3D
     private HexGridChunk[] _chunks = null!;
     private bool _labelsVisible = true;
 
+    /// <summary>
+    /// Number of cells in the X direction.
+    /// </summary>
+    public int CellCountX => _cellCountX;
+
+    /// <summary>
+    /// Number of cells in the Z direction.
+    /// </summary>
+    public int CellCountZ => _cellCountZ;
+
+    /// <summary>
+    /// Total number of cells in the grid.
+    /// </summary>
+    public int CellCount => _cells.Length;
+
     // Tutorial 14: Number of terrain types available
     private const int TerrainTypeCount = 5;
 
@@ -182,8 +197,9 @@ public partial class HexGrid : Node3D
     /// <summary>
     /// Sets the refresh suppression state for all chunks.
     /// Used during batch initialization to prevent redundant mesh rebuilds.
+    /// Also used by MapGenerator during procedural generation.
     /// </summary>
-    private void SetChunkRefreshSuppression(bool suppress)
+    public void SetChunkRefreshSuppression(bool suppress)
     {
         for (int i = 0; i < _chunks.Length; i++)
         {
@@ -193,8 +209,9 @@ public partial class HexGrid : Node3D
 
     /// <summary>
     /// Triggers a refresh on all chunks. Called once after batch initialization.
+    /// Also used by MapGenerator after procedural generation.
     /// </summary>
-    private void RefreshAllChunks()
+    public void RefreshAllChunks()
     {
         for (int i = 0; i < _chunks.Length; i++)
         {
@@ -953,6 +970,18 @@ public partial class HexGrid : Node3D
             return null;
         }
         return _cells[x + z * _cellCountX];
+    }
+
+    /// <summary>
+    /// Returns an enumerable of all cells in the grid.
+    /// Useful for bulk operations like procedural generation.
+    /// </summary>
+    public System.Collections.Generic.IEnumerable<HexCell> GetAllCells()
+    {
+        for (int i = 0; i < _cells.Length; i++)
+        {
+            yield return _cells[i];
+        }
     }
 
     /// <summary>

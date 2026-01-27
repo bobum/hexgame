@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Godot;
+
+namespace HexGame.Generation;
 
 /// <summary>
 /// Procedural map generator orchestrating terrain, climate, rivers, and features.
@@ -13,6 +16,11 @@ using Godot;
 /// 4. AssignBiomes - Set terrain types based on elevation/moisture
 /// 5. GenerateRivers - Create rivers flowing downhill
 /// 6. PlaceFeatures - Add vegetation/structures based on biome
+///
+/// Thread Safety:
+/// - Async generation uses intermediate CellData structures
+/// - All HexCell/HexGrid modifications happen on main thread
+/// - Events are only fired from main thread
 /// </summary>
 public class MapGenerator : IMapGenerator
 {
@@ -20,10 +28,24 @@ public class MapGenerator : IMapGenerator
     private Random _rng = new();
     private int _currentSeed;
 
+    // Cached grid dimensions (set at start of generation)
+    private int _gridWidth;
+    private int _gridHeight;
+
     // Async generation support
     private Thread? _workerThread;
+    private CancellationTokenSource? _cts;
     private volatile bool _isGenerating;
     private volatile bool _asyncComplete;
+    private volatile bool _asyncFailed;
+    private string? _asyncError;
+
+    // Thread-safe intermediate data for async generation
+    private CellData[]? _generatedData;
+
+    // Pending progress updates (queued from worker thread, dispatched on main thread)
+    private readonly Queue<(string stage, float progress)> _pendingProgress = new();
+    private readonly object _progressLock = new();
 
     #region Events
 
@@ -55,6 +77,7 @@ public class MapGenerator : IMapGenerator
         _grid = grid;
         _currentSeed = seed != 0 ? seed : (int)GD.Randi();
         _rng = new Random(_currentSeed);
+        CacheGridDimensions();
 
         GD.Print($"[MapGenerator] Starting synchronous generation with seed {_currentSeed}");
         _isGenerating = true;
@@ -63,22 +86,32 @@ public class MapGenerator : IMapGenerator
 
         try
         {
-            RunGenerationPipeline();
+            // Suppress chunk refreshes during bulk modifications
+            _grid.SetChunkRefreshSuppression(true);
+
+            RunGenerationPipelineSync();
+
+            _grid.SetChunkRefreshSuppression(false);
+            _grid.RefreshAllChunks();
+
             GenerationCompleted?.Invoke(true);
         }
         catch (Exception ex)
         {
             GD.PrintErr($"[MapGenerator] Generation failed: {ex.Message}");
+            _grid.SetChunkRefreshSuppression(false);
             GenerationCompleted?.Invoke(false);
         }
         finally
         {
             _isGenerating = false;
+            _grid = null; // Release reference to allow GC
         }
     }
 
     /// <summary>
     /// Starts asynchronous map generation.
+    /// Uses intermediate data structures - HexGrid is only modified on main thread.
     /// </summary>
     public void GenerateAsync(HexGrid grid, int seed = 0)
     {
@@ -91,14 +124,20 @@ public class MapGenerator : IMapGenerator
         _grid = grid;
         _currentSeed = seed != 0 ? seed : (int)GD.Randi();
         _rng = new Random(_currentSeed);
+        CacheGridDimensions();
 
         GD.Print($"[MapGenerator] Starting async generation with seed {_currentSeed}");
         _isGenerating = true;
         _asyncComplete = false;
+        _asyncFailed = false;
+        _asyncError = null;
+        _generatedData = null;
+
+        _cts = new CancellationTokenSource();
 
         GenerationStarted?.Invoke();
 
-        _workerThread = new Thread(AsyncWorker);
+        _workerThread = new Thread(() => AsyncWorker(_cts.Token));
         _workerThread.Start();
     }
 
@@ -111,7 +150,7 @@ public class MapGenerator : IMapGenerator
     }
 
     /// <summary>
-    /// Applies the results of async generation.
+    /// Applies the results of async generation to the grid.
     /// Must be called from main thread after IsGenerationComplete() returns true.
     /// </summary>
     public void FinishAsyncGeneration()
@@ -122,125 +161,114 @@ public class MapGenerator : IMapGenerator
             _workerThread = null;
         }
 
-        // Apply any pending changes that require main thread
-        // (e.g., chunk refresh, node operations)
-        FinalizeGeneration();
+        _cts?.Dispose();
+        _cts = null;
+
+        // Dispatch any pending progress updates
+        DispatchPendingProgress();
+
+        if (_asyncFailed)
+        {
+            GD.PrintErr($"[MapGenerator] Async generation failed: {_asyncError}");
+            _isGenerating = false;
+            _grid = null;
+            GenerationCompleted?.Invoke(false);
+            return;
+        }
+
+        // Apply generated data to grid (main thread only)
+        if (_generatedData != null && _grid != null)
+        {
+            ApplyGeneratedDataToGrid();
+        }
+
+        ReportProgressMainThread("Complete", 1.0f);
 
         _isGenerating = false;
+        _grid = null; // Release reference to allow GC
+        _generatedData = null;
         GenerationCompleted?.Invoke(true);
     }
 
     /// <summary>
     /// Cancels any ongoing async generation.
+    /// Non-blocking - signals cancellation and returns immediately.
     /// </summary>
     public void CancelGeneration()
     {
-        if (_workerThread != null && _workerThread.IsAlive)
-        {
-            // Note: Can't actually cancel thread, but we'll wait and discard
-            _workerThread.Join();
-        }
-        _workerThread = null;
+        _cts?.Cancel();
+
+        // Don't block waiting for thread - let it finish naturally
+        // The thread checks cancellation token and exits early
         _isGenerating = false;
-        _asyncComplete = false;
+        _asyncComplete = true;
+        _generatedData = null;
     }
 
     #endregion
 
-    #region Generation Pipeline
+    #region Intermediate Data Structure
 
     /// <summary>
-    /// Async worker thread entry point.
+    /// Thread-safe cell data for async generation.
+    /// Plain C# struct with no Godot dependencies.
     /// </summary>
-    private void AsyncWorker()
+    private struct CellData
     {
-        try
-        {
-            RunGenerationPipeline();
-            _asyncComplete = true;
-        }
-        catch (Exception ex)
-        {
-            GD.PrintErr($"[MapGenerator] Async generation failed: {ex.Message}");
-            _asyncComplete = true; // Mark complete so FinishAsync can clean up
-        }
-    }
-
-    /// <summary>
-    /// Runs the full generation pipeline.
-    /// </summary>
-    private void RunGenerationPipeline()
-    {
-        ReportProgress("Resetting cells", 0f);
-        ResetCells();
-
-        ReportProgress("Generating land", 0.1f);
-        GenerateLand();
-
-        ReportProgress("Generating moisture", 0.4f);
-        GenerateMoisture();
-
-        ReportProgress("Assigning biomes", 0.5f);
-        AssignBiomes();
-
-        ReportProgress("Generating rivers", 0.6f);
-        GenerateRivers();
-
-        ReportProgress("Placing features", 0.8f);
-        PlaceFeatures();
-
-        ReportProgress("Complete", 1.0f);
-    }
-
-    /// <summary>
-    /// Reports progress to listeners.
-    /// </summary>
-    private void ReportProgress(string stage, float progress)
-    {
-        GD.Print($"[MapGenerator] {stage} ({progress:P0})");
-        GenerationProgress?.Invoke(stage, progress);
-    }
-
-    /// <summary>
-    /// Finalizes generation after async completion.
-    /// Called on main thread.
-    /// </summary>
-    private void FinalizeGeneration()
-    {
-        GD.Print("[MapGenerator] Finalizing generation");
-        // Any main-thread operations go here
-        // (Chunk refresh is handled by the caller)
+        public int X;
+        public int Z;
+        public int Elevation;
+        public int WaterLevel;
+        public int TerrainTypeIndex;
+        public int UrbanLevel;
+        public int FarmLevel;
+        public int PlantLevel;
+        public int SpecialIndex;
+        public bool Walled;
+        // River data would be added in Sprint 4
+        // Road data would be added if needed
     }
 
     #endregion
 
-    #region Stage 1: Reset Cells
+    #region Synchronous Generation Pipeline
 
     /// <summary>
-    /// Resets all cells to default underwater state.
+    /// Runs the full generation pipeline synchronously.
+    /// Directly modifies HexCell instances.
     /// </summary>
-    private void ResetCells()
+    private void RunGenerationPipelineSync()
+    {
+        ReportProgressMainThread("Resetting cells", 0f);
+        ResetCellsSync();
+
+        ReportProgressMainThread("Generating land", 0.1f);
+        GenerateLandSync();
+
+        ReportProgressMainThread("Generating moisture", 0.4f);
+        GenerateMoistureSync();
+
+        ReportProgressMainThread("Assigning biomes", 0.5f);
+        AssignBiomesSync();
+
+        ReportProgressMainThread("Generating rivers", 0.6f);
+        GenerateRiversSync();
+
+        ReportProgressMainThread("Placing features", 0.8f);
+        PlaceFeaturesSync();
+
+        ReportProgressMainThread("Finalizing", 0.95f);
+    }
+
+    private void ResetCellsSync()
     {
         if (_grid == null) return;
 
-        // Get grid dimensions via reflection or counting
-        // For now, iterate until we hit null
-        int x = 0, z = 0;
-        while (true)
+        foreach (var cell in _grid.GetAllCells())
         {
-            var cell = _grid.GetCellByOffset(x, z);
-            if (cell == null)
-            {
-                if (x == 0) break; // End of grid
-                x = 0;
-                z++;
-                continue;
-            }
-
-            // Reset to underwater state
             cell.WaterLevel = GenerationConfig.WaterLevel;
             cell.Elevation = GenerationConfig.MinElevation;
-            cell.TerrainTypeIndex = 0; // Will be set by biome assignment
+            cell.TerrainTypeIndex = 0;
             cell.RemoveRiver();
             cell.RemoveRoads();
             cell.UrbanLevel = 0;
@@ -248,112 +276,85 @@ public class MapGenerator : IMapGenerator
             cell.PlantLevel = 0;
             cell.SpecialIndex = 0;
             cell.Walled = false;
-
-            x++;
         }
-
-        GD.Print("[MapGenerator] Cells reset to underwater state");
     }
 
-    #endregion
-
-    #region Stage 2: Generate Land
-
-    /// <summary>
-    /// Generates land masses using chunk budget system.
-    /// Catlike-style approach: randomly raise chunks of connected cells.
-    /// </summary>
-    private void GenerateLand()
+    private void GenerateLandSync()
     {
         if (_grid == null) return;
 
-        // Count total cells to calculate land budget
-        int totalCells = CountCells();
+        int totalCells = _gridWidth * _gridHeight;
         int landBudget = (int)(totalCells * GenerationConfig.LandPercentage);
 
         GD.Print($"[MapGenerator] Land budget: {landBudget} of {totalCells} cells");
 
         int iterations = 0;
+        int cellsRaised = 0;
+
         while (landBudget > 0 && iterations < GenerationConfig.MaxChunkIterations)
         {
             iterations++;
 
-            // Pick random starting cell
-            HexCell? startCell = GetRandomCell();
+            HexCell? startCell = GetRandomCellSync();
             if (startCell == null) continue;
 
-            // Grow a land chunk from this cell
             int chunkSize = _rng.Next(GenerationConfig.MinChunkSize, GenerationConfig.MaxChunkSize + 1);
-            int raised = RaiseLandChunk(startCell, chunkSize);
+            int raised = RaiseLandChunkSync(startCell, chunkSize);
             landBudget -= raised;
+            cellsRaised += raised;
         }
 
-        GD.Print($"[MapGenerator] Land generation complete after {iterations} iterations");
+        GD.Print($"[MapGenerator] Land generation: {cellsRaised} cells raised in {iterations} iterations");
     }
 
-    /// <summary>
-    /// Raises a chunk of connected cells above water level.
-    /// Returns the number of cells raised.
-    /// </summary>
-    private int RaiseLandChunk(HexCell center, int budget)
+    private int RaiseLandChunkSync(HexCell center, int budget)
     {
-        // TODO: Implement in Sprint 2
+        // TODO: Implement full chunk expansion in Sprint 2
         // For now, just raise the center cell
         if (center.Elevation < GenerationConfig.WaterLevel)
         {
             center.Elevation = GenerationConfig.WaterLevel;
             return 1;
         }
+        else if (_rng.NextDouble() < GenerationConfig.ElevationRaiseChance)
+        {
+            // Sometimes raise land cells higher
+            if (center.Elevation < GenerationConfig.MaxElevation)
+            {
+                center.Elevation++;
+                return 1;
+            }
+        }
         return 0;
     }
 
-    #endregion
+    private HexCell? GetRandomCellSync()
+    {
+        if (_grid == null || _gridWidth == 0 || _gridHeight == 0) return null;
+        int x = _rng.Next(_gridWidth);
+        int z = _rng.Next(_gridHeight);
+        return _grid.GetCellByOffset(x, z);
+    }
 
-    #region Stage 3: Generate Moisture
-
-    /// <summary>
-    /// Generates moisture values using noise.
-    /// </summary>
-    private void GenerateMoisture()
+    private void GenerateMoistureSync()
     {
         // TODO: Implement in Sprint 3
         GD.Print("[MapGenerator] Moisture generation (stub)");
     }
 
-    #endregion
-
-    #region Stage 4: Assign Biomes
-
-    /// <summary>
-    /// Assigns terrain types based on elevation and moisture.
-    /// </summary>
-    private void AssignBiomes()
+    private void AssignBiomesSync()
     {
         // TODO: Implement in Sprint 3
         GD.Print("[MapGenerator] Biome assignment (stub)");
     }
 
-    #endregion
-
-    #region Stage 5: Generate Rivers
-
-    /// <summary>
-    /// Generates rivers flowing from high to low elevation.
-    /// </summary>
-    private void GenerateRivers()
+    private void GenerateRiversSync()
     {
         // TODO: Implement in Sprint 4
         GD.Print("[MapGenerator] River generation (stub)");
     }
 
-    #endregion
-
-    #region Stage 6: Place Features
-
-    /// <summary>
-    /// Places features (vegetation, structures) based on biome.
-    /// </summary>
-    private void PlaceFeatures()
+    private void PlaceFeaturesSync()
     {
         // TODO: Implement in Sprint 5
         GD.Print("[MapGenerator] Feature placement (stub)");
@@ -361,68 +362,223 @@ public class MapGenerator : IMapGenerator
 
     #endregion
 
+    #region Asynchronous Generation Pipeline
+
+    /// <summary>
+    /// Async worker thread entry point.
+    /// Generates to intermediate CellData array - NO Godot node access.
+    /// </summary>
+    private void AsyncWorker(CancellationToken ct)
+    {
+        try
+        {
+            _generatedData = RunGenerationPipelineAsync(ct);
+            _asyncComplete = true;
+        }
+        catch (OperationCanceledException)
+        {
+            _asyncComplete = true;
+            _asyncFailed = false; // Cancellation is not a failure
+        }
+        catch (Exception ex)
+        {
+            _asyncError = ex.Message;
+            _asyncFailed = true;
+            _asyncComplete = true;
+        }
+    }
+
+    /// <summary>
+    /// Runs the generation pipeline to intermediate data.
+    /// Thread-safe - no Godot node access.
+    /// </summary>
+    private CellData[] RunGenerationPipelineAsync(CancellationToken ct)
+    {
+        int totalCells = _gridWidth * _gridHeight;
+        var data = new CellData[totalCells];
+
+        // Initialize all cells to underwater state
+        QueueProgress("Resetting cells", 0f);
+        for (int z = 0; z < _gridHeight; z++)
+        {
+            ct.ThrowIfCancellationRequested();
+            for (int x = 0; x < _gridWidth; x++)
+            {
+                int index = z * _gridWidth + x;
+                data[index] = new CellData
+                {
+                    X = x,
+                    Z = z,
+                    Elevation = GenerationConfig.MinElevation,
+                    WaterLevel = GenerationConfig.WaterLevel,
+                    TerrainTypeIndex = 0,
+                    UrbanLevel = 0,
+                    FarmLevel = 0,
+                    PlantLevel = 0,
+                    SpecialIndex = 0,
+                    Walled = false
+                };
+            }
+        }
+
+        ct.ThrowIfCancellationRequested();
+
+        // Generate land
+        QueueProgress("Generating land", 0.1f);
+        GenerateLandAsync(data, ct);
+
+        ct.ThrowIfCancellationRequested();
+
+        // Generate moisture
+        QueueProgress("Generating moisture", 0.4f);
+        GenerateMoistureAsync(data, ct);
+
+        ct.ThrowIfCancellationRequested();
+
+        // Assign biomes
+        QueueProgress("Assigning biomes", 0.5f);
+        AssignBiomesAsync(data, ct);
+
+        ct.ThrowIfCancellationRequested();
+
+        QueueProgress("Finalizing", 0.9f);
+
+        return data;
+    }
+
+    private void GenerateLandAsync(CellData[] data, CancellationToken ct)
+    {
+        int totalCells = data.Length;
+        int landBudget = (int)(totalCells * GenerationConfig.LandPercentage);
+
+        int iterations = 0;
+        while (landBudget > 0 && iterations < GenerationConfig.MaxChunkIterations)
+        {
+            ct.ThrowIfCancellationRequested();
+            iterations++;
+
+            int x = _rng.Next(_gridWidth);
+            int z = _rng.Next(_gridHeight);
+            int index = z * _gridWidth + x;
+
+            ref CellData cell = ref data[index];
+
+            if (cell.Elevation < GenerationConfig.WaterLevel)
+            {
+                cell.Elevation = GenerationConfig.WaterLevel;
+                landBudget--;
+            }
+            else if (_rng.NextDouble() < GenerationConfig.ElevationRaiseChance)
+            {
+                if (cell.Elevation < GenerationConfig.MaxElevation)
+                {
+                    cell.Elevation++;
+                    landBudget--;
+                }
+            }
+        }
+    }
+
+    private void GenerateMoistureAsync(CellData[] data, CancellationToken ct)
+    {
+        // TODO: Implement in Sprint 3
+    }
+
+    private void AssignBiomesAsync(CellData[] data, CancellationToken ct)
+    {
+        // TODO: Implement in Sprint 3
+    }
+
+    /// <summary>
+    /// Applies generated data to the HexGrid.
+    /// Must be called from main thread only.
+    /// </summary>
+    private void ApplyGeneratedDataToGrid()
+    {
+        if (_grid == null || _generatedData == null) return;
+
+        _grid.SetChunkRefreshSuppression(true);
+
+        foreach (var cellData in _generatedData)
+        {
+            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
+            if (cell == null) continue;
+
+            cell.WaterLevel = cellData.WaterLevel;
+            cell.Elevation = cellData.Elevation;
+            cell.TerrainTypeIndex = cellData.TerrainTypeIndex;
+            cell.UrbanLevel = cellData.UrbanLevel;
+            cell.FarmLevel = cellData.FarmLevel;
+            cell.PlantLevel = cellData.PlantLevel;
+            cell.SpecialIndex = cellData.SpecialIndex;
+            cell.Walled = cellData.Walled;
+            // Rivers and roads would be applied here in later sprints
+        }
+
+        _grid.SetChunkRefreshSuppression(false);
+        _grid.RefreshAllChunks();
+    }
+
+    #endregion
+
+    #region Progress Reporting
+
+    /// <summary>
+    /// Reports progress from main thread (sync generation).
+    /// </summary>
+    private void ReportProgressMainThread(string stage, float progress)
+    {
+        GD.Print($"[MapGenerator] {stage} ({progress:P0})");
+        GenerationProgress?.Invoke(stage, progress);
+    }
+
+    /// <summary>
+    /// Queues progress update from worker thread.
+    /// Will be dispatched on main thread via DispatchPendingProgress().
+    /// </summary>
+    private void QueueProgress(string stage, float progress)
+    {
+        lock (_progressLock)
+        {
+            _pendingProgress.Enqueue((stage, progress));
+        }
+    }
+
+    /// <summary>
+    /// Dispatches all pending progress updates.
+    /// Must be called from main thread.
+    /// </summary>
+    private void DispatchPendingProgress()
+    {
+        lock (_progressLock)
+        {
+            while (_pendingProgress.Count > 0)
+            {
+                var (stage, progress) = _pendingProgress.Dequeue();
+                GD.Print($"[MapGenerator] {stage} ({progress:P0})");
+                GenerationProgress?.Invoke(stage, progress);
+            }
+        }
+    }
+
+    #endregion
+
     #region Helper Methods
 
     /// <summary>
-    /// Counts the total number of cells in the grid.
+    /// Caches grid dimensions at start of generation.
     /// </summary>
-    private int CountCells()
+    private void CacheGridDimensions()
     {
-        if (_grid == null) return 0;
-
-        int count = 0;
-        int x = 0, z = 0;
-        while (true)
+        if (_grid == null)
         {
-            var cell = _grid.GetCellByOffset(x, z);
-            if (cell == null)
-            {
-                if (x == 0) break;
-                x = 0;
-                z++;
-                continue;
-            }
-            count++;
-            x++;
-        }
-        return count;
-    }
-
-    /// <summary>
-    /// Gets the grid dimensions.
-    /// </summary>
-    private (int width, int height) GetGridDimensions()
-    {
-        if (_grid == null) return (0, 0);
-
-        int width = 0, height = 0;
-
-        // Find width (scan first row)
-        while (_grid.GetCellByOffset(width, 0) != null)
-        {
-            width++;
+            _gridWidth = 0;
+            _gridHeight = 0;
+            return;
         }
 
-        // Find height (scan first column)
-        while (_grid.GetCellByOffset(0, height) != null)
-        {
-            height++;
-        }
-
-        return (width, height);
-    }
-
-    /// <summary>
-    /// Gets a random cell from the grid.
-    /// </summary>
-    private HexCell? GetRandomCell()
-    {
-        var (width, height) = GetGridDimensions();
-        if (width == 0 || height == 0) return null;
-
-        int x = _rng.Next(width);
-        int z = _rng.Next(height);
-        return _grid?.GetCellByOffset(x, z);
+        _gridWidth = _grid.CellCountX;
+        _gridHeight = _grid.CellCountZ;
     }
 
     #endregion
