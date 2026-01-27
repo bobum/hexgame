@@ -93,6 +93,44 @@ public class MapGeneratorTests
     }
 
     [Fact]
+    public void MockCell_IsUnderwater_ReflectsWaterAndElevation()
+    {
+        var cell = new MockGenerationCell(0, 0);
+
+        // Below water level - underwater
+        cell.Elevation = 0;
+        cell.WaterLevel = 1;
+        cell.IsUnderwater.Should().BeTrue();
+
+        // At water level - not underwater
+        cell.Elevation = 1;
+        cell.WaterLevel = 1;
+        cell.IsUnderwater.Should().BeFalse();
+
+        // Above water level - not underwater
+        cell.Elevation = 2;
+        cell.WaterLevel = 1;
+        cell.IsUnderwater.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MockGrid_NeighborRelationship_IsBidirectional()
+    {
+        var grid = new MockGenerationGrid(5, 5);
+        var cell = grid.GetCellByOffset(2, 2);
+
+        foreach (HexDirection dir in Enum.GetValues<HexDirection>())
+        {
+            var neighbor = cell!.GetNeighbor(dir);
+            if (neighbor != null)
+            {
+                neighbor.GetNeighbor(dir.Opposite()).Should().BeSameAs(cell,
+                    $"Neighbor in direction {dir} should have reciprocal link back");
+            }
+        }
+    }
+
+    [Fact]
     public void MockGrid_GetAllCells_ReturnsCorrectCount()
     {
         var grid = new MockGenerationGrid(8, 6);
