@@ -197,6 +197,87 @@ public static class GenerationConfig
     /// </summary>
     public const int FeatureSeedOffset = 2000;
 
+    /// <summary>
+    /// Base probability for placing any feature on eligible cells.
+    /// </summary>
+    public const float FeaturePlacementChance = 0.7f;
+
+    /// <summary>
+    /// Probability of placing a special feature on eligible cells.
+    /// </summary>
+    public const float SpecialFeatureChance = 0.02f;
+
+    /// <summary>
+    /// Minimum elevation for castle placement.
+    /// Set equal to HillElevation so castles appear on hills and mountains.
+    /// </summary>
+    public const int CastleMinElevation = HillElevation;
+
+    /// <summary>
+    /// Moisture threshold for high plant density on grass terrain (level 2).
+    /// </summary>
+    public const float PlantHighMoistureThreshold = 0.6f;
+
+    /// <summary>
+    /// Moisture threshold for medium plant density on grass terrain (level 1-2).
+    /// </summary>
+    public const float PlantMediumMoistureThreshold = 0.3f;
+
+    /// <summary>
+    /// Moisture threshold for dense plants on mud/jungle terrain (level 3).
+    /// </summary>
+    public const float JungleDensePlantThreshold = 0.7f;
+
+    /// <summary>
+    /// Moisture threshold for sparse plants on stone terrain.
+    /// </summary>
+    public const float StonePlantMoistureThreshold = 0.5f;
+
+    /// <summary>
+    /// Probability of sparse farms on desert/mud terrain.
+    /// </summary>
+    public const float SparseFarmChance = 0.3f;
+
+    /// <summary>
+    /// Minimum moisture for optimal farm placement on grass terrain.
+    /// </summary>
+    public const float FarmOptimalMoistureMin = 0.4f;
+
+    /// <summary>
+    /// Maximum moisture for optimal farm placement on grass terrain.
+    /// </summary>
+    public const float FarmOptimalMoistureMax = 0.7f;
+
+    /// <summary>
+    /// Probability of sparse farms on stone terrain.
+    /// </summary>
+    public const float StoneFarmChance = 0.4f;
+
+    /// <summary>
+    /// Probability of sparse urban on desert terrain.
+    /// </summary>
+    public const float DesertUrbanChance = 0.4f;
+
+    /// <summary>
+    /// Moisture threshold below which grass terrain favors urban development.
+    /// </summary>
+    public const float UrbanLowMoistureThreshold = 0.4f;
+
+    /// <summary>
+    /// Probability of moderate urban on grass terrain with higher moisture.
+    /// </summary>
+    public const float GrassUrbanChance = 0.5f;
+
+    /// <summary>
+    /// Probability of sparse urban on stone terrain.
+    /// </summary>
+    public const float StoneUrbanChance = 0.3f;
+
+    /// <summary>
+    /// Moisture threshold for megaflora placement on mud terrain.
+    /// </summary>
+    public const float MegafloraMoistureThreshold = 0.7f;
+
     #endregion
 
     #region Weighted Selection

@@ -369,8 +369,13 @@ public class MapGenerator : IMapGenerator
 
     private void PlaceFeaturesSync()
     {
-        // TODO: Implement in Sprint 5
-        GD.Print("[MapGenerator] Feature placement (stub)");
+        if (_syncData == null) return;
+
+        var featureRng = new Random(_currentSeed + GenerationConfig.FeatureSeedOffset);
+        var featureGenerator = new FeatureGenerator(featureRng, _gridWidth, _gridHeight);
+        featureGenerator.Generate(_syncData);
+
+        GD.Print("[MapGenerator] Features placed");
     }
 
     /// <summary>
@@ -503,6 +508,12 @@ public class MapGenerator : IMapGenerator
 
         ct.ThrowIfCancellationRequested();
 
+        // Place features
+        QueueProgress("Placing features", 0.8f);
+        PlaceFeaturesAsync(data, ct);
+
+        ct.ThrowIfCancellationRequested();
+
         QueueProgress("Finalizing", 0.9f);
 
         return data;
@@ -531,6 +542,16 @@ public class MapGenerator : IMapGenerator
         // Use RiverGenerator for river creation
         var riverGenerator = new RiverGenerator(_rng, _gridWidth, _gridHeight);
         riverGenerator.Generate(data, ct);
+    }
+
+    private void PlaceFeaturesAsync(CellData[] data, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        // Use FeatureGenerator for feature placement with dedicated seed
+        var featureRng = new Random(_currentSeed + GenerationConfig.FeatureSeedOffset);
+        var featureGenerator = new FeatureGenerator(featureRng, _gridWidth, _gridHeight);
+        featureGenerator.Generate(data, ct);
     }
 
     /// <summary>

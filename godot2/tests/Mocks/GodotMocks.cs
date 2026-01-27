@@ -1,6 +1,16 @@
 namespace Godot;
 
 /// <summary>
+/// Mock GD for testing without Godot runtime.
+/// Provides no-op implementations of Print methods.
+/// </summary>
+public static class GD
+{
+    public static void Print(params object[] what) { }
+    public static void PrintErr(params object[] what) { }
+}
+
+/// <summary>
 /// Mock Mathf for testing without Godot runtime.
 /// </summary>
 public static class Mathf
