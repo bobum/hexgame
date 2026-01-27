@@ -43,6 +43,9 @@ public class MapGenerator : IMapGenerator
     // Thread-safe intermediate data for async generation
     private CellData[]? _generatedData;
 
+    // Shared intermediate data for sync generation pipeline
+    private CellData[]? _syncData;
+
     // Pending progress updates (queued from worker thread, dispatched on main thread)
     private readonly Queue<(string stage, float progress)> _pendingProgress = new();
     private readonly object _progressLock = new();
@@ -213,21 +216,18 @@ public class MapGenerator : IMapGenerator
 
     /// <summary>
     /// Runs the full generation pipeline synchronously.
-    /// Directly modifies HexCell instances.
+    /// Uses intermediate CellData array, then applies to HexGrid at the end.
     /// </summary>
     private void RunGenerationPipelineSync()
     {
-        ReportProgressMainThread("Resetting cells", 0f);
-        ResetCellsSync();
+        ReportProgressMainThread("Initializing", 0f);
+        InitializeSyncData();
 
         ReportProgressMainThread("Generating land", 0.1f);
         GenerateLandSync();
 
-        ReportProgressMainThread("Generating moisture", 0.4f);
-        GenerateMoistureSync();
-
-        ReportProgressMainThread("Assigning biomes", 0.5f);
-        AssignBiomesSync();
+        ReportProgressMainThread("Generating climate", 0.4f);
+        GenerateClimateSync();
 
         ReportProgressMainThread("Generating rivers", 0.6f);
         GenerateRiversSync();
@@ -235,76 +235,64 @@ public class MapGenerator : IMapGenerator
         ReportProgressMainThread("Placing features", 0.8f);
         PlaceFeaturesSync();
 
+        ReportProgressMainThread("Applying to grid", 0.9f);
+        ApplySyncDataToGrid();
+
         ReportProgressMainThread("Finalizing", 0.95f);
+        _syncData = null; // Release memory
     }
 
-    private void ResetCellsSync()
+    /// <summary>
+    /// Initializes the intermediate data array for sync generation.
+    /// </summary>
+    private void InitializeSyncData()
     {
-        if (_grid == null) return;
-
-        foreach (var cell in _grid.GetAllCells())
-        {
-            cell.WaterLevel = GenerationConfig.WaterLevel;
-            cell.Elevation = GenerationConfig.MinElevation;
-            cell.TerrainTypeIndex = 0;
-            cell.RemoveRiver();
-            cell.RemoveRoads();
-            cell.UrbanLevel = 0;
-            cell.FarmLevel = 0;
-            cell.PlantLevel = 0;
-            cell.SpecialIndex = 0;
-            cell.Walled = false;
-        }
-    }
-
-    private void GenerateLandSync()
-    {
-        if (_grid == null) return;
-
         int totalCells = _gridWidth * _gridHeight;
-        GD.Print($"[MapGenerator] Starting land generation for {totalCells} cells");
+        _syncData = new CellData[totalCells];
 
-        // Create intermediate data array
-        var data = new CellData[totalCells];
         for (int z = 0; z < _gridHeight; z++)
         {
             for (int x = 0; x < _gridWidth; x++)
             {
                 int index = z * _gridWidth + x;
-                data[index] = new CellData(x, z);
+                _syncData[index] = new CellData(x, z);
             }
         }
 
-        // Use LandGenerator for chunk-based land creation
+        GD.Print($"[MapGenerator] Initialized {totalCells} cells for generation");
+    }
+
+    /// <summary>
+    /// Generates land using chunk-based algorithm.
+    /// </summary>
+    private void GenerateLandSync()
+    {
+        if (_syncData == null) return;
+
         var landGenerator = new LandGenerator(_rng, _gridWidth, _gridHeight);
-        landGenerator.Generate(data, GenerationConfig.LandPercentage);
+        landGenerator.Generate(_syncData, GenerationConfig.LandPercentage);
 
-        // Apply results to grid
         int landCells = 0;
-        foreach (var cellData in data)
+        foreach (var cell in _syncData)
         {
-            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
-            if (cell != null)
-            {
-                cell.Elevation = cellData.Elevation;
-                if (cellData.Elevation >= GenerationConfig.WaterLevel)
-                    landCells++;
-            }
+            if (cell.Elevation >= GenerationConfig.WaterLevel)
+                landCells++;
         }
 
-        GD.Print($"[MapGenerator] Land generation complete: {landCells} land cells ({100f * landCells / totalCells:F1}%)");
+        GD.Print($"[MapGenerator] Land: {landCells} cells ({100f * landCells / _syncData.Length:F1}%)");
     }
 
-    private void GenerateMoistureSync()
+    /// <summary>
+    /// Generates climate (moisture) and assigns biomes.
+    /// </summary>
+    private void GenerateClimateSync()
     {
-        // TODO: Implement in Sprint 3
-        GD.Print("[MapGenerator] Moisture generation (stub)");
-    }
+        if (_syncData == null) return;
 
-    private void AssignBiomesSync()
-    {
-        // TODO: Implement in Sprint 3
-        GD.Print("[MapGenerator] Biome assignment (stub)");
+        var climateGenerator = new ClimateGenerator(_gridWidth, _gridHeight, _currentSeed);
+        climateGenerator.Generate(_syncData);
+
+        GD.Print("[MapGenerator] Climate and biomes assigned");
     }
 
     private void GenerateRiversSync()
@@ -317,6 +305,33 @@ public class MapGenerator : IMapGenerator
     {
         // TODO: Implement in Sprint 5
         GD.Print("[MapGenerator] Feature placement (stub)");
+    }
+
+    /// <summary>
+    /// Applies generated data to the HexGrid.
+    /// </summary>
+    private void ApplySyncDataToGrid()
+    {
+        if (_grid == null || _syncData == null) return;
+
+        foreach (var cellData in _syncData)
+        {
+            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
+            if (cell == null) continue;
+
+            cell.WaterLevel = cellData.WaterLevel;
+            cell.Elevation = cellData.Elevation;
+            cell.TerrainTypeIndex = cellData.TerrainTypeIndex;
+            cell.UrbanLevel = cellData.UrbanLevel;
+            cell.FarmLevel = cellData.FarmLevel;
+            cell.PlantLevel = cellData.PlantLevel;
+            cell.SpecialIndex = cellData.SpecialIndex;
+            cell.Walled = cellData.Walled;
+            cell.RemoveRiver();
+            cell.RemoveRoads();
+        }
+
+        GD.Print("[MapGenerator] Applied data to grid");
     }
 
     #endregion
@@ -376,15 +391,9 @@ public class MapGenerator : IMapGenerator
 
         ct.ThrowIfCancellationRequested();
 
-        // Generate moisture
-        QueueProgress("Generating moisture", 0.4f);
-        GenerateMoistureAsync(data, ct);
-
-        ct.ThrowIfCancellationRequested();
-
-        // Assign biomes
-        QueueProgress("Assigning biomes", 0.5f);
-        AssignBiomesAsync(data, ct);
+        // Generate climate (moisture + biomes)
+        QueueProgress("Generating climate", 0.4f);
+        GenerateClimateAsync(data, ct);
 
         ct.ThrowIfCancellationRequested();
 
@@ -400,14 +409,13 @@ public class MapGenerator : IMapGenerator
         landGenerator.Generate(data, GenerationConfig.LandPercentage, ct);
     }
 
-    private void GenerateMoistureAsync(CellData[] data, CancellationToken ct)
+    private void GenerateClimateAsync(CellData[] data, CancellationToken ct)
     {
-        // TODO: Implement in Sprint 3
-    }
+        ct.ThrowIfCancellationRequested();
 
-    private void AssignBiomesAsync(CellData[] data, CancellationToken ct)
-    {
-        // TODO: Implement in Sprint 3
+        // Use ClimateGenerator for moisture and biome assignment
+        var climateGenerator = new ClimateGenerator(_gridWidth, _gridHeight, _currentSeed);
+        climateGenerator.Generate(data, ct);
     }
 
     /// <summary>

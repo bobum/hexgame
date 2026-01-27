@@ -71,7 +71,8 @@ public static class GenerationConfig
     public const int MaxElevation = 8;
 
     /// <summary>
-    /// Water level threshold. Cells at or below this are underwater.
+    /// Water level threshold. Cells below this elevation are underwater.
+    /// Cells at WaterLevel or above are considered land.
     /// </summary>
     public const int WaterLevel = 1;
 
@@ -110,26 +111,33 @@ public static class GenerationConfig
     #region Biome Thresholds
 
     /// <summary>
-    /// Maximum moisture for desert biome.
+    /// Maximum moisture for desert biome (TerrainType=Sand).
+    /// Moisture below this threshold results in desert terrain.
     /// </summary>
     public const float DesertMoistureMax = 0.2f;
 
     /// <summary>
     /// Maximum moisture for grassland/savanna biome.
+    /// Reserved for future feature placement differentiation.
+    /// Currently all moisture 0.2-0.8 maps to Grass terrain type.
     /// </summary>
     public const float GrasslandMoistureMax = 0.4f;
 
     /// <summary>
     /// Maximum moisture for plains biome.
+    /// Reserved for future feature placement differentiation.
+    /// Currently all moisture 0.2-0.8 maps to Grass terrain type.
     /// </summary>
     public const float PlainsMoistureMax = 0.6f;
 
     /// <summary>
-    /// Maximum moisture for forest biome.
+    /// Maximum moisture for forest biome (TerrainType=Grass).
+    /// Moisture at or above this threshold results in jungle/swamp (Mud).
+    /// Used by ClimateGenerator for biome boundaries.
     /// </summary>
     public const float ForestMoistureMax = 0.8f;
 
-    // Above ForestMoistureMax is jungle
+    // Above ForestMoistureMax is jungle/swamp (TerrainType=Mud)
 
     #endregion
 
