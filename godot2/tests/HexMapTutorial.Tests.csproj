@@ -29,6 +29,12 @@
   <ItemGroup>
     <Compile Include="..\src\HexDirection.cs" Link="Source\HexDirection.cs" />
     <Compile Include="..\src\EdgeVertices.cs" Link="Source\EdgeVertices.cs" />
+    <Compile Include="..\src\Generation\GenerationConfig.cs" Link="Source\GenerationConfig.cs" />
+    <Compile Include="..\src\Generation\LandGenerator.cs" Link="Source\LandGenerator.cs" />
+    <Compile Include="..\src\Generation\ClimateGenerator.cs" Link="Source\ClimateGenerator.cs" />
+    <Compile Include="..\src\Generation\RiverGenerator.cs" Link="Source\RiverGenerator.cs" />
+    <Compile Include="..\src\Generation\FeatureGenerator.cs" Link="Source\FeatureGenerator.cs" />
+    <Compile Include="..\src\Generation\RoadGenerator.cs" Link="Source\RoadGenerator.cs" />
   </ItemGroup>
 
 </Project>
