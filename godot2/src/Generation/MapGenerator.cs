@@ -395,11 +395,9 @@ public class MapGenerator : IMapGenerator
 
     private void GenerateLandAsync(CellData[] data, CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
-
-        // Use LandGenerator for chunk-based land creation
+        // Use LandGenerator for chunk-based land creation with cancellation support
         var landGenerator = new LandGenerator(_rng, _gridWidth, _gridHeight);
-        landGenerator.Generate(data, GenerationConfig.LandPercentage);
+        landGenerator.Generate(data, GenerationConfig.LandPercentage, ct);
     }
 
     private void GenerateMoistureAsync(CellData[] data, CancellationToken ct)

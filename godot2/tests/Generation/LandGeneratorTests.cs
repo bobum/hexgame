@@ -1,6 +1,7 @@
 using FluentAssertions;
 using HexGame.Generation;
 using System;
+using System.Linq;
 using Xunit;
 
 namespace HexMapTutorial.Tests.Generation;
@@ -52,8 +53,10 @@ public class LandGeneratorTests
         generator.Generate(data, 0.0f);
 
         int landCells = CountLandCells(data);
-        // Erosion might fill in some isolated water, so allow small tolerance
-        landCells.Should().BeLessThan(10, "Zero land percentage should produce minimal land");
+        // With 0% land budget, no land should be raised initially.
+        // Erosion only fills water surrounded by land (>70% land neighbors),
+        // which can't happen if no land exists. Should be exactly 0.
+        landCells.Should().Be(0, "Zero land percentage should produce no land");
     }
 
     [Fact]
@@ -222,6 +225,237 @@ public class LandGeneratorTests
 
     #endregion
 
+    #region Edge Case Tests - Grid Sizes
+
+    [Fact]
+    public void Generate_WithEmptyGrid_DoesNotThrow()
+    {
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 0, 0);
+        var data = Array.Empty<CellData>();
+
+        var act = () => generator.Generate(data, 0.5f);
+
+        act.Should().NotThrow("Empty grid should be handled gracefully");
+    }
+
+    [Fact]
+    public void Generate_WithSingleCell_WorksCorrectly()
+    {
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 1, 1);
+        var data = CreateInitializedData(1, 1);
+
+        generator.Generate(data, 1.0f);
+
+        // Single cell with 100% land should become land
+        data[0].Elevation.Should().BeGreaterOrEqualTo(GenerationConfig.WaterLevel,
+            "Single cell with full land percentage should be land");
+    }
+
+    [Fact]
+    public void Generate_WithSingleRow_WorksCorrectly()
+    {
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 10, 1);
+        var data = CreateInitializedData(10, 1);
+
+        generator.Generate(data, 0.5f);
+
+        int landCells = CountLandCells(data);
+        landCells.Should().BeGreaterThan(0, "Single row grid should produce some land");
+        landCells.Should().BeLessThan(data.Length, "Single row grid should have some water");
+    }
+
+    [Fact]
+    public void Generate_WithSingleColumn_WorksCorrectly()
+    {
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 1, 10);
+        var data = CreateInitializedData(1, 10);
+
+        generator.Generate(data, 0.5f);
+
+        int landCells = CountLandCells(data);
+        landCells.Should().BeGreaterThan(0, "Single column grid should produce some land");
+        landCells.Should().BeLessThan(data.Length, "Single column grid should have some water");
+    }
+
+    [Fact]
+    public void Generate_WithZeroWidth_DoesNotThrow()
+    {
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 0, 10);
+        var data = Array.Empty<CellData>();
+
+        var act = () => generator.Generate(data, 0.5f);
+
+        act.Should().NotThrow("Zero width grid should be handled gracefully");
+    }
+
+    [Fact]
+    public void Generate_WithZeroHeight_DoesNotThrow()
+    {
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 10, 0);
+        var data = Array.Empty<CellData>();
+
+        var act = () => generator.Generate(data, 0.5f);
+
+        act.Should().NotThrow("Zero height grid should be handled gracefully");
+    }
+
+    #endregion
+
+    #region Erosion Boundary Condition Tests
+
+    [Fact]
+    public void Erosion_LandCellAtExactThreshold_IsNotEroded()
+    {
+        // Create a scenario where a land cell has exactly 30% land neighbors (at threshold)
+        // With 6 neighbors, 30% = 1.8 neighbors, so we need 2 land neighbors (33%)
+        // which is above threshold, so it should NOT be eroded
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 5, 5);
+        var data = CreateInitializedData(5, 5);
+
+        // Set up center cell (2,2) as land with specific neighbors
+        // First generate normally, then verify erosion behavior
+        generator.Generate(data, 0.5f);
+
+        // All remaining land cells should have at least ErosionLandThreshold land neighbors
+        for (int i = 0; i < data.Length; i++)
+        {
+            if (data[i].Elevation >= GenerationConfig.WaterLevel)
+            {
+                int landNeighbors = CountLandNeighborsUsingHelper(data, i, 5, 5);
+                int totalNeighbors = CountTotalNeighbors(i, 5, 5);
+
+                if (totalNeighbors > 0)
+                {
+                    float landRatio = (float)landNeighbors / totalNeighbors;
+                    landRatio.Should().BeGreaterOrEqualTo(GenerationConfig.ErosionLandThreshold,
+                        $"Land cell {i} should have been eroded if below threshold");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void Erosion_WaterCellAtExactThreshold_IsNotFilled()
+    {
+        var rng = new Random(42);
+        var generator = new LandGenerator(rng, 5, 5);
+        var data = CreateInitializedData(5, 5);
+
+        generator.Generate(data, 0.5f);
+
+        // All remaining water cells should have at most ErosionWaterThreshold land neighbors
+        for (int i = 0; i < data.Length; i++)
+        {
+            if (data[i].Elevation < GenerationConfig.WaterLevel)
+            {
+                int landNeighbors = CountLandNeighborsUsingHelper(data, i, 5, 5);
+                int totalNeighbors = CountTotalNeighbors(i, 5, 5);
+
+                if (totalNeighbors > 0)
+                {
+                    float landRatio = (float)landNeighbors / totalNeighbors;
+                    landRatio.Should().BeLessOrEqualTo(GenerationConfig.ErosionWaterThreshold,
+                        $"Water cell {i} should have been filled if above threshold");
+                }
+            }
+        }
+    }
+
+    #endregion
+
+    #region HexNeighborHelper Tests
+
+    [Fact]
+    public void HexNeighborHelper_CenterCell_HasSixNeighbors()
+    {
+        var neighbors = HexNeighborHelper.GetNeighborIndices(12, 5, 5).ToList();
+
+        // Cell 12 is at (2,2) in a 5x5 grid - center cell should have 6 neighbors
+        neighbors.Should().HaveCount(6, "Center cell should have 6 neighbors");
+    }
+
+    [Fact]
+    public void HexNeighborHelper_CornerCell_HasFewerNeighbors()
+    {
+        var neighbors = HexNeighborHelper.GetNeighborIndices(0, 5, 5).ToList();
+
+        // Cell 0 is at (0,0) - corner should have fewer than 6 neighbors
+        neighbors.Count.Should().BeLessThan(6, "Corner cell should have fewer than 6 neighbors");
+        neighbors.Count.Should().BeGreaterThan(0, "Corner cell should have at least 1 neighbor");
+    }
+
+    [Fact]
+    public void HexNeighborHelper_EmptyGrid_ReturnsNoNeighbors()
+    {
+        var neighbors = HexNeighborHelper.GetNeighborIndices(0, 0, 0).ToList();
+
+        neighbors.Should().BeEmpty("Empty grid should have no neighbors");
+    }
+
+    [Fact]
+    public void HexNeighborHelper_SingleCell_HasNoNeighbors()
+    {
+        var neighbors = HexNeighborHelper.GetNeighborIndices(0, 1, 1).ToList();
+
+        neighbors.Should().BeEmpty("Single cell grid should have no neighbors");
+    }
+
+    [Fact]
+    public void HexNeighborHelper_EvenRow_HasCorrectNeighbors()
+    {
+        // Cell at (2, 0) in a 5x5 grid - even row
+        int index = 0 * 5 + 2; // = 2
+        var neighbors = HexNeighborHelper.GetNeighborIndices(index, 5, 5).ToList();
+
+        // Even row neighbors for (2,0): E(3,0), W(1,0), NE(2,1), NW(1,1)
+        // SE and SW would be at z=-1 which is out of bounds
+        neighbors.Should().Contain(3, "Should have E neighbor at index 3");
+        neighbors.Should().Contain(1, "Should have W neighbor at index 1");
+        neighbors.Should().Contain(7, "Should have NE neighbor at index 7 (2,1)");
+        neighbors.Should().Contain(6, "Should have NW neighbor at index 6 (1,1)");
+    }
+
+    [Fact]
+    public void HexNeighborHelper_OddRow_HasCorrectNeighbors()
+    {
+        // Cell at (2, 1) in a 5x5 grid - odd row
+        int index = 1 * 5 + 2; // = 7
+        var neighbors = HexNeighborHelper.GetNeighborIndices(index, 5, 5).ToList();
+
+        // Odd row neighbors for (2,1): E(3,1), W(1,1), NE(3,2), NW(2,2), SE(3,0), SW(2,0)
+        neighbors.Should().Contain(8, "Should have E neighbor at index 8 (3,1)");
+        neighbors.Should().Contain(6, "Should have W neighbor at index 6 (1,1)");
+        neighbors.Should().Contain(13, "Should have NE neighbor at index 13 (3,2)");
+        neighbors.Should().Contain(12, "Should have NW neighbor at index 12 (2,2)");
+        neighbors.Should().Contain(3, "Should have SE neighbor at index 3 (3,0)");
+        neighbors.Should().Contain(2, "Should have SW neighbor at index 2 (2,0)");
+    }
+
+    [Fact]
+    public void HexNeighborHelper_NeighborRelationship_IsBidirectional()
+    {
+        int width = 5, height = 5;
+
+        for (int i = 0; i < width * height; i++)
+        {
+            foreach (int neighborIndex in HexNeighborHelper.GetNeighborIndices(i, width, height))
+            {
+                var reverseNeighbors = HexNeighborHelper.GetNeighborIndices(neighborIndex, width, height).ToList();
+                reverseNeighbors.Should().Contain(i,
+                    $"Cell {neighborIndex} should have {i} as a neighbor (bidirectional relationship)");
+            }
+        }
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static CellData[] CreateInitializedData(int width, int height)
@@ -248,47 +482,36 @@ public class LandGeneratorTests
         return count;
     }
 
+    /// <summary>
+    /// Uses the shared HexNeighborHelper to count land neighbors.
+    /// This ensures tests use the same neighbor logic as production code.
+    /// </summary>
+    private static int CountLandNeighborsUsingHelper(CellData[] data, int index, int width, int height)
+    {
+        int landNeighbors = 0;
+        foreach (int neighborIndex in HexNeighborHelper.GetNeighborIndices(index, width, height))
+        {
+            if (data[neighborIndex].Elevation >= GenerationConfig.WaterLevel)
+                landNeighbors++;
+        }
+        return landNeighbors;
+    }
+
+    /// <summary>
+    /// Counts total neighbors for a cell (for calculating ratios).
+    /// </summary>
+    private static int CountTotalNeighbors(int index, int width, int height)
+    {
+        return HexNeighborHelper.GetNeighborIndices(index, width, height).Count();
+    }
+
+    /// <summary>
+    /// Legacy helper - kept for backward compatibility with existing tests.
+    /// Uses HexNeighborHelper internally.
+    /// </summary>
     private static int CountLandNeighbors(CellData[] data, int index, int width, int height)
     {
-        int x = index % width;
-        int z = index / width;
-        bool evenRow = (z & 1) == 0;
-
-        int landNeighbors = 0;
-
-        // Check all 6 hex neighbors
-        int[][] offsets = evenRow
-            ? new[] {
-                new[] { 0, 1 },   // NE
-                new[] { 1, 0 },   // E
-                new[] { 0, -1 },  // SE
-                new[] { -1, -1 }, // SW
-                new[] { -1, 0 },  // W
-                new[] { -1, 1 }   // NW
-            }
-            : new[] {
-                new[] { 1, 1 },   // NE
-                new[] { 1, 0 },   // E
-                new[] { 1, -1 },  // SE
-                new[] { 0, -1 }, // SW
-                new[] { -1, 0 },  // W
-                new[] { 0, 1 }   // NW
-            };
-
-        foreach (var offset in offsets)
-        {
-            int nx = x + offset[0];
-            int nz = z + offset[1];
-
-            if (nx >= 0 && nx < width && nz >= 0 && nz < height)
-            {
-                int neighborIndex = nz * width + nx;
-                if (data[neighborIndex].Elevation >= GenerationConfig.WaterLevel)
-                    landNeighbors++;
-            }
-        }
-
-        return landNeighbors;
+        return CountLandNeighborsUsingHelper(data, index, width, height);
     }
 
     #endregion

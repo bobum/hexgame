@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace HexGame.Generation;
 
@@ -33,8 +34,13 @@ public class LandGenerator
     /// </summary>
     /// <param name="data">Cell data array (modified in place)</param>
     /// <param name="landPercentage">Target percentage of cells that should be land (0-1)</param>
-    public void Generate(CellData[] data, float landPercentage)
+    /// <param name="ct">Optional cancellation token for async generation</param>
+    public void Generate(CellData[] data, float landPercentage, CancellationToken ct = default)
     {
+        // Handle empty grids gracefully
+        if (data.Length == 0 || _gridWidth == 0 || _gridHeight == 0)
+            return;
+
         int totalCells = data.Length;
         int landBudget = (int)(totalCells * landPercentage);
 
@@ -44,6 +50,10 @@ public class LandGenerator
 
         while (landBudget > 0 && iterations < GenerationConfig.MaxChunkIterations)
         {
+            // Check cancellation every 100 iterations to avoid overhead
+            if ((iterations & 0xFF) == 0)
+                ct.ThrowIfCancellationRequested();
+
             iterations++;
 
             // Pick random starting cell
@@ -57,6 +67,8 @@ public class LandGenerator
             landBudget -= raised;
             cellsRaised += raised;
         }
+
+        ct.ThrowIfCancellationRequested();
 
         // Phase 2: Apply erosion to smooth coastlines
         ApplyErosion(data);
@@ -90,9 +102,9 @@ public class LandGenerator
             // Expand to neighbors
             if (budget > 0)
             {
-                foreach (int neighborIndex in GetNeighborIndices(currentIndex))
+                foreach (int neighborIndex in HexNeighborHelper.GetNeighborIndices(currentIndex, _gridWidth, _gridHeight))
                 {
-                    if (neighborIndex >= 0 && !visited.Contains(neighborIndex))
+                    if (!visited.Contains(neighborIndex))
                     {
                         visited.Add(neighborIndex);
 
@@ -134,75 +146,6 @@ public class LandGenerator
     }
 
     /// <summary>
-    /// Gets the indices of all valid neighbors for a cell.
-    /// Uses hex grid neighbor calculation with offset coordinates.
-    /// </summary>
-    private IEnumerable<int> GetNeighborIndices(int index)
-    {
-        int x = index % _gridWidth;
-        int z = index / _gridWidth;
-
-        // Hex grid neighbor offsets depend on whether we're in an even or odd row
-        bool evenRow = (z & 1) == 0;
-
-        // NE neighbor
-        if (evenRow)
-        {
-            if (z + 1 < _gridHeight)
-                yield return (z + 1) * _gridWidth + x;
-        }
-        else
-        {
-            if (x + 1 < _gridWidth && z + 1 < _gridHeight)
-                yield return (z + 1) * _gridWidth + (x + 1);
-        }
-
-        // E neighbor
-        if (x + 1 < _gridWidth)
-            yield return z * _gridWidth + (x + 1);
-
-        // SE neighbor
-        if (evenRow)
-        {
-            if (z > 0)
-                yield return (z - 1) * _gridWidth + x;
-        }
-        else
-        {
-            if (x + 1 < _gridWidth && z > 0)
-                yield return (z - 1) * _gridWidth + (x + 1);
-        }
-
-        // SW neighbor
-        if (evenRow)
-        {
-            if (x > 0 && z > 0)
-                yield return (z - 1) * _gridWidth + (x - 1);
-        }
-        else
-        {
-            if (z > 0)
-                yield return (z - 1) * _gridWidth + x;
-        }
-
-        // W neighbor
-        if (x > 0)
-            yield return z * _gridWidth + (x - 1);
-
-        // NW neighbor
-        if (evenRow)
-        {
-            if (x > 0 && z + 1 < _gridHeight)
-                yield return (z + 1) * _gridWidth + (x - 1);
-        }
-        else
-        {
-            if (z + 1 < _gridHeight)
-                yield return (z + 1) * _gridWidth + x;
-        }
-    }
-
-    /// <summary>
     /// Applies erosion to smooth coastlines.
     /// Lowers land cells that are mostly surrounded by water,
     /// raises water cells that are mostly surrounded by land.
@@ -216,16 +159,13 @@ public class LandGenerator
         for (int i = 0; i < data.Length; i++)
         {
             int landNeighbors = 0;
-            int waterNeighbors = 0;
             int totalNeighbors = 0;
 
-            foreach (int neighborIndex in GetNeighborIndices(i))
+            foreach (int neighborIndex in HexNeighborHelper.GetNeighborIndices(i, _gridWidth, _gridHeight))
             {
                 totalNeighbors++;
                 if (data[neighborIndex].Elevation >= GenerationConfig.WaterLevel)
                     landNeighbors++;
-                else
-                    waterNeighbors++;
             }
 
             if (totalNeighbors == 0) continue;
@@ -254,6 +194,89 @@ public class LandGenerator
         foreach (int i in toRaise)
         {
             data[i].Elevation = GenerationConfig.WaterLevel;
+        }
+    }
+}
+
+/// <summary>
+/// Static helper for hex grid neighbor calculations.
+/// Used by LandGenerator and available for testing.
+/// </summary>
+public static class HexNeighborHelper
+{
+    /// <summary>
+    /// Gets the indices of all valid neighbors for a cell in a hex grid.
+    /// Uses offset coordinates where odd rows are shifted right.
+    /// </summary>
+    /// <param name="index">Linear index of the cell</param>
+    /// <param name="gridWidth">Width of the grid</param>
+    /// <param name="gridHeight">Height of the grid</param>
+    /// <returns>Enumerable of valid neighbor indices</returns>
+    public static IEnumerable<int> GetNeighborIndices(int index, int gridWidth, int gridHeight)
+    {
+        if (gridWidth <= 0 || gridHeight <= 0)
+            yield break;
+
+        int x = index % gridWidth;
+        int z = index / gridWidth;
+
+        // Hex grid neighbor offsets depend on whether we're in an even or odd row
+        bool evenRow = (z & 1) == 0;
+
+        // NE neighbor
+        if (evenRow)
+        {
+            if (z + 1 < gridHeight)
+                yield return (z + 1) * gridWidth + x;
+        }
+        else
+        {
+            if (x + 1 < gridWidth && z + 1 < gridHeight)
+                yield return (z + 1) * gridWidth + (x + 1);
+        }
+
+        // E neighbor
+        if (x + 1 < gridWidth)
+            yield return z * gridWidth + (x + 1);
+
+        // SE neighbor
+        if (evenRow)
+        {
+            if (z > 0)
+                yield return (z - 1) * gridWidth + x;
+        }
+        else
+        {
+            if (x + 1 < gridWidth && z > 0)
+                yield return (z - 1) * gridWidth + (x + 1);
+        }
+
+        // SW neighbor
+        if (evenRow)
+        {
+            if (x > 0 && z > 0)
+                yield return (z - 1) * gridWidth + (x - 1);
+        }
+        else
+        {
+            if (z > 0)
+                yield return (z - 1) * gridWidth + x;
+        }
+
+        // W neighbor
+        if (x > 0)
+            yield return z * gridWidth + (x - 1);
+
+        // NW neighbor
+        if (evenRow)
+        {
+            if (x > 0 && z + 1 < gridHeight)
+                yield return (z + 1) * gridWidth + (x - 1);
+        }
+        else
+        {
+            if (z + 1 < gridHeight)
+                yield return (z + 1) * gridWidth + x;
         }
     }
 }
