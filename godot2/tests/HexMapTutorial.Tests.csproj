@@ -34,6 +34,7 @@
     <Compile Include="..\src\Generation\ClimateGenerator.cs" Link="Source\ClimateGenerator.cs" />
     <Compile Include="..\src\Generation\RiverGenerator.cs" Link="Source\RiverGenerator.cs" />
     <Compile Include="..\src\Generation\FeatureGenerator.cs" Link="Source\FeatureGenerator.cs" />
+    <Compile Include="..\src\Generation\RoadGenerator.cs" Link="Source\RoadGenerator.cs" />
   </ItemGroup>
 
 </Project>

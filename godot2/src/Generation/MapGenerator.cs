@@ -232,8 +232,11 @@ public class MapGenerator : IMapGenerator
         ReportProgressMainThread("Generating rivers", 0.6f);
         GenerateRiversSync();
 
-        ReportProgressMainThread("Placing features", 0.8f);
+        ReportProgressMainThread("Placing features", 0.75f);
         PlaceFeaturesSync();
+
+        ReportProgressMainThread("Generating roads", 0.85f);
+        GenerateRoadsSync();
 
         ReportProgressMainThread("Applying to grid", 0.9f);
         ApplySyncDataToGrid();
@@ -378,6 +381,17 @@ public class MapGenerator : IMapGenerator
         GD.Print("[MapGenerator] Features placed");
     }
 
+    private void GenerateRoadsSync()
+    {
+        if (_syncData == null) return;
+
+        var roadRng = new Random(_currentSeed + GenerationConfig.RoadSeedOffset);
+        var roadGenerator = new RoadGenerator(roadRng, _gridWidth, _gridHeight);
+        roadGenerator.Generate(_syncData);
+
+        GD.Print("[MapGenerator] Roads generated");
+    }
+
     /// <summary>
     /// Applies generated data to the HexGrid.
     /// Uses two passes: first set all cell properties, then apply rivers.
@@ -436,7 +450,24 @@ public class MapGenerator : IMapGenerator
             }
         }
 
-        GD.Print($"[MapGenerator] Applied data to grid: {riversApplied} rivers applied, {riversFailed} failed validation");
+        // Pass 3: Apply roads (after rivers, so we can check bridge validity)
+        int roadsApplied = 0;
+        foreach (var cellData in _syncData)
+        {
+            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
+            if (cell == null) continue;
+
+            for (int dir = 0; dir < 6; dir++)
+            {
+                if (cellData.HasRoadInDirection(dir))
+                {
+                    cell.AddRoad((HexDirection)dir);
+                    roadsApplied++;
+                }
+            }
+        }
+
+        GD.Print($"[MapGenerator] Applied data to grid: {riversApplied} rivers, {riversFailed} failed, {roadsApplied} road segments");
     }
 
     #endregion
@@ -509,8 +540,14 @@ public class MapGenerator : IMapGenerator
         ct.ThrowIfCancellationRequested();
 
         // Place features
-        QueueProgress("Placing features", 0.8f);
+        QueueProgress("Placing features", 0.75f);
         PlaceFeaturesAsync(data, ct);
+
+        ct.ThrowIfCancellationRequested();
+
+        // Generate roads
+        QueueProgress("Generating roads", 0.85f);
+        GenerateRoadsAsync(data, ct);
 
         ct.ThrowIfCancellationRequested();
 
@@ -554,6 +591,16 @@ public class MapGenerator : IMapGenerator
         featureGenerator.Generate(data, ct);
     }
 
+    private void GenerateRoadsAsync(CellData[] data, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        // Use RoadGenerator for road creation with dedicated seed
+        var roadRng = new Random(_currentSeed + GenerationConfig.RoadSeedOffset);
+        var roadGenerator = new RoadGenerator(roadRng, _gridWidth, _gridHeight);
+        roadGenerator.Generate(data, ct);
+    }
+
     /// <summary>
     /// Applies generated data to the HexGrid.
     /// Must be called from main thread only.
@@ -580,6 +627,7 @@ public class MapGenerator : IMapGenerator
             cell.SpecialIndex = cellData.SpecialIndex;
             cell.Walled = cellData.Walled;
             cell.RemoveRiver();
+            cell.RemoveRoads();
         }
 
         // Pass 2: Apply rivers (now that all elevations are set correctly)
@@ -595,6 +643,21 @@ public class MapGenerator : IMapGenerator
             if (neighbor != null)
             {
                 cell.SetOutgoingRiver(direction);
+            }
+        }
+
+        // Pass 3: Apply roads (after rivers, so we can check bridge validity)
+        foreach (var cellData in _generatedData)
+        {
+            var cell = _grid.GetCellByOffset(cellData.X, cellData.Z);
+            if (cell == null) continue;
+
+            for (int dir = 0; dir < 6; dir++)
+            {
+                if (cellData.HasRoadInDirection(dir))
+                {
+                    cell.AddRoad((HexDirection)dir);
+                }
             }
         }
 

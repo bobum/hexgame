@@ -405,6 +405,14 @@ public struct CellData
     // Moisture storage (from ClimateGenerator)
     public float Moisture;
 
+    // Road tracking - individual flags for each direction (0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW)
+    public bool HasRoadNE;
+    public bool HasRoadE;
+    public bool HasRoadSE;
+    public bool HasRoadSW;
+    public bool HasRoadW;
+    public bool HasRoadNW;
+
     public CellData(int x, int z)
     {
         X = x;
@@ -422,5 +430,47 @@ public struct CellData
         IncomingRiverDirection = 0;
         OutgoingRiverDirection = 0;
         Moisture = 0f;
+        HasRoadNE = false;
+        HasRoadE = false;
+        HasRoadSE = false;
+        HasRoadSW = false;
+        HasRoadW = false;
+        HasRoadNW = false;
+    }
+
+    /// <summary>
+    /// Gets whether a road exists in the specified direction.
+    /// </summary>
+    /// <param name="direction">Direction (0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW)</param>
+    public readonly bool HasRoadInDirection(int direction)
+    {
+        return direction switch
+        {
+            0 => HasRoadNE,
+            1 => HasRoadE,
+            2 => HasRoadSE,
+            3 => HasRoadSW,
+            4 => HasRoadW,
+            5 => HasRoadNW,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Sets a road in the specified direction.
+    /// </summary>
+    /// <param name="direction">Direction (0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW)</param>
+    /// <param name="value">Whether the road exists</param>
+    public void SetRoad(int direction, bool value)
+    {
+        switch (direction)
+        {
+            case 0: HasRoadNE = value; break;
+            case 1: HasRoadE = value; break;
+            case 2: HasRoadSE = value; break;
+            case 3: HasRoadSW = value; break;
+            case 4: HasRoadW = value; break;
+            case 5: HasRoadNW = value; break;
+        }
     }
 }

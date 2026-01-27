@@ -308,4 +308,28 @@ public static class GenerationConfig
     public const float WeightLowPriority = 1.0f;
 
     #endregion
+
+    #region Road Generation
+
+    /// <summary>
+    /// Seed offset for road generation to decorrelate from features.
+    /// </summary>
+    public const int RoadSeedOffset = 3000;
+
+    /// <summary>
+    /// Maximum path length when connecting settlements.
+    /// </summary>
+    public const int MaxRoadPathLength = 50;
+
+    /// <summary>
+    /// Maximum distance to search for nearby settlements to connect.
+    /// </summary>
+    public const int MaxSettlementConnectionDistance = 15;
+
+    /// <summary>
+    /// Minimum urban level for a cell to be considered a settlement.
+    /// </summary>
+    public const int MinUrbanLevelForSettlement = 1;
+
+    #endregion
 }
