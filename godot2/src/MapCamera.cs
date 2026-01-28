@@ -12,7 +12,7 @@ using Godot;
 public partial class MapCamera : Camera3D
 {
     [Export] public float MinZoom { get; set; } = 10.0f;
-    [Export] public float MaxZoom { get; set; } = 150.0f;
+    [Export] public float MaxZoom { get; set; } = 1000.0f;
     [Export] public float MinPitch { get; set; } = 20.0f;
     [Export] public float MaxPitch { get; set; } = 85.0f;
     [Export] public float PanSpeed { get; set; } = 1.5f;
@@ -44,7 +44,7 @@ public partial class MapCamera : Camera3D
     public override void _Ready()
     {
         _targetPosition = _target;
-        Far = 300.0f;
+        Far = 5000.0f;
         Current = true;
         UpdateCameraPosition();
         GD.Print("MapCamera ready - WASD to pan, mouse wheel to zoom, right-drag to rotate");

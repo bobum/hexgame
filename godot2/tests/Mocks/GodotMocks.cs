@@ -17,6 +17,8 @@ public static class Mathf
 {
     public static int RoundToInt(float value) => (int)Math.Round(value);
     public static float Abs(float value) => Math.Abs(value);
+    public static float Floor(float value) => (float)Math.Floor(value);
+    public static float Sqrt(float value) => (float)Math.Sqrt(value);
 }
 
 /// <summary>
@@ -28,6 +30,8 @@ public struct Vector3
     public float X;
     public float Y;
     public float Z;
+
+    public static readonly Vector3 Zero = new Vector3(0, 0, 0);
 
     public Vector3(float x, float y, float z)
     {
@@ -61,6 +65,23 @@ public struct Vector3
             Y + (to.Y - Y) * weight,
             Z + (to.Z - Z) * weight
         );
+}
+
+/// <summary>
+/// Mock Vector2I for testing without Godot runtime.
+/// </summary>
+public struct Vector2I
+{
+    public int X;
+    public int Y;
+
+    public Vector2I(int x, int y)
+    {
+        X = x;
+        Y = y;
+    }
+
+    public override string ToString() => $"({X}, {Y})";
 }
 
 /// <summary>
