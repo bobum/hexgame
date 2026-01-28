@@ -286,6 +286,11 @@ public partial class HexGridChunk : Node3D
     }
 
     /// <summary>
+    /// Gets the cells in this chunk for LOD mesh generation.
+    /// </summary>
+    public HexCell[] Cells => _cells;
+
+    /// <summary>
     /// Adds a cell to this chunk at the specified local index.
     /// </summary>
     public void AddCell(int index, HexCell cell)

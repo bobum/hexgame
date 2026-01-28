@@ -8,9 +8,9 @@ public static class HexMetrics
 {
     public const float OuterRadius = 10f;
 
-    // Tutorial 5: Chunk system constants
-    public const int ChunkSizeX = 5;
-    public const int ChunkSizeZ = 5;
+    // Tutorial 5: Chunk system constants (increased for better LOD grouping)
+    public const int ChunkSizeX = 10;
+    public const int ChunkSizeZ = 10;
 
     public const float OuterToInner = 0.866025404f; // sqrt(3)/2
     public const float InnerToOuter = 1f / OuterToInner;

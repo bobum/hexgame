@@ -35,6 +35,9 @@
     <Compile Include="..\src\Generation\RiverGenerator.cs" Link="Source\RiverGenerator.cs" />
     <Compile Include="..\src\Generation\FeatureGenerator.cs" Link="Source\FeatureGenerator.cs" />
     <Compile Include="..\src\Generation\RoadGenerator.cs" Link="Source\RoadGenerator.cs" />
+    <Compile Include="..\src\Rendering\RenderingConfig.cs" Link="Source\RenderingConfig.cs" />
+    <Compile Include="..\src\Rendering\PerformanceStatistics.cs" Link="Source\PerformanceStatistics.cs" />
+    <Compile Include="..\src\Rendering\ChunkMath.cs" Link="Source\ChunkMath.cs" />
   </ItemGroup>
 
 </Project>

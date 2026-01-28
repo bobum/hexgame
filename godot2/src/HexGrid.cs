@@ -1,5 +1,7 @@
 using Godot;
 using System.Collections.Generic;
+using HexGame.UI;
+using HexGame.Rendering;
 
 /// <summary>
 /// Creates and manages a hexagonal grid using chunks.
@@ -86,6 +88,10 @@ public partial class HexGrid : Node3D
     private static ArrayMesh? _hexHighlightMesh;
     private static ShaderMaterial? _highlightBaseMaterial;
 
+    // Sprint 7: Chunked terrain renderer for LOD and culling
+    private ChunkedTerrainRenderer? _terrainRenderer;
+    private Camera3D? _mainCamera;
+
     public override void _Ready()
     {
         // Initialize noise texture for perturbation
@@ -142,6 +148,12 @@ public partial class HexGrid : Node3D
 
         // Debug: Create on-screen debug label
         CreateDebugLabel();
+
+        // Sprint 7: Create performance UI
+        CreatePerformanceUI();
+
+        // Sprint 7: Setup terrain renderer for LOD and culling
+        SetupTerrainRenderer();
     }
 
     /// <summary>
@@ -191,6 +203,68 @@ public partial class HexGrid : Node3D
         if (_debugLabel != null)
         {
             _debugLabel.Text = message;
+        }
+    }
+
+    /// <summary>
+    /// Creates the performance monitoring UI components.
+    /// Sprint 7: Performance monitor and control panel.
+    /// </summary>
+    private void CreatePerformanceUI()
+    {
+        // Find or create a CanvasLayer for UI
+        var canvasLayer = GetNode<CanvasLayer>("../CanvasLayer");
+        if (canvasLayer == null)
+        {
+            canvasLayer = new CanvasLayer();
+            canvasLayer.Name = "UILayer";
+            GetParent().AddChild(canvasLayer);
+        }
+
+        // Add performance monitor (lower-left corner)
+        var perfMonitor = new PerformanceMonitor();
+        perfMonitor.Name = "PerformanceMonitor";
+        canvasLayer.AddChild(perfMonitor);
+
+        // Add game UI control panel (upper-right corner)
+        var gameUI = new GameUI();
+        gameUI.Name = "GameUI";
+        canvasLayer.AddChild(gameUI);
+
+        GD.Print("[HexGrid] Performance UI created");
+    }
+
+    /// <summary>
+    /// Sets up the chunked terrain renderer for LOD and distance culling.
+    /// Sprint 7: Rendering optimization.
+    /// </summary>
+    private void SetupTerrainRenderer()
+    {
+        // Find the main camera
+        _mainCamera = GetNode<Camera3D>("../Camera3D");
+        if (_mainCamera == null)
+        {
+            GD.PrintErr("[HexGrid] Could not find Camera3D for terrain renderer");
+            return;
+        }
+
+        // Create and setup the terrain renderer
+        _terrainRenderer = new ChunkedTerrainRenderer();
+        _terrainRenderer.Name = "TerrainRenderer";
+        AddChild(_terrainRenderer);
+
+        _terrainRenderer.Setup(this);
+        _terrainRenderer.Build();
+
+        GD.Print($"[HexGrid] Terrain renderer initialized with {_terrainRenderer.GetTotalChunkCount()} chunks");
+    }
+
+    public override void _Process(double delta)
+    {
+        // Sprint 7: Update terrain visibility based on camera position
+        if (_terrainRenderer != null && _mainCamera != null)
+        {
+            _terrainRenderer.UpdateVisibility(_mainCamera);
         }
     }
 
