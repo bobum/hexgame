@@ -256,7 +256,7 @@ public static class GenerationConfig
     /// <summary>
     /// Probability of sparse urban on desert terrain.
     /// </summary>
-    public const float DesertUrbanChance = 0.4f;
+    public const float DesertUrbanChance = 0.15f;
 
     /// <summary>
     /// Moisture threshold below which grass terrain favors urban development.
@@ -266,12 +266,12 @@ public static class GenerationConfig
     /// <summary>
     /// Probability of moderate urban on grass terrain with higher moisture.
     /// </summary>
-    public const float GrassUrbanChance = 0.5f;
+    public const float GrassUrbanChance = 0.2f;
 
     /// <summary>
     /// Probability of sparse urban on stone terrain.
     /// </summary>
-    public const float StoneUrbanChance = 0.3f;
+    public const float StoneUrbanChance = 0.1f;
 
     /// <summary>
     /// Moisture threshold for megaflora placement on mud terrain.
@@ -328,8 +328,9 @@ public static class GenerationConfig
 
     /// <summary>
     /// Minimum urban level for a cell to be considered a settlement.
+    /// Level 2+ significantly reduces settlement count for faster road generation.
     /// </summary>
-    public const int MinUrbanLevelForSettlement = 1;
+    public const int MinUrbanLevelForSettlement = 2;
 
     #endregion
 }
