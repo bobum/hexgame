@@ -293,15 +293,16 @@ public class RoadGeneratorTests
         var generator = new RoadGenerator(rng, 10, 10);
         var data = CreateFlatLand(10, 10);
 
-        data[15].UrbanLevel = 1;
-        data[45].UrbanLevel = 2;
-        data[75].UrbanLevel = 1;
+        // MinUrbanLevelForSettlement = 2, so only level 2+ counts
+        data[15].UrbanLevel = 2;
+        data[45].UrbanLevel = 3;
+        data[75].UrbanLevel = 2;
 
         var settlements = generator.FindSettlements(data);
 
-        settlements.Should().Contain(15, "urban level 1 should be settlement");
-        settlements.Should().Contain(45, "urban level 2 should be settlement");
-        settlements.Should().Contain(75, "urban level 1 should be settlement");
+        settlements.Should().Contain(15, "urban level 2 should be settlement");
+        settlements.Should().Contain(45, "urban level 3 should be settlement");
+        settlements.Should().Contain(75, "urban level 2 should be settlement");
     }
 
     [Fact]

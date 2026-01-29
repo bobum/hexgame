@@ -64,6 +64,13 @@ public static class GenerationConfig
     /// </summary>
     public const float ErosionWaterThreshold = 0.7f;
 
+    /// <summary>
+    /// Distance from water (in cells) within which elevation is smoothed.
+    /// Creates gradual shorelines/beaches instead of cliffs.
+    /// Keep this small to preserve terrain variety.
+    /// </summary>
+    public const int CoastalSmoothingDistance = 2;
+
     #endregion
 
     #region Elevation

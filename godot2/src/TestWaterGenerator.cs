@@ -36,6 +36,9 @@ public static class TestWaterGenerator
         // Create river from highland lake (15,5) -> (15,6) -> (14,7)
         GenerateHighlandOutflow(getCell);
 
+        // Create terraced coastline demonstration (gradual land-to-water transition)
+        GenerateTerracedCoastline(getCell);
+
         GD.Print("Test water patterns generated.");
     }
 
@@ -427,5 +430,117 @@ public static class TestWaterGenerator
         }
 
         GD.Print($"  Connecting river created: {successCount}/{riverPath.Length - 1} segments");
+    }
+
+    /// <summary>
+    /// Creates a large lake with terraced shoreline demonstrating gradual elevation transitions.
+    /// Land elevations: 1 (just above water), 2, and 3 surrounding the water.
+    /// This shows the smooth terrain-to-water blending without harsh cliffs.
+    /// Located at x=25-35, z=3-12 (unused area on right side of map).
+    /// </summary>
+    private static void GenerateTerracedCoastline(Func<int, int, HexCell?> getCell)
+    {
+        GD.Print("  Creating terraced coastline demonstration...");
+        int waterLevel = 1;
+        int waterCount = 0;
+        int terraceCount = 0;
+
+        // Large central lake - water cells (elevation 0, water level 1)
+        var waterCells = new (int x, int z)[]
+        {
+            // Core water body
+            (28, 6), (29, 6), (30, 6), (31, 6),
+            (28, 7), (29, 7), (30, 7), (31, 7), (32, 7),
+            (28, 8), (29, 8), (30, 8), (31, 8), (32, 8),
+            (29, 9), (30, 9), (31, 9),
+        };
+
+        // Elevation 1 terrace (just above water - this is what user wants to see)
+        var terrace1Cells = new (int x, int z)[]
+        {
+            // Northern shore (elevation 1)
+            (27, 5), (28, 5), (29, 5), (30, 5), (31, 5), (32, 5),
+            // Western shore
+            (26, 6), (27, 6), (27, 7), (26, 8), (27, 8),
+            // Eastern shore
+            (32, 6), (33, 6), (33, 7), (33, 8), (33, 9),
+            // Southern shore
+            (28, 9), (32, 9), (28, 10), (29, 10), (30, 10), (31, 10), (32, 10),
+        };
+
+        // Elevation 2 terrace (middle terrace)
+        var terrace2Cells = new (int x, int z)[]
+        {
+            // Northern area
+            (26, 4), (27, 4), (28, 4), (29, 4), (30, 4), (31, 4), (32, 4), (33, 4),
+            // Western area
+            (25, 5), (26, 5), (25, 6), (25, 7), (26, 7), (25, 8), (25, 9),
+            // Eastern area
+            (34, 5), (34, 6), (34, 7), (34, 8), (34, 9),
+            // Southern area
+            (26, 9), (27, 9), (26, 10), (27, 10), (33, 10), (34, 10),
+            (27, 11), (28, 11), (29, 11), (30, 11), (31, 11), (32, 11), (33, 11),
+        };
+
+        // Elevation 3 terrace (outer ring)
+        var terrace3Cells = new (int x, int z)[]
+        {
+            // Northern outer ring
+            (25, 3), (26, 3), (27, 3), (28, 3), (29, 3), (30, 3), (31, 3), (32, 3), (33, 3), (34, 3),
+            // Western outer
+            (24, 4), (25, 4), (24, 5), (24, 6), (24, 7), (24, 8), (24, 9), (24, 10),
+            // Eastern outer
+            (35, 4), (35, 5), (35, 6), (35, 7), (35, 8), (35, 9), (35, 10),
+            // Southern outer
+            (25, 10), (25, 11), (26, 11), (34, 11), (35, 11),
+            (25, 12), (26, 12), (27, 12), (28, 12), (29, 12), (30, 12), (31, 12), (32, 12), (33, 12), (34, 12),
+        };
+
+        // Set water cells
+        foreach (var (x, z) in waterCells)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+            cell.Elevation = 0;
+            cell.WaterLevel = waterLevel;
+            cell.TerrainTypeIndex = 2; // Mud for water areas
+            waterCount++;
+        }
+
+        // Set elevation 1 terrace (grass - this creates the smooth shore transition)
+        foreach (var (x, z) in terrace1Cells)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+            cell.Elevation = 1;
+            cell.WaterLevel = 0;
+            cell.TerrainTypeIndex = 1; // Grass
+            terraceCount++;
+        }
+
+        // Set elevation 2 terrace (grass)
+        foreach (var (x, z) in terrace2Cells)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+            cell.Elevation = 2;
+            cell.WaterLevel = 0;
+            cell.TerrainTypeIndex = 1; // Grass
+            terraceCount++;
+        }
+
+        // Set elevation 3 terrace (stone for variety)
+        foreach (var (x, z) in terrace3Cells)
+        {
+            var cell = getCell(x, z);
+            if (cell == null) continue;
+            cell.Elevation = 3;
+            cell.WaterLevel = 0;
+            cell.TerrainTypeIndex = 3; // Stone
+            terraceCount++;
+        }
+
+        GD.Print($"  Terraced coastline created: {waterCount} water cells, {terraceCount} terrace cells");
+        GD.Print($"    Location: x=24-35, z=3-12 (pan camera right to see it)");
     }
 }

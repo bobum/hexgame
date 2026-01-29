@@ -77,6 +77,11 @@ public class LandGenerator
 
         // Phase 3: Apply erosion to smooth coastlines
         ApplyErosion(data);
+
+        ct.ThrowIfCancellationRequested();
+
+        // Phase 4: Smooth coastal elevations to create beaches instead of cliffs
+        SmoothCoastlines(data);
     }
 
     /// <summary>
@@ -229,6 +234,113 @@ public class LandGenerator
         {
             data[i].Elevation = GenerationConfig.WaterLevel;
         }
+    }
+
+    /// <summary>
+    /// Smooths coastal elevations to create gradual shorelines (beaches) instead of cliffs.
+    /// Uses BFS from water cells to determine distance, then caps elevation based on distance.
+    /// Distance 1 from water: max elevation 1 (beach)
+    /// Distance 2 from water: max elevation 2
+    /// Distance 3+: no cap (allows hills/mountains inland)
+    /// </summary>
+    private void SmoothCoastlines(CellData[] data)
+    {
+        // Calculate distance from water for each land cell using BFS
+        var distanceFromWater = new int[data.Length];
+        for (int i = 0; i < data.Length; i++)
+            distanceFromWater[i] = int.MaxValue;
+
+        var queue = new Queue<int>();
+
+        // Seed BFS with all water cells (distance 0)
+        for (int i = 0; i < data.Length; i++)
+        {
+            if (data[i].Elevation < GenerationConfig.WaterLevel)
+            {
+                distanceFromWater[i] = 0;
+                queue.Enqueue(i);
+            }
+        }
+
+        // BFS to calculate distances
+        while (queue.Count > 0)
+        {
+            int current = queue.Dequeue();
+            int currentDist = distanceFromWater[current];
+
+            // Only propagate up to distance 3 (beyond that, no smoothing needed)
+            if (currentDist >= GenerationConfig.CoastalSmoothingDistance)
+                continue;
+
+            foreach (int neighbor in HexNeighborHelper.GetNeighborIndices(current, _gridWidth, _gridHeight))
+            {
+                if (distanceFromWater[neighbor] > currentDist + 1)
+                {
+                    distanceFromWater[neighbor] = currentDist + 1;
+                    queue.Enqueue(neighbor);
+                }
+            }
+        }
+
+        // Smooth underwater cells adjacent to land to create gradual underwater slope
+        // This prevents the -2 to 1 cliff (3 levels) at water's edge
+        // Only affect cells directly adjacent to land (minimal smoothing)
+        for (int i = 0; i < data.Length; i++)
+        {
+            ref CellData cell = ref data[i];
+
+            // Only process underwater cells
+            if (cell.Elevation >= GenerationConfig.WaterLevel)
+                continue;
+
+            // Check if this underwater cell has any land neighbors
+            bool hasLandNeighbor = false;
+            foreach (int neighbor in HexNeighborHelper.GetNeighborIndices(i, _gridWidth, _gridHeight))
+            {
+                if (data[neighbor].Elevation >= GenerationConfig.WaterLevel)
+                {
+                    hasLandNeighbor = true;
+                    break;
+                }
+            }
+
+            // Only raise cells directly adjacent to land to elevation 0
+            if (hasLandNeighbor)
+            {
+                cell.Elevation = 0;
+            }
+        }
+
+        // Then: smooth land cells near water to create gradual elevation increase
+        for (int i = 0; i < data.Length; i++)
+        {
+            ref CellData cell = ref data[i];
+
+            // Skip water cells
+            if (cell.Elevation < GenerationConfig.WaterLevel)
+                continue;
+
+            int dist = distanceFromWater[i];
+
+            // Cap elevation based on distance from water
+            // Distance 1: max elevation 1 (beach/shore)
+            // Distance 2: max elevation 2 (coastal plains)
+            // Beyond: no cap (allows hills/mountains)
+            if (dist <= GenerationConfig.CoastalSmoothingDistance)
+            {
+                // Simple formula: max elevation = water level + distance - 1
+                int maxElevation = GenerationConfig.WaterLevel + dist - 1;
+
+                // Ensure at least water level for land
+                maxElevation = Math.Max(maxElevation, GenerationConfig.WaterLevel);
+
+                if (cell.Elevation > maxElevation)
+                {
+                    cell.Elevation = maxElevation;
+                }
+            }
+        }
+
     }
 }
 
