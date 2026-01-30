@@ -1,69 +1,166 @@
 # ABYSSAL TIDE - Game Design Document
 
-**Version:** 0.2 (Draft)
+**Version:** 0.3 (Draft)
 **Last Updated:** 2026-01-30
 **Genre:** Turn-Based Tactical Strategy / Open World
 **Platform:** PC (Godot 4.x / C#)
+**Source Material:** Neo-Pirate Caribbean Novel Series (9 books, 3 trilogies)
 
 ---
 
 ## Table of Contents
 
+### Part I: Philosophy & Foundation
 1. [Executive Summary](#1-executive-summary)
-2. [Core Pillars](#2-core-pillars)
-3. [Setting & Narrative](#3-setting--narrative)
-4. [Game Structure](#4-game-structure)
-5. [The Ship](#5-the-ship)
-6. [Captain Creation](#6-captain-creation)
-7. [Crew System](#7-crew-system)
-8. [Job & Ability System](#8-job--ability-system)
-9. [Naval Gameplay](#9-naval-gameplay)
-10. [Land Gameplay](#10-land-gameplay)
-11. [Economy & Resources](#11-economy--resources)
-12. [Progression Systems](#12-progression-systems)
-13. [Modding Architecture](#13-modding-architecture)
-14. [Technical Requirements](#14-technical-requirements)
+2. [Engine Philosophy](#2-engine-philosophy)
+3. [Core Pillars](#3-core-pillars)
+
+### Part II: Canonical Lore
+4. [Timeline & History](#4-timeline--history)
+5. [The Novel Trilogies](#5-the-novel-trilogies)
+6. [Canonical Characters](#6-canonical-characters)
+7. [Factions & Powers](#7-factions--powers)
+
+### Part III: Engine Systems
+8. [Game Structure](#8-game-structure)
+9. [The Ship System](#9-the-ship-system)
+10. [Captain Creation](#10-captain-creation)
+11. [Crew System](#11-crew-system)
+12. [Job & Ability System](#12-job--ability-system)
+13. [Naval Combat Engine](#13-naval-combat-engine)
+14. [Land Combat Engine](#14-land-combat-engine)
+15. [Economy Engine](#15-economy-engine)
+16. [Progression Engine](#16-progression-engine)
+17. [Campaign & Story Engine](#17-campaign--story-engine)
+
+### Part IV: Content & Modding
+18. [Modding Architecture](#18-modding-architecture)
+19. [Base Game Content](#19-base-game-content)
+20. [Technical Requirements](#20-technical-requirements)
 
 ---
 
 ## 1. Executive Summary
 
-**ABYSSAL TIDE** is a turn-based tactical strategy game set in the neo-Caribbean of 2085. Players captain a ship and crew through an open world of island nations, corporate fleets, and pirate havens. The game combines **open-world naval exploration** (Sid Meier's Pirates!) with **tactical land missions** (XCOM) and **deep crew relationships** (Mass Effect/Fire Emblem).
+**ABYSSAL TIDE** is a turn-based tactical strategy game set in the neo-Caribbean, based on a 9-book novel series spanning 70 years of alternate history. The game is designed as a **content-agnostic engine** that can tell any story within this universe - from the collapse of civilization to the submarine cold wars of the 22nd century.
+
+### The Vision
+
+The game combines **open-world naval exploration** (Sid Meier's Pirates!) with **tactical land missions** (XCOM) and **deep crew relationships** (Mass Effect/Fire Emblem). But more importantly, it's built so that **each novel can become a campaign mod**, and the community can create their own stories using the same tools.
+
+### Engine + Content Model
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    THE ENGINE                                │
+│  (What we build - the systems that never change)            │
+│                                                             │
+│  • Hex Grid & Navigation    • Combat (Naval + Land)         │
+│  • Ship Management          • Crew & Job Systems            │
+│  • Economy & Trade          • Campaign & Story Systems      │
+│  • Modding API              • Save/Load                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    THE CONTENT                               │
+│  (What changes - delivered as mods/campaigns)               │
+│                                                             │
+│  • Book 4: The Coral Crown     (Discovery era campaign)     │
+│  • Book 5: The Broken Bridge   (Canal war campaign)         │
+│  • Book 6: The Trident Pact    (Unification campaign)       │
+│  • Books 7-9: Abyssal War      (Submarine era campaigns)    │
+│  • Community Campaigns         (Fan-made content)           │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ### The Star Trek Principle
 
 Like the Enterprise, your ship houses a large crew of dozens - but the game focuses on your **Bridge Crew**: a growing roster of named officers and specialists with unique personalities, skills, and story arcs. The rest of the crew provides bonuses and flavor, but the Bridge Crew are the characters you deploy, develop, and potentially lose.
 
-### Core Loop
+---
+
+## 2. Engine Philosophy
+
+### "Build the Engine, Not the Things"
+
+The most critical insight for this project: **focus on systems, not content**. Content changes. Stories evolve. But a well-designed engine enables infinite content.
+
+### What is "Engine"?
+
+| Engine (Build Once) | Content (Mod/Data) |
+|---------------------|-------------------|
+| Hex grid rendering | Specific maps |
+| Combat turn system | Enemy types, abilities |
+| Crew relationship system | Specific characters |
+| Dialogue tree system | Actual dialogue |
+| Economy simulation | Item definitions, prices |
+| Ship physics/movement | Ship models, stats |
+| Campaign state machine | Specific story beats |
+| Save/Load serialization | Save file format |
+
+### Engine Design Principles
+
+1. **Data-Driven Everything**
+   - No hardcoded content
+   - All game objects defined in JSON/YAML
+   - Engine reads data, doesn't know what "AetherCorp" or "Corbin Shaw" means
+
+2. **Event-Based Architecture**
+   - Engine emits events (OnCombatStart, OnCrewDeath, OnDialogueChoice)
+   - Content/mods subscribe to events
+   - Loose coupling between systems
+
+3. **Campaign Agnostic**
+   - Engine doesn't know what year it is
+   - Engine doesn't know who the protagonist is
+   - Engine doesn't know what the "main quest" is
+   - All of that comes from campaign data
+
+4. **Mod-First Development**
+   - Base game content uses the same mod API as community mods
+   - If we can't do it with the mod system, fix the mod system
+   - No "special" paths for official content
+
+5. **Temporal Flexibility**
+   - Engine supports different technology levels (sail-only, sail+submarine, etc.)
+   - Engine supports different map scales (single island, full Caribbean, Atlantic)
+   - Campaign data defines what's available
+
+### The Three Layers
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      OPEN WORLD                              │
-│  Sail the Caribbean → Discover locations → Trigger events   │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-        ┌─────────────┴─────────────┐
-        ▼                           ▼
-┌───────────────────┐     ┌───────────────────┐
-│   NAVAL COMBAT    │     │   LAND MISSION    │
-│                   │     │                   │
-│ Ship-to-ship      │     │ Deploy landing    │
-│ Hex-based tactics │     │ party (4-6 crew)  │
-│ Boarding actions  │     │ Tactical hex      │
-│                   │     │ combat on islands │
-└─────────┬─────────┘     └─────────┬─────────┘
-          │                         │
-          └───────────┬─────────────┘
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    SHIP MANAGEMENT                           │
-│  Upgrade ship → Manage crew → Sell cargo → Repair/refit    │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│  LAYER 3: CAMPAIGN CONTENT              │
+│  (Specific stories, characters, items)  │
+│  - "The Coral Crown" campaign           │
+│  - Corbin Shaw character definition     │
+│  - AetherCorp faction definition        │
+└────────────────┬────────────────────────┘
+                 │ Uses
+                 ▼
+┌─────────────────────────────────────────┐
+│  LAYER 2: GAME SYSTEMS                  │
+│  (Rules, mechanics, formulas)           │
+│  - Combat damage formulas               │
+│  - Job ability definitions              │
+│  - Ship upgrade paths                   │
+└────────────────┬────────────────────────┘
+                 │ Uses
+                 ▼
+┌─────────────────────────────────────────┐
+│  LAYER 1: CORE ENGINE                   │
+│  (Rendering, input, serialization)      │
+│  - Hex grid math                        │
+│  - Turn management                      │
+│  - UI framework                         │
+│  - Mod loading                          │
+└─────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Core Pillars
+## 3. Core Pillars
 
 ### Pillar 1: Your Ship Is Home
 
@@ -83,40 +180,242 @@ Open world exploration with emergent stories, but strong narrative throughlines.
 
 ---
 
-## 3. Setting & Narrative
+# PART II: CANONICAL LORE
 
-### The World of 2085
-
-**The Great Atmospheric Shift (2045):** Solar activity caused catastrophic atmospheric changes. Air travel became impossible. Satellites fell. The sky turned hostile.
-
-**The Fuel Famine (2050-2060):** Oil ran out. Nuclear plants melted down without maintenance. Civilization contracted to coastlines where wind and current provided power.
-
-**The Great Devaluation (2065):** Digital currencies collapsed. Banks failed. The old world's wealth became worthless paper. What remained was tangible: ships, cargo, and armed crews.
-
-**The Broken Bridge (2070):** The Panama Canal, damaged by earthquakes and unmaintained, became impassable. All Atlantic-Pacific trade now routes through the Caribbean - through pirate waters.
-
-### The Neo-Caribbean (2085)
-
-| Faction | Description | Relationship |
-|---------|-------------|--------------|
-| **AetherCorp** | Megacorporation controlling Aetherium refinement. Operates armored treasure fleets. | Primary antagonist (but nuanced) |
-| **The Free Ports** | Independent city-states (Nassau, Havana, Kingston). Neutral trade hubs. | Safe havens, quest givers |
-| **Trident Confederation** | Organized pirate nation. Has a code. Offers letters of marque. | Potential allies or rivals |
-| **Resource Nations** | Island nations with Vita-Algae farms or CanaFiber plantations. Desperate for protection. | Clients, employers |
-| **The Drowned** | Cultists who worship the changed sea. Operate strange vessels. | Wild card antagonists |
-
-### Main Narrative Arc
-
-The player starts as a small-time salvager who discovers something in a wreck - something AetherCorp will kill to recover. The main story is about uncovering what AetherCorp found in the deep ocean and why the Atmospheric Shift really happened.
-
-**Story Beats (High Level):**
-1. **Act 1:** Escape and survival. Build your first real crew. Establish reputation.
-2. **Act 2:** Choose allegiances. The Trident Confederation, a Free Port alliance, or go independent.
-3. **Act 3:** Confront AetherCorp. Discover the truth. Make a choice that shapes the Caribbean's future.
+This section documents the canonical world from the novel series. The engine doesn't "know" any of this - it's all content. But it serves as the reference for official campaigns.
 
 ---
 
-## 4. Game Structure
+## 4. Timeline & History
+
+### The Pre-Crisis Era (2025-2033)
+Global economies strained by debt and fragile "just-in-time" supply chains. The calm before the storm.
+
+### The Twin Shocks (2034-2043)
+
+**The Great Atmospheric Shift (2034-2038):**
+Hyper-energetic solar flares permanently altered Earth's magnetosphere. The weakened magnetic field caused:
+- Thermospheric heating and expansion
+- Chronic wind shear at high altitudes
+- Frequent high-altitude microbursts
+- 15-30% increase in aircraft fuel consumption
+- Exponential maintenance costs for aircraft
+- Air travel became economically unviable for cargo
+
+**The Fuel Famine (2039-2043):**
+Depletion of accessible hydrocarbons accelerated. Energy costs skyrocketed. Aviation industry collapsed. Manufacturing crippled.
+
+### The Great Devaluation (2044-2048)
+- Governments print money uncontrollably to manage crises
+- Hyperinflation destroys faith in fiat currency
+- ~2048: Major central bank defaults, triggering global collapse
+- International trade halts
+- Nations fracture into regional blocs
+
+### The Age of Scarcity (2049-2055)
+- Mega-corporations and regional blocs emerge as new powers
+- Caribbean's unique resources discovered: Grav-Coral, Vita-Algae, CanaFiber
+- Advanced sail becomes the only viable transport
+- Piracy flourishes
+
+### The Canal Wars (2056-2076)
+- 2056: Panamanian authority dissolves, Canal Zone descends into chaos
+- 2060: AetherCorp wins the struggle, temporarily reopens one lane
+- 2061-2075: AetherCorp fights losing battle against maintenance costs, sabotage, and guerilla warfare
+- 2076: **The Canal is Abandoned** - AetherCorp withdraws, jungle reclaims the locks
+
+### The New Order (2077-Present)
+- Panama Canal becomes "The Broken Bridge" - a monument to the old world
+- All trade forced around Cape Horn
+- Caribbean becomes the most vital maritime hub on Earth
+- The Trident Confederation forms as a unified pirate nation
+- Cold war between AetherCorp and the Confederation intensifies
+
+---
+
+## 5. The Novel Trilogies
+
+The canonical source material spans three trilogies, each covering a distinct era. Each can become a campaign mod.
+
+### TRILOGY 1: The Long Fall (2030-2048)
+*Genre: Techno-thriller disaster epic*
+*Theme: The end of the world as we know it*
+
+| Book | Title | Focus | Protagonist |
+|------|-------|-------|-------------|
+| 1 | **SKYFIRE** | The Atmospheric Shift | Dr. Aris Thorne (climatologist) |
+| 2 | **DRY RUN** | Fuel Famine & Devaluation | Maria Flores (trader), young Corbin Shaw |
+| 3 | **BROKEN BANKS** | Central bank collapse | Thorne, Flores, Shaw, Marcus Valerius |
+
+**Campaign Potential:** Survival/escape campaigns, resource management under collapse, minimal naval combat, focus on land missions and tough choices.
+
+### TRILOGY 2: The Age of Scarcity & Sail (2050-2077)
+*Genre: High-seas adventure saga*
+*Theme: Discovery, freedom vs. corporate tyranny*
+
+| Book | Title | Focus | Protagonist |
+|------|-------|-------|-------------|
+| 4 | **THE CORAL CROWN** | Rise of AetherCorp, Grav-Coral discovery | Corbin Shaw (captain of *Stargazer*) |
+| 5 | **THE BROKEN BRIDGE** | Canal struggle and abandonment | Shaw + AetherCorp engineer |
+| 6 | **THE TRIDENT PACT** | Unification of pirate factions | Aging Corbin Shaw |
+
+**Campaign Potential:** Classic pirate gameplay, ship combat, raiding, building reputation, political maneuvering. This is the "golden age of piracy" era for the setting.
+
+### TRILOGY 3: The Abyssal War (2080-2100+)
+*Genre: Deep-sea techno-thriller, cold war*
+*Theme: Freedom vs. control, legacy*
+
+| Book | Title | Focus | Protagonist |
+|------|-------|-------|-------------|
+| 7 | **THE KRAKEN PROJECT** | Submarine arms race begins | Sofia (engineer), elder Corbin Shaw |
+| 8 | **THE SERPENT'S PASSAGE** | Submarine transport service | Crew of *Void Kraken* |
+| 9 | **ABYSSAL DAWN** | Final confrontation | Sofia, Shaw, AetherCorp chief |
+
+**Campaign Potential:** Adds submarine gameplay, espionage, underwater combat, higher tech level. The "endgame" era.
+
+### Campaign Era Support
+
+The engine must support campaigns in ANY of these eras:
+
+| Era | Surface Ships | Submarines | Air | Tech Level |
+|-----|--------------|------------|-----|------------|
+| Long Fall (2030s-40s) | Modern → Sail | No | Failing | High → Low |
+| Age of Sail (2050s-70s) | Advanced Sail | No | None | Medium |
+| Abyssal War (2080s+) | Advanced Sail | Yes | None | High (specialized) |
+
+---
+
+## 6. Canonical Characters
+
+These characters span the novel series. In campaigns, they may be:
+- The player character (playing AS Corbin Shaw)
+- Major NPCs (interacting with Shaw)
+- Historical figures (referenced in later-era campaigns)
+
+### Corbin Shaw - "Nemo"
+*The Hero of the Saga*
+
+| Era | Role | Status |
+|-----|------|--------|
+| Long Fall | Young oil rig engineer | Survivor, learning leadership |
+| Age of Sail | Captain of *Stargazer*, pirate legend | Active protagonist |
+| Abyssal War | Elder statesman, founder of Confederation | Mentor figure |
+
+**Character Arc:** Humble worker → Reluctant survivor → Pirate captain "Nemo" → Founder of a nation → Elder watching his legacy tested
+
+**Virtues:** Honor, Sacrifice, Courage
+**Ship:** *Stargazer* (later legendary vessel)
+
+### Dr. Aris Thorne
+*The Cassandra*
+
+Climatologist who predicted the Atmospheric Shift. Dismissed as alarmist until proven right. Retreats to Caribbean, becomes mentor figure.
+
+**Role in Game:** Potential mentor character, source of scientific knowledge, connection to "why" the world changed.
+
+### Maria Flores
+*The Pragmatist*
+
+Energy commodities trader who saw the collapse coming. Lost her paper wealth, retained her strategic mind. Helps organize post-collapse communities.
+
+**Role in Game:** Economic advisor, quest giver for trade/intelligence missions.
+
+### Marcus Valerius
+*The Corporate Antagonist*
+
+AetherCorp security chief who rose through the chaos. Ruthless, brilliant, believes order must be imposed. Not a cackling villain - genuinely believes corporate control is humanity's best chance.
+
+**Role in Game:** Primary antagonist for Age of Sail and Abyssal War campaigns. Complex motivations.
+
+### Sofia
+*The Next Generation*
+
+Daughter of an AetherCorp scientist rescued by Shaw. Raised in the Confederation, becomes the architect of the Kraken submarine fleet. Represents the future.
+
+**Role in Game:** Key character in Abyssal War campaigns. Engineering/tech specialist.
+
+---
+
+## 7. Factions & Powers
+
+### AetherCorp
+*The New Empire*
+
+- **Type:** Mega-corporation
+- **Controls:** Grav-Coral harvesting, Aetherium refining, Treasure Fleets
+- **Military:** Corporate navy, hunter-killer drones, advanced sensors
+- **Philosophy:** Order through control, efficiency over freedom
+- **Headquarters:** Yucatan coast (processing facilities)
+
+**Game Role:** Primary antagonist faction. Their ships are tough, their resources vast, but they're not everywhere.
+
+### The Trident Confederation
+*The Pirate Nation*
+
+- **Type:** Loose federation of pirate captains
+- **Controls:** Hidden coves, trade routes, "The Code"
+- **Military:** Fast raiders, boarding specialists, guerilla tactics
+- **Philosophy:** Freedom, the Code, strength through unity
+- **Headquarters:** Hidden - various pirate havens
+
+**Game Role:** Can be allied with, joined, or opposed. Player may help form it (Book 6 campaign).
+
+### The Free Ports
+*The Neutral Ground*
+
+- **Type:** Independent city-states
+- **Cities:** Nassau, Kingston, Havana (rebuilt), Port-Royal
+- **Controls:** Trade, information, repair facilities
+- **Military:** Harbor defense only
+- **Philosophy:** Neutrality, commerce above all
+
+**Game Role:** Safe havens, trade hubs, quest sources. Attacking a Free Port turns everyone against you.
+
+### Resource Nations
+*The Desperate Powers*
+
+- **Type:** Island nations controlling key resources
+- **Examples:** Bahamas Vita-Algae Syndicate, Hispaniola CanaFiber Cooperative
+- **Controls:** Specific commodity production
+- **Military:** Defensive fleets, hire protection
+- **Philosophy:** Survival through leverage
+
+**Game Role:** Employers, clients, faction to protect or exploit.
+
+### The Drowned
+*The Wild Card*
+
+- **Type:** Religious cult
+- **Beliefs:** The sea changed for a reason; humanity must adapt or perish
+- **Controls:** Unknown - they appear and disappear
+- **Military:** Strange ships, fanatical crews, possible "gifts" from the deep
+- **Philosophy:** Embrace the change, reject the old world
+
+**Game Role:** Mysterious antagonists, possible allies for those willing to go dark. Source of weird tech/abilities.
+
+### The Three Treasures (Economic Foundation)
+
+| Resource | Historical Parallel | Source | Use |
+|----------|-------------------|--------|-----|
+| **Aetherium Fuel** | Gold | Grav-Coral (Yucatan reefs) | Power source, highest value |
+| **Vita-Algae** | Sugar | Caribbean shallows | Pharmaceuticals, lubricants |
+| **CanaFiber** | Cotton | Cuba, Hispaniola | Textiles, composites, bulk cargo |
+
+**Why Sea Transport:**
+- Grav-Coral is too heavy to fly
+- Aetherium Fuel is too volatile for unstable atmosphere
+- CanaFiber is too bulky
+- Air travel is impossible regardless
+
+---
+
+# PART III: ENGINE SYSTEMS
+
+These sections describe the **systems** the engine must provide. They are content-agnostic - they work regardless of what campaign is loaded.
+
+---
+
+## 8. Game Structure
 
 ### Open World Map
 
@@ -155,7 +454,7 @@ The game world is a **strategic hex map** of the Caribbean:
 
 ---
 
-## 5. The Ship
+## 9. The Ship System
 
 ### Ship as Central Hub
 
@@ -204,7 +503,7 @@ Players can rename their ship and customize:
 
 ---
 
-## 6. Captain Creation
+## 10. Captain Creation
 
 ### The Oracle's Cards (Ultima IV Inspiration)
 
@@ -325,7 +624,7 @@ Your captain is a Bridge Crew member who:
 
 ---
 
-## 7. Crew System
+## 11. Crew System
 
 ### The Two-Tier Crew
 
@@ -409,7 +708,7 @@ When a Bridge Crew member dies:
 
 ---
 
-## 8. Job & Ability System
+## 12. Job & Ability System
 
 ### FFT-Inspired Multi-Job System
 
@@ -719,7 +1018,7 @@ The depth comes from combining abilities across jobs:
 
 ---
 
-## 9. Naval Gameplay
+## 13. Naval Combat Engine
 
 ### Strategic Sailing
 
@@ -814,7 +1113,7 @@ Choose what to target:
 
 ---
 
-## 10. Land Gameplay
+## 14. Land Combat Engine
 
 ### Mission Types
 
@@ -921,7 +1220,7 @@ Weapon Base Damage
 
 ---
 
-## 11. Economy & Resources
+## 15. Economy Engine
 
 ### The Three Treasures
 
@@ -965,7 +1264,7 @@ Weapon Base Damage
 
 ---
 
-## 12. Progression Systems
+## 16. Progression Engine
 
 ### Captain Progression
 
@@ -1016,7 +1315,261 @@ Weapon Base Damage
 
 ---
 
-## 13. Modding Architecture
+## 17. Campaign & Story Engine
+
+The Campaign Engine is the system that turns raw gameplay into narrative experiences. It's entirely data-driven - the engine doesn't know what story it's telling.
+
+### Campaign Structure
+
+A campaign is a ZIP file containing all data needed for a complete game experience:
+
+```
+campaign-coral-crown.zip
+├── campaign.json          # Campaign manifest
+├── world/
+│   ├── map.json           # Strategic map definition
+│   ├── ports.json         # Port locations and data
+│   ├── factions.json      # Faction definitions
+│   └── regions.json       # Territory definitions
+├── story/
+│   ├── main_quest.json    # Main storyline
+│   ├── side_quests/       # Optional content
+│   └── events/            # Random events
+├── characters/
+│   ├── protagonist.json   # Player character (if fixed)
+│   ├── crew/              # Recruitable characters
+│   └── npcs/              # Non-playable characters
+├── missions/
+│   ├── naval/             # Naval combat scenarios
+│   └── land/              # Land mission maps
+├── dialogue/
+│   └── *.json             # Dialogue trees
+└── assets/
+    └── ...                # Art, audio specific to campaign
+```
+
+### Campaign Manifest (campaign.json)
+
+```json
+{
+  "id": "official.coral-crown",
+  "name": "The Coral Crown",
+  "description": "Book 4 of the Neo-Pirate Caribbean series",
+  "version": "1.0.0",
+  "author": "Official",
+
+  "era": {
+    "year_start": 2055,
+    "year_end": 2060,
+    "tech_level": "age_of_sail",
+    "submarines_available": false
+  },
+
+  "protagonist": {
+    "type": "fixed",
+    "character_id": "corbin_shaw",
+    "starting_ship": "stargazer_early"
+  },
+
+  "world": {
+    "map": "caribbean_full",
+    "starting_location": "barrier_island_haven",
+    "factions_active": ["aethercorp", "free_ports", "pirates_unaligned"]
+  },
+
+  "victory_conditions": [
+    { "type": "story_flag", "flag": "coral_crown_complete" }
+  ],
+
+  "dependencies": [],
+  "incompatible_with": []
+}
+```
+
+### Story State Machine
+
+The engine tracks story state through:
+
+**Flags:** Boolean markers (e.g., `"met_valerius": true`)
+**Variables:** Numeric values (e.g., `"aethercorp_reputation": -50`)
+**Quest States:** Per-quest progress tracking
+
+### Quest Definition
+
+```json
+{
+  "id": "quest_discover_grav_coral",
+  "name": "The Heavy Reef",
+  "type": "main",
+
+  "trigger": {
+    "type": "location",
+    "location": "yucatan_channel",
+    "conditions": [
+      { "flag": "act1_complete", "value": true }
+    ]
+  },
+
+  "stages": [
+    {
+      "id": "investigate",
+      "description": "Investigate the strange readings",
+      "objectives": [
+        { "type": "reach_location", "location": "reef_alpha" },
+        { "type": "dialogue", "npc": "maria_flores", "topic": "coral" }
+      ],
+      "on_complete": { "advance_to": "dive" }
+    },
+    {
+      "id": "dive",
+      "description": "Dive to the reef",
+      "objectives": [
+        { "type": "mission", "mission_id": "mission_coral_dive" }
+      ],
+      "on_complete": { "advance_to": "escape" }
+    },
+    {
+      "id": "escape",
+      "description": "Escape the AetherCorp patrol",
+      "objectives": [
+        { "type": "naval_combat", "escape": true },
+        { "type": "reach_location", "location": "safe_haven" }
+      ],
+      "on_complete": {
+        "set_flag": "discovered_grav_coral",
+        "set_variable": { "aethercorp_reputation": -20 },
+        "unlock_quest": "quest_the_engineer"
+      }
+    }
+  ],
+
+  "rewards": {
+    "xp": 500,
+    "items": ["grav_coral_sample"],
+    "reputation": { "free_ports": 10 }
+  }
+}
+```
+
+### Event System
+
+Random and triggered events that create emergent narrative:
+
+```json
+{
+  "id": "event_storm_approaching",
+  "type": "random",
+
+  "conditions": {
+    "location_type": "open_sea",
+    "season": ["hurricane_season"],
+    "probability": 0.15
+  },
+
+  "dialogue": "dialogue_storm_warning",
+
+  "choices": [
+    {
+      "text": "Push through",
+      "requirements": { "captain_virtue_courage": 40 },
+      "outcome": {
+        "type": "skill_check",
+        "skill": "navigation",
+        "success": { "continue": true, "bonus_xp": 100 },
+        "failure": { "damage": "ship_medium", "crew_injury": 2 }
+      }
+    },
+    {
+      "text": "Seek shelter",
+      "outcome": {
+        "type": "delay",
+        "days": 3,
+        "continue": true
+      }
+    },
+    {
+      "text": "Turn back",
+      "outcome": {
+        "type": "return_to_port",
+        "continue": true
+      }
+    }
+  ]
+}
+```
+
+### Dialogue System
+
+Branching dialogue with conditions:
+
+```json
+{
+  "id": "dialogue_maria_coral",
+  "speaker": "maria_flores",
+  "portrait": "maria_serious",
+
+  "nodes": [
+    {
+      "id": "start",
+      "text": "You found what? Corbin, do you have any idea what you're holding?",
+      "responses": [
+        {
+          "text": "It's just coral, isn't it?",
+          "next": "explain"
+        },
+        {
+          "text": "I know exactly what it is. That's why I came to you.",
+          "conditions": { "flag": "knows_about_aetherium" },
+          "next": "business"
+        }
+      ]
+    },
+    {
+      "id": "explain",
+      "text": "That 'coral' is worth more than your ship. AetherCorp has killed for less. This is Grav-Coral - the source of Aetherium Fuel.",
+      "effects": { "set_flag": "knows_about_aetherium" },
+      "responses": [
+        {
+          "text": "Then we need to hide it.",
+          "next": "hide"
+        },
+        {
+          "text": "Or we need to sell it.",
+          "next": "sell"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Protagonist Modes
+
+Campaigns can define protagonist handling:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Fixed** | Player IS a specific character (Corbin Shaw) | Novel adaptations |
+| **Created** | Player creates captain through Oracle system | Sandbox campaigns |
+| **Selected** | Player chooses from roster | Multi-protagonist stories |
+
+### Time & Pacing
+
+The engine tracks time at multiple scales:
+
+- **Strategic Time:** Days pass during travel
+- **Tactical Time:** Turns during combat
+- **Story Time:** Triggered by quest completion, not real time
+
+Campaigns can define time pressure or allow unlimited exploration.
+
+---
+
+# PART IV: CONTENT & MODDING
+
+---
+
+## 18. Modding Architecture
 
 ### Design Philosophy
 
@@ -1384,7 +1937,47 @@ Planned features:
 
 ---
 
-## 14. Technical Requirements
+## 19. Base Game Content
+
+The base game ships with a single complete campaign to demonstrate all engine features. Additional campaigns (novel adaptations) release as official DLC/mods.
+
+### Launch Campaign: "Abyssal Tide"
+
+**Era:** Early Abyssal War (~2085)
+**Protagonist Mode:** Created (Oracle system)
+**Scope:** Full Caribbean, ~30 hours main story
+
+**Premise:** You're a small-time captain who stumbles into the cold war between AetherCorp and the Trident Confederation. Both sides want you - as an asset or eliminated. Choose your path.
+
+**Features Demonstrated:**
+- All combat systems (naval, land, boarding)
+- Full job system
+- Ship upgrades
+- Faction reputation
+- Multiple endings
+
+### Future Official Campaigns (DLC)
+
+| Campaign | Novel | Era | Unique Features |
+|----------|-------|-----|-----------------|
+| The Coral Crown | Book 4 | 2055 | Play as young Corbin Shaw |
+| The Broken Bridge | Book 5 | 2060s | Canal guerilla warfare |
+| The Trident Pact | Book 6 | 2076 | Political/diplomatic focus |
+| The Kraken Project | Book 7 | 2080s | Submarine introduction |
+| The Serpent's Passage | Book 8 | 2090s | Full submarine gameplay |
+| Abyssal Dawn | Book 9 | 2100 | Endgame content |
+
+### Modding Community Vision
+
+The tools and API we ship allow community to create:
+- New campaigns (original stories)
+- New time periods (pre-collapse, far future)
+- Total conversions (different settings entirely)
+- Additional content for official campaigns
+
+---
+
+## 20. Technical Requirements
 
 ### Map System (Current Implementation)
 
@@ -1445,6 +2038,7 @@ Planned features:
 
 ## Appendix A: Influences Reference
 
+### Gameplay Influences
 | Game | What We Take |
 |------|--------------|
 | **Ultima IV: Quest of the Avatar** | Virtue-based character creation, moral dilemmas shape identity |
@@ -1455,7 +2049,14 @@ Planned features:
 | **Mass Effect** | Crew loyalty missions, dialogue importance, ship as home |
 | **FTL** | Ship management under pressure, crew as resource |
 | **Valkyria Chronicles** | Beautiful tactical battles, named squad members |
+
+### Technical/Architecture Influences
+| System | What We Take |
+|--------|--------------|
 | **Skyrim/Bethesda** | Moddable architecture, community content ecosystem |
+| **Paradox Games** | Data-driven design, event systems, campaign mods |
+| **Unity Asset Store Model** | Content as packages, mix official + community |
+| **Rimworld** | Storyteller system, emergent narrative from systems |
 
 ---
 
@@ -1475,4 +2076,5 @@ Planned features:
 |---------|------|---------|
 | 0.1 | 2026-01-30 | Initial draft |
 | 0.2 | 2026-01-30 | Added Captain Creation (Ultima IV-style virtues), Job & Ability System (FFT-style), Modding Architecture |
+| 0.3 | 2026-01-30 | Major restructure: Engine Philosophy, Canonical Lore (9-book novel series), Campaign & Story Engine, "Build the Engine, Not the Things" approach |
 
