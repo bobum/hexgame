@@ -1,6 +1,6 @@
 # ABYSSAL TIDE - Game Design Document
 
-**Version:** 1.1 (Draft)
+**Version:** 1.2 (Draft)
 **Last Updated:** 2026-01-30
 **Genre:** Turn-Based Tactical Strategy / Open World
 **Platform:** PC (Godot 4.x / C#)
@@ -432,40 +432,194 @@ These sections describe the **systems** the engine must provide. They are conten
 
 ## 8. Game Structure
 
-### Open World Map
+### Unified World Map
 
-The game world is a **strategic hex map** of the Caribbean:
-- ~500-1000 sea hexes representing ocean zones
-- ~50-100 island/location hexes (ports, ruins, resource sites)
-- Weather systems that move across the map
-- Faction-controlled territories that shift based on player actions
+The entire game takes place on **one seamless hex map** at a consistent scale. There is no "strategic map" vs "tactical map" - just one world where ships sail on water hexes and parties walk on land hexes.
+
+**Single Scale Philosophy:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ONE MAP - ONE SCALE - SEAMLESS PLAY                        │
+│                                                             │
+│  • Ship sails on water hexes                                │
+│  • Party walks on land hexes                                │
+│  • Cities are building clusters you can see                 │
+│  • No loading screens between naval and land                │
+│  • No zoom levels or abstraction layers                     │
+│  • What you see is where you are                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Map Specifications:**
+- Hex scale: ~50-100 meters per hex
+- Full Caribbean: Thousands of hexes across multiple streaming regions
+- Terrain: Ocean, coast, beach, jungle, urban, ruins, mountains
+- Features: Buildings, docks, roads, rivers, vegetation, elevation
+
+### Ocean Boundaries - Island-Based Regions
+
+The Caribbean is too large for a single map. Instead, the world uses **Ocean Boundaries** where each region is an island (or island cluster) naturally separated by open ocean:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    THE CARIBBEAN                            │
+│                                                             │
+│         ┌─────────┐                    ┌─────────┐         │
+│         │ NASSAU  │                    │ PUERTO  │         │
+│         │ (start) │                    │ RICO    │         │
+│         └─────────┘                    └─────────┘         │
+│    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~      │
+│         ┌─────────────────┐       ┌─────────┐              │
+│         │      CUBA       │       │ VIRGIN  │              │
+│         │  (2-3 regions)  │       │ ISLANDS │              │
+│         └─────────────────┘       └─────────┘              │
+│    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~      │
+│    ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐     │
+│    │ YUCATAN │  │ JAMAICA │  │SHATTERED│  │ LESSER  │     │
+│    │ COAST   │  │         │  │ ISLES   │  │ANTILLES │     │
+│    └─────────┘  └─────────┘  └─────────┘  └─────────┘     │
+│                                                             │
+│  ~~~ = Open Ocean (strategic travel, not hex-by-hex)       │
+│  Each island region: ~200x200 hexes (self-contained)       │
+│  Only ONE region loaded at a time + Ocean Map overlay      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Why Ocean Boundaries?**
+
+This approach eliminates cross-region complexity by design:
+
+| Problem | Ocean Boundary Solution |
+|---------|------------------------|
+| Neighbor cells across regions | **Gone** - ocean hexes have no land neighbors to stitch |
+| Cross-region pathfinding | **Gone** - A* stays within island, ship travel between |
+| Roads crossing boundaries | **Gone** - roads don't cross ocean |
+| Rivers crossing boundaries | **Gone** - rivers end at coastline |
+| Seamless streaming complexity | **Gone** - explicit "sail to destination" transition |
+| Rendering seams at borders | **Gone** - ocean IS the natural border |
+
+**Two-Level System:**
+1. **Ocean Map** (Strategic) - Low-res overview of entire Caribbean for inter-island navigation
+2. **Island Region** (Tactical) - Full detail hex map for the current island, with existing LOD/chunking
+
+**Region Data:**
+- Each region is a self-contained island map file
+- Contains: terrain, buildings, roads, spawn points, encounter zones
+- NO edge stitching required - coastline is the natural boundary
+- Procedural + hand-crafted hybrid (key locations authored, surroundings generated)
+
+### Movement Modes
+
+The player has three movement modes:
+
+**Naval Mode - Coastal (Ship on Island Region):**
+- Active when on water hexes within a loaded island region
+- Ship token represents your vessel + full crew
+- Hex-by-hex movement around the island
+- Encounters: Coastal patrols, fishing boats, local pirates
+
+**Shore Mode (Away Party as Unit):**
+- Active when on land hexes
+- Party token represents selected crew members
+- Movement: Based on terrain, party composition
+- Encounters: Combat, social, tech, medical (see Section 14)
+
+**Naval Mode - Open Ocean (Strategic Travel):**
+- Active when sailing between islands
+- Uses simplified **Ocean Map** (not hex-by-hex)
+- Ship travels along sea lanes between ports
+- Encounters: Naval combat, storms, discoveries, random events
+- Triggers region load/unload
+
+**The Land Transition:**
+```
+SHIP on water hex adjacent to land
+          │
+          ▼
+    "GO ASHORE?"
+     [Yes] [No]
+          │
+          ▼
+   SELECT AWAY PARTY
+   (Choose crew, gear)
+          │
+          ▼
+   PARTY TOKEN appears on beach hex
+   Ship stays anchored (or crew left behind)
+          │
+          ▼
+   Party moves on land hexes
+   (Walk into town, explore, complete objectives)
+          │
+          ▼
+   Return to ship hex → Automatically re-board
+```
+
+**The Sea Travel Transition (Between Islands):**
+```
+SHIP at port or open water
+          │
+          ▼
+    "SET SAIL" → Opens OCEAN MAP
+          │
+          ▼
+   ┌─────────────────────────────────────┐
+   │  OCEAN MAP (Strategic View)         │
+   │  ┌───┐                              │
+   │  │YOU│ ═══════▶ [JAMAICA]           │
+   │  └───┘    ↑                         │
+   │      Sea Lane                       │
+   │  Travel time: 3 days                │
+   │  Danger level: Moderate             │
+   │  [CONFIRM] [CANCEL]                 │
+   └─────────────────────────────────────┘
+          │
+          ▼
+   SEA TRAVEL SEQUENCE
+   - Time passes (days)
+   - Random encounters roll
+   - Weather events
+   - Crew management
+          │
+          ▼
+   ARRIVE AT DESTINATION
+   - Unload previous island region
+   - Load new island region
+   - Ship appears at destination port
+```
 
 ### Time & Turns
 
-**Strategic Layer (Open World):**
-- Time passes as you sail (1 hex = ~1 day)
-- Events trigger based on time, location, and reputation
-- Story missions appear when conditions are met
-- Day/night cycle affects visibility and some events
+**Time Passage:**
+- Time advances as you move (1 hex = variable based on terrain/mode)
+- Naval: ~2 hours per hex (wind-dependent)
+- Land: ~30 minutes per hex
+- Resting, trading, dialogue: Time costs vary
 
-**Tactical Layer (Combat):**
-- Fully turn-based hex combat
-- Initiative system determines unit order
-- No time pressure - think as long as you need
+**Turn-Based vs Real-Time:**
+- Movement: Real-time with pause option
+- Encounters: Fully turn-based when triggered
+- Naval Combat: Turn-based on same hex map
+- No separate "battle map" - fight where you stand
 
-### Exploration
+### Encounters on the Map
 
-**Sailing:**
-- Plot courses on the strategic map
-- Random encounters based on region danger level
-- Discover uncharted locations
-- Weather affects travel time and combat conditions
+Encounters trigger based on hex type and content:
 
-**Ports:**
-- Dock to trade, repair, recruit, and gather information
-- Each port has unique shops, NPCs, and rumors
-- Reputation affects prices and available options
-- Story missions often begin/end in ports
+| Hex Content | Trigger | Resolution |
+|-------------|---------|------------|
+| **Enemy Ship** | Enter same hex or adjacent | Naval combat or flee |
+| **Port/Town** | Enter building hex | Social/trade interface |
+| **Patrol** | Enter guarded hex (land) | Combat/stealth/social check |
+| **Ruin** | Enter ruin hex | Exploration encounters |
+| **Event Marker** | Enter marked hex | Story event triggers |
+| **Hazard** | Enter hazard hex | Environmental check |
+
+**Line of Sight:**
+- You can SEE enemies before you reach them
+- Plan routes to avoid or engage
+- Fog of war for unexplored hexes
+- Some enemies patrol (move on their own)
 
 ---
 
@@ -3928,60 +4082,285 @@ The same tools we use to build official campaigns are available to modders:
 
 ## 20. Technical Requirements
 
-### Map System (Current Implementation)
+### Map System Architecture
 
-**Hex Grid:**
+The game uses an **Ocean Boundaries** approach: each island is a self-contained hex map, with inter-island travel handled by a strategic ocean map. This dramatically simplifies the streaming architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  LEVEL 1: OCEAN MAP (Strategic)                             │
+│  ═══════════════════════════════                            │
+│  • Coarse grid covering entire Caribbean (~100x75 hexes)    │
+│  • Each hex = ~30km (open ocean navigation)                 │
+│  • Islands are region markers (not detailed hexes)          │
+│  • Used for: destination selection, sea lane routing        │
+│  • Always in memory (~7,500 hexes, trivial)                 │
+├─────────────────────────────────────────────────────────────┤
+│  LEVEL 2: ISLAND REGION (Tactical)                          │
+│  ════════════════════════════════                           │
+│  • ONE island region loaded at a time                       │
+│  • Each region: ~200x200 hexes (self-contained island)      │
+│  • Full detail: terrain, buildings, roads, encounters       │
+│  • Uses existing chunk rendering with LOD                   │
+│  • No cross-region neighbors (ocean is the boundary)        │
+├─────────────────────────────────────────────────────────────┤
+│  LEVEL 3: CHUNK RENDERING (Existing)                        │
+│  ═════════════════════════════════════                      │
+│  • Within loaded island, divide into render chunks          │
+│  • LOD system reduces detail at distance                    │
+│  • Frustum culling hides off-screen chunks                  │
+│  • Currently handles 1024 cells at 30 FPS                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Why Ocean Boundaries Simplifies Everything:**
+- NO neighbor stitching at region edges (coastline IS the edge)
+- NO cross-region pathfinding (A* stays on current island)
+- NO seamless streaming complexity (explicit sea travel transition)
+- NO boundary rendering artifacts (ocean is the natural seam)
+- Single region in memory = predictable performance
+
+### Hex Grid (Current Implementation)
+
+**Core Features (Built):**
 - Cube coordinates (q, r, s)
-- Terrain types with elevation
+- Terrain types with elevation (0-6 levels)
+- Water rendering with coastal transitions
 - Rivers and roads
 - Chunked rendering with LOD
+- Building placement
+- Vegetation (trees, features)
+- 30 FPS @ 1024 cells, ~917K triangles
 
-**Generation:**
-- Procedural terrain generation exists
-- Need to extend for:
-  - Island generation
-  - Port placement
-  - Faction territory assignment
+**Needs Extension:**
+- Region boundary handling (seamless loading)
+- Region file format (save/load region data)
+- Unit tokens on hex grid (ship, party)
+- Encounter zone markers
+- Dynamic content spawning
+
+### Ocean Map System (To Build)
+
+**Ocean Map Data:**
+```csharp
+public class OceanMap
+{
+    // Coarse strategic grid - entire Caribbean
+    public int Width = 100;              // ~3,000 km
+    public int Height = 75;              // ~2,250 km
+    public float HexScale = 30000f;      // 30km per hex
+
+    public OceanHex[,] Hexes;            // Ocean depth, currents, danger
+    public IslandRegion[] Regions;       // Metadata for each island
+    public SeaLane[] TradeLanes;         // Common shipping routes
+}
+
+public class IslandRegion
+{
+    public string Id;                    // "nassau", "jamaica", etc.
+    public string DisplayName;           // "Nassau, Bahamas"
+    public Vector2I OceanMapPosition;    // Where on ocean map
+    public string RegionFile;            // "regions/nassau.region"
+    public List<Port> Ports;             // Entry points
+    public bool IsDiscovered;            // Fog of war
+}
+```
+
+**Island Region Data Format:**
+```
+/regions/
+  nassau.region           # MVP starting area (New Providence)
+  jamaica.region          # Kingston, Port Royal
+  cuba_havana.region      # Western Cuba
+  cuba_santiago.region    # Eastern Cuba
+  hispaniola.region       # Haiti/DR
+  puerto_rico.region
+  virgin_islands.region
+  shattered_isles.region  # Fictional, main story area
+  ...
+```
+
+**Per-Region Contents:**
+- Terrain heightmap + type map
+- Building/structure placements
+- Road/path network
+- Coastal buffer (5-10 hexes of ocean around island)
+- Port locations (entry/exit points)
+- Encounter spawn points
+- Story event markers
+- Faction control zones
+- Resource locations
+
+**Region Lifecycle (Simple!):**
+```
+1. Player selects destination on Ocean Map
+2. Sea Travel sequence plays (encounters, time passage)
+3. On arrival:
+   - Save current region state to disk
+   - Unload current region (QueueFree)
+   - Load new region from file
+   - Place ship at destination port
+4. Player explores island (existing HexGrid code)
+5. Repeat when sailing to new destination
+```
+
+**No Complex Streaming Logic Needed:**
+- No boundary detection (player explicitly chooses to sail)
+- No edge stitching (ocean separates everything)
+- No adjacent region preloading (one region at a time)
+- No pathfinding across regions (A* stays on island)
 
 ### Required Systems (To Build)
 
-| System | Priority | Complexity | Status |
-|--------|----------|------------|--------|
-| **Turn Manager** | High | Medium | Partial |
-| **Unit/Crew System** | High | High | Not started |
-| **Combat System** | High | High | Not started |
-| **Ship Management UI** | High | Medium | Not started |
-| **Strategic Map** | High | High | Not started |
-| **Dialogue System** | Medium | Medium | Not started |
-| **Save/Load** | Medium | Medium | Not started |
-| **Economy/Trade** | Medium | Medium | Not started |
-| **AI (Enemy/Crew)** | Medium | High | Not started |
-| **Mission Generator** | Low | High | Not started |
-| **Faction System** | Low | Medium | Not started |
-| **Modding API** | Medium | High | Not started |
-| **Mod Manager UI** | Low | Medium | Not started |
-| **Character Creator** | High | Medium | Not started |
+| System | Priority | Complexity | Status | Notes |
+|--------|----------|------------|--------|-------|
+| **Ocean Map System** | Critical | Low | Not started | Simple strategic map, ~7.5K hexes |
+| **Sea Travel Screen** | Critical | Medium | Not started | Inter-island navigation UI |
+| **Region Serializer** | Critical | Low | Not started | Save/load CellData[] per island |
+| **Unit Token System** | Critical | Medium | Not started | Ship + Party tokens on hex |
+| **Movement Controller** | Critical | Medium | Not started | Hex movement, coastal vs land |
+| **Encounter Trigger System** | High | Medium | Not started | Land + sea encounters |
+| **Away Party UI** | High | Medium | Not started | Party selection, stats display |
+| **Naval Combat (same map)** | High | High | Not started | Ship vs ship on coastal hexes |
+| **Party Stats Calculator** | High | Low | Not started | Aggregate party skills |
+| **Turn Manager** | High | Medium | Partial | Existing foundation |
+| **Dialogue System** | Medium | Medium | Not started | Conversation trees |
+| **Save/Load System** | Medium | Medium | Not started | Simplified with ocean boundaries |
+| **Economy/Trade** | Medium | Medium | Not started | Port-based trading |
+| **AI Pathfinding (hex)** | Medium | Medium | Not started | Single-island only (simpler!) |
+| **Faction System** | Low | Medium | Not started | Territory control |
+| **Character Creator** | High | Medium | Not started | Initial crew setup |
+
+**Complexity Reductions from Ocean Boundaries:**
+- ~~Cross-region pathfinding~~ → Eliminated (A* stays on island)
+- ~~Boundary stitching~~ → Eliminated (coastline is boundary)
+- ~~Seamless streaming~~ → Replaced with explicit sea travel
+- ~~Multi-region memory management~~ → One region at a time
+- Save/Load: High → Medium (simpler region lifecycle)
+
+### Unit Token System
+
+**Ship Token:**
+- 3D model on water hexes
+- Represents: hull, crew, cargo
+- Click to select, right-click to move
+- Shows health, status indicators
+- Smooth hex-to-hex movement animation
+
+**Party Token:**
+- 3D model/icon on land hexes
+- Represents: away party (combined)
+- Same interaction as ship
+- Shows party composition indicator
+- Returns to ship when reaching ship hex
+
+**Enemy Tokens:**
+- Same system for AI units
+- Patrol paths on hex grid
+- Detection radius (can see player)
+- Behavior: patrol, pursue, flee
 
 ### Art Requirements
 
 **2D Assets:**
 - Character portraits (Bridge Crew)
-- UI elements
-- Icons (items, abilities, resources)
+- UI elements (party selection, stats display)
+- Icons (items, abilities, resources, encounter types)
+- Minimap elements
 
-**3D Assets (Using Current System):**
-- Ship models (5-10 types)
-- Building prefabs for ports
+**3D Assets:**
+- Ship models (5-10 types) - placed ON water hexes
+- Ship tokens for distant view (simplified)
+- Party token model (group representation)
+- Building prefabs for ports/towns (ON land hexes)
+- Dock/pier structures (at coast hexes)
 - Terrain textures (tropical expansion)
-- Unit models for land combat
+- Vegetation variety (palms, jungle, mangroves)
 
 ### Audio Requirements
 
-- Sea ambience
-- Combat sounds (cannons, swords, gunfire)
-- UI feedback
+- Sea ambience (waves, wind, seabirds)
+- Land ambience (jungle, town, ruins)
+- Movement sounds (ship creaking, footsteps)
+- Combat sounds (cannons, gunfire, melee)
+- UI feedback (clicks, notifications)
 - Music (exploration, combat, port, story)
-- Voice acting (optional, for key moments)
+- Voice acting (optional, for key story moments)
+
+### Sea Travel System
+
+The Sea Travel System handles inter-island navigation, providing gameplay during the transition between island regions:
+
+**Ocean Map Interface:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  CARIBBEAN SEA                           [Wind: NE 15kts]   │
+│  ═══════════════                                            │
+│                    ○ Puerto Rico                            │
+│        ┌───┐                                                │
+│        │YOU│══════════════▶ ○ Virgin Islands               │
+│        └───┘    Route                                       │
+│     Nassau      ─ ─ ─▶ ○ Jamaica                           │
+│                                                             │
+│     ○ Cuba                ○ Hispaniola                     │
+│                                                             │
+│  ───────────────────────────────────────────────────────── │
+│  Destination: Virgin Islands                                │
+│  Distance: ~800 km  |  Est. Time: 4 days  |  Danger: Low   │
+│  [SET SAIL]  [CANCEL]                                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Sea Travel Events:**
+During the voyage, random events can occur based on:
+- Distance traveled
+- Danger level of route
+- Current crew/ship condition
+- Faction hostilities
+
+| Event Type | Example | Resolution |
+|------------|---------|------------|
+| **Storm** | Tropical storm ahead | Navigate around (+1 day) or through (damage risk) |
+| **Encounter** | Merchant vessel spotted | Hail, ignore, or attack |
+| **Discovery** | Uncharted island | Investigate (side region) or note for later |
+| **Crew Issue** | Morale dropping | Address or ignore (consequences) |
+| **Naval Combat** | Pirates intercept! | Fight or flee (triggers combat) |
+
+**Region Loading During Travel:**
+```
+Player clicks [SET SAIL]
+        │
+        ▼
+   Start sea travel animation/UI
+        │
+        ▼
+   BEGIN ASYNC: Load destination region file
+        │
+        ├──▶ While loading, play sea travel events
+        │    (events take real time, mask load time)
+        │
+        ▼
+   COMPLETE: Destination region ready
+        │
+        ▼
+   Unload current region
+   Swap to destination region
+   Place ship at port
+```
+
+### Performance Targets
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| **Ocean Map Hexes** | ~7,500 | Always loaded, minimal memory |
+| **Island Region Hexes** | ~40,000 | One region at a time |
+| **Rendered Hexes** | 2,000-4,000 | With existing LOD/culling |
+| **Frame Rate** | 30+ FPS | On mid-range hardware |
+| **Region Load Time** | <3 sec | Async, masked by sea travel |
+| **Region File Size** | 1-2 MB | Compressed CellData[] |
+| **Memory (Island)** | ~300 MB | HexCells + chunks + meshes |
+| **Memory (Ocean Map)** | ~10 MB | Coarse grid + metadata |
+| **Save File Size** | <50MB | All region states + player data |
 
 ---
 
@@ -4059,4 +4438,6 @@ The combat system is designed around these principles:
 | 0.9 | 2026-01-30 | Complete Shaw's Task: "The Defector" - Full 4-mission story arc with Dr. Elena Vasquez extraction. Includes: The Encounter (Shaw meeting), Mission 1 "The Cover" (trade), Mission 2 "The Contact" (infiltration), Mission 3 "The Extraction" (land combat with family choice), Mission 4 "The Run" (naval chase). Three endings (Shaw/Corp/Independent), branching choices, consequences table. Core MVP narrative complete. |
 | 1.0 | 2026-01-30 | **MAJOR SCOPE REVISION:** Replaced tactical grid Land Combat with **Away Party System**. Party moves as single unit through location hex clusters. Five party stats (Combat, Stealth, Tech, Medical, Social) derived from crew + gear. Encounters resolve through stat checks + player choices, not individual tactics. Reduces development time ~75% while preserving depth of party composition, equipment, and consequences. |
 | 1.1 | 2026-01-30 | Revised Job System for Party-as-Unit: Jobs now provide Party Stat Contributions + Mission Abilities (limited uses per mission) + Passive Bonuses. Removed tactical abilities (Overwatch, Cleave, etc.). Added Job Synergies for party composition bonuses. Simplified leveling (1-10 instead of 1-20). Naval boarding uses same system as land. |
+| 1.2 | 2026-01-30 | **Unified Single-Scale Map:** Entire game on one seamless hex map - ship sails water hexes, party walks land hexes, no loading screens. Added Region Streaming system for Caribbean-scale world (12-16 regions, ~200x200 hexes each, streamed as player moves). Updated Technical Requirements with two-level loading (Region Streaming + Chunk Rendering), Unit Token system, and performance targets. |
+| 1.3 | 2026-01-30 | **Ocean Boundaries Architecture:** Replaced complex seamless streaming with island-based regions. Each island is a self-contained region naturally separated by ocean - eliminates cross-region pathfinding, boundary stitching, and neighbor synchronization. Added Ocean Map (strategic ~7.5K hex overview) for inter-island navigation. Added Sea Travel System with events/encounters during voyages. Only one island region loaded at a time = predictable performance. Dramatically simplified technical requirements while fitting the Caribbean setting perfectly. |
 
