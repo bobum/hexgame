@@ -1,6 +1,6 @@
 # ABYSSAL TIDE - Game Design Document
 
-**Version:** 0.5 (Draft)
+**Version:** 1.1 (Draft)
 **Last Updated:** 2026-01-30
 **Genre:** Turn-Based Tactical Strategy / Open World
 **Platform:** PC (Godot 4.x / C#)
@@ -28,7 +28,7 @@
 11. [Crew System](#11-crew-system)
 12. [Job & Ability System](#12-job--ability-system)
 13. [Naval Combat Engine](#13-naval-combat-engine)
-14. [Land Combat Engine](#14-land-combat-engine)
+14. [Away Party System](#14-away-party-system)
 15. [Economy Engine](#15-economy-engine)
 16. [Progression Engine](#16-progression-engine)
 17. [Campaign & Story Engine](#17-campaign--story-engine)
@@ -1190,76 +1190,267 @@ Jobs are organized into tiers. Higher-tier jobs require mastery of prerequisite 
 
 ### Tier 1 Jobs (Starting)
 
-Every crew member starts with access to these three jobs:
+Every crew member starts with access to these three jobs. With the Party-as-Unit system, jobs provide:
+- **Party Stat Bonuses** - Passive contributions to the five party stats
+- **Mission Abilities** - Powerful abilities usable once per mission (or limited uses)
+- **Passive Bonuses** - Always-active benefits
 
-#### Cutlass (Melee Fighter)
-| Stat | Value | Description |
-|------|-------|-------------|
-| HP | High | Frontline durability |
-| MP | Low | Limited ability use |
-| Speed | Medium | Balanced initiative |
-| Move | 4 | Standard mobility |
-| Jump | 2 | Can climb moderate terrain |
+Jobs still level up (1-10), unlocking more powerful abilities and increasing stat contributions.
 
-**Innate:** *Close Quarters* - +15% damage in melee range
+---
 
-**Learnable Abilities:**
-| Ability | JP Cost | Effect |
-|---------|---------|--------|
-| Slash | 50 | Basic melee attack |
-| Riposte | 100 | Counter next melee attack |
-| Cleave | 150 | Hit two adjacent enemies |
-| Intimidate | 200 | Lower enemy attack for 3 turns |
-| Blade Dance | 300 | Attack all adjacent enemies |
-| Armor Break | 400 | Reduce enemy defense permanently |
-| Killing Blow | 600 | 2x damage on targets below 25% HP |
-| **MASTERY: Steel Skin** | - | +10% physical defense (permanent, all jobs) |
+#### Cutlass (Combat Specialist)
 
-#### Marksman (Ranged Fighter)
-| Stat | Value | Description |
-|------|-------|-------------|
-| HP | Low | Fragile |
-| MP | Medium | Moderate ability use |
-| Speed | High | Acts early |
-| Move | 3 | Below average mobility |
-| Jump | 1 | Prefers flat ground |
+The frontline fighter. Cutlass crew members excel at direct confrontation, intimidation, and protecting the party in dangerous situations.
 
-**Innate:** *Eagle Eye* - +1 range to all ranged attacks
+**Role:** Combat encounters, intimidation, boarding actions
 
-**Learnable Abilities:**
-| Ability | JP Cost | Effect |
-|---------|---------|--------|
-| Aimed Shot | 50 | Basic ranged attack |
-| Overwatch | 100 | Shoot first enemy that moves |
-| Headshot | 200 | +50% crit chance, -20% accuracy |
-| Suppressing Fire | 250 | Enemy can't move next turn |
-| Piercing Round | 350 | Ignores 50% armor |
-| Double Tap | 450 | Two attacks at -25% damage each |
-| Kill Zone | 600 | Overwatch triggers twice |
-| **MASTERY: Keen Senses** | - | +5% accuracy (permanent, all jobs) |
+**Base Stats:**
+| Stat | Base | Growth/Level |
+|------|------|--------------|
+| HP | 120 | +12 |
+| STR | 14 | +2 |
+| DEX | 10 | +1 |
+| CON | 12 | +2 |
 
-#### Sailor (Support)
-| Stat | Value | Description |
-|------|-------|-------------|
-| HP | Medium | Moderate durability |
-| MP | High | Lots of ability use |
-| Speed | Medium | Balanced initiative |
-| Move | 4 | Standard mobility |
-| Jump | 3 | Good vertical movement |
+**Party Stat Contribution:**
 
-**Innate:** *Sea Legs* - Immune to movement penalties from terrain
+| Party Stat | Base Contribution | Per Job Level |
+|------------|-------------------|---------------|
+| **Combat** | +12 | +2 |
+| **Stealth** | +4 | +0.5 |
+| **Tech** | +2 | +0 |
+| **Medical** | +3 | +0 |
+| **Social** | +6 | +1 (intimidation) |
 
-**Learnable Abilities:**
-| Ability | JP Cost | Effect |
-|---------|---------|--------|
-| First Aid | 50 | Heal ally 25% HP |
-| Rally | 100 | Remove fear/debuffs from ally |
-| Throw Rope | 150 | Pull ally to your position |
-| Brace | 200 | Ally gains +25% defense for 1 turn |
-| Quick Patch | 300 | Heal self 50% HP (once per battle) |
-| Inspire | 400 | All allies gain +1 AP this turn |
-| Lifeline | 500 | Prevent one death this battle |
-| **MASTERY: Endurance** | - | +10% max HP (permanent, all jobs) |
+---
+
+**MISSION ABILITIES:**
+
+| Ability | JP | Unlock | Uses/Mission | Effect |
+|---------|----| -------|--------------|--------|
+| **Vanguard** | 0 | Lv1 | Passive | Party takes 15% less injury damage from Combat encounters. |
+| **Intimidate** | 100 | Lv2 | 2 | +20 to a Social check when threatening or demanding. |
+| **Breach** | 150 | Lv3 | 2 | Auto-succeed a Combat check to break through a barrier, door, or blockade. Alert +1. |
+| **Bodyguard** | 200 | Lv4 | 1 | Designate one crew member. They cannot be injured this mission (Cutlass takes double). |
+| **Shock & Awe** | 300 | Lv5 | 1 | Before a Combat encounter: +30 Combat for this fight. |
+| **Hold the Line** | 400 | Lv7 | 1 | During retreat/extraction: Party cannot be caught. Auto-escape one pursuit. |
+| **Boarding Master** | 500 | Lv9 | Passive | +10 Combat during all boarding actions. |
+
+---
+
+**PASSIVE BONUSES:**
+
+| Ability | JP | Unlock | Effect |
+|---------|----| -------|--------|
+| **Thick Skin** | 100 | Lv2 | This crew member's injuries are one severity level lower. |
+| **Combat Instincts** | 200 | Lv4 | +5 Combat contribution (stacks with base). |
+| **Fearless** | 250 | Lv5 | Party immune to morale penalties when this crew member is present. |
+| **Veteran** | 400 | Lv8 | +3 to ALL party stats while in party. |
+
+---
+
+**MASTERY BONUS (Job Level 10):**
+*Steel Resolve* - This crew member contributes +5 Combat to ANY party they join (permanent, all jobs).
+
+---
+
+#### Marksman (Ranged/Stealth Specialist)
+
+The precision specialist. Marksmen provide ranged superiority, ambush capability, and reconnaissance. Essential for stealth-focused parties.
+
+**Role:** Stealth encounters, ambushes, scouting, ranged superiority
+
+**Base Stats:**
+| Stat | Base | Growth/Level |
+|------|------|--------------|
+| HP | 80 | +8 |
+| STR | 8 | +1 |
+| DEX | 14 | +2 |
+| CON | 8 | +1 |
+
+**Party Stat Contribution:**
+
+| Party Stat | Base Contribution | Per Job Level |
+|------------|-------------------|---------------|
+| **Combat** | +8 | +1.5 |
+| **Stealth** | +10 | +2 |
+| **Tech** | +4 | +0.5 |
+| **Medical** | +2 | +0 |
+| **Social** | +3 | +0.5 |
+
+---
+
+**MISSION ABILITIES:**
+
+| Ability | JP | Unlock | Uses/Mission | Effect |
+|---------|----| -------|--------------|--------|
+| **Scout Ahead** | 0 | Lv1 | 2 | Reveal all encounters in adjacent hexes before moving. |
+| **Ambush** | 100 | Lv2 | 2 | If undetected, +25 Combat for the next Combat encounter. |
+| **Covering Fire** | 150 | Lv3 | 2 | +15 to a Stealth check (suppressing enemies while party moves). |
+| **Precision Shot** | 250 | Lv4 | 1 | Auto-succeed one Combat encounter against a single target (assassination). Alert +2. |
+| **Spotter** | 200 | Lv4 | Passive | All party members contribute +2 extra Combat (you coordinate fire). |
+| **Ghost** | 400 | Lv6 | 1 | Party can skip one hex entirely (move through without triggering encounter). |
+| **Overwatch** | 350 | Lv7 | 1 | After resolving any encounter, immediately resolve a free Combat attack if enemies remain. |
+| **Sniper's Nest** | 500 | Lv9 | 1 | For remainder of mission: +20 Combat, but Marksman cannot move with party (extracted at end). |
+
+---
+
+**PASSIVE BONUSES:**
+
+| Ability | JP | Unlock | Effect |
+|---------|----| -------|--------|
+| **Steady Hands** | 100 | Lv2 | +5 Stealth contribution. |
+| **Silent Killer** | 200 | Lv4 | Combat encounters you ambush don't raise Alert. |
+| **Eagle Eye** | 250 | Lv5 | Scout Ahead range increases to 2 hexes. |
+| **Deadeye** | 400 | Lv8 | +5 Combat contribution. |
+
+---
+
+**MASTERY BONUS (Job Level 10):**
+*Keen Senses* - This crew member contributes +5 Stealth to ANY party they join (permanent, all jobs).
+
+---
+
+#### Sailor (Support/Utility Specialist)
+
+The jack-of-all-trades. Sailors keep the party healthy, interact with ship systems, and provide crucial support in all situations.
+
+**Role:** Medical encounters, Tech encounters, ship systems, general support
+
+**Base Stats:**
+| Stat | Base | Growth/Level |
+|------|------|--------------|
+| HP | 100 | +10 |
+| STR | 10 | +1 |
+| DEX | 10 | +1 |
+| CON | 10 | +1 |
+| INT | 12 | +2 |
+
+**Party Stat Contribution:**
+
+| Party Stat | Base Contribution | Per Job Level |
+|------------|-------------------|---------------|
+| **Combat** | +6 | +1 |
+| **Stealth** | +6 | +1 |
+| **Tech** | +8 | +1.5 |
+| **Medical** | +10 | +2 |
+| **Social** | +6 | +1 |
+
+---
+
+**MISSION ABILITIES:**
+
+| Ability | JP | Unlock | Uses/Mission | Effect |
+|---------|----| -------|--------------|--------|
+| **First Aid** | 0 | Lv1 | 3 | Heal one crew member to Wounded (from Injured or Critical). Uses 1 Med Kit. |
+| **Patch Up** | 100 | Lv2 | 2 | Heal one crew member one injury level. No supplies needed. |
+| **Jury Rig** | 150 | Lv3 | 2 | +15 to a Tech check (improvised solution). |
+| **Rally** | 200 | Lv4 | 1 | Remove all negative status effects from party. +10 to all stats for next encounter. |
+| **Sabotage** | 250 | Lv5 | 1 | Auto-succeed one Tech check (disable alarms, unlock doors, etc.). |
+| **Emergency Treatment** | 350 | Lv6 | 1 | Stabilize an Incapacitated crew member (they survive but can't contribute). |
+| **Inspire** | 400 | Lv7 | 1 | All party stats +15 for the rest of the mission. |
+| **Damage Control** | 500 | Lv9 | 1 | *Naval only:* Prevent one critical hit to your ship. |
+
+---
+
+**PASSIVE BONUSES:**
+
+| Ability | JP | Unlock | Effect |
+|---------|----| -------|--------|
+| **Field Medic** | 100 | Lv2 | First Aid heals to full (Healthy) instead of Wounded. |
+| **Scrounger** | 200 | Lv4 | Find +1 Med Kit and +1 Ammo at end of successful missions. |
+| **Reassuring Presence** | 250 | Lv5 | Party is immune to fear/morale checks. |
+| **Jack of All Trades** | 400 | Lv8 | +3 to ALL party stats while in party. |
+
+---
+
+**MASTERY BONUS (Job Level 10):**
+*Survivor's Grit* - This crew member contributes +5 Medical to ANY party they join (permanent, all jobs).
+
+---
+
+### How Jobs Affect Party Stats
+
+When forming an away party, each crew member contributes to party stats based on:
+
+```
+Crew_Contribution = Job_Base + (Job_Level × Per_Level_Bonus) + Passive_Bonuses + Equipment
+
+Party_Stat = Sum of all Crew_Contributions + Gear_Bonuses + Synergy_Bonuses
+```
+
+**Example Party Calculation (Combat Stat):**
+
+| Crew Member | Job | Level | Base | Level Bonus | Passives | Equipment | Total |
+|-------------|-----|-------|------|-------------|----------|-----------|-------|
+| Captain | Cutlass | 5 | 12 | +10 | +5 | +8 (Rifle) | 35 |
+| First Mate | Sailor | 4 | 6 | +4 | 0 | +5 (SMG) | 15 |
+| Rosa | Marksman | 6 | 8 | +9 | +5 | +8 (Rifle) | 30 |
+| **TOTAL** | | | | | | | **80** |
+
+---
+
+### Multi-Jobbing (Simplified)
+
+Crew members can learn multiple jobs, but only ONE job is active at a time.
+
+**Switching Jobs:**
+- Can switch between missions (not during)
+- All learned abilities remain available regardless of active job
+- Stat contributions come from ACTIVE job only
+- Passive bonuses from mastered jobs apply always
+
+**Example:**
+Rosa has Marksman (Lv 8) and Cutlass (Lv 4).
+- As Marksman: Contributes high Stealth/Combat, can use all Marksman abilities
+- As Cutlass: Contributes high Combat, can use all Cutlass abilities
+- Either way: If she mastered Marksman, she always gets +5 Stealth bonus
+
+---
+
+### XP & Job Leveling
+
+**Earning XP:**
+| Action | XP Earned |
+|--------|-----------|
+| Complete mission | 50 XP |
+| Complete optional objective | 25 XP |
+| Successful encounter (based on your contribution) | 10-20 XP |
+| Flawless mission (no injuries) | +25 XP bonus |
+| Mission MVP | +25 XP bonus |
+
+**XP to Level:**
+| Level | Total XP Required |
+|-------|-------------------|
+| 1 → 2 | 100 |
+| 2 → 3 | 150 |
+| 3 → 4 | 200 |
+| 4 → 5 | 300 |
+| 5 → 6 | 400 |
+| 6 → 7 | 500 |
+| 7 → 8 | 650 |
+| 8 → 9 | 800 |
+| 9 → 10 | 1000 |
+| **Total to Master** | **4,100 XP** |
+
+**Estimated Missions to Master:** 40-50 missions (one job)
+
+---
+
+### Job Synergies
+
+Certain job combinations in a party provide bonuses:
+
+| Synergy | Requirement | Bonus |
+|---------|-------------|-------|
+| **Assault Team** | 2+ Cutlass | +10 Combat, +5 intimidation Social |
+| **Sniper Team** | 2+ Marksman | +10 Stealth, Ambush costs 1 use instead of 2 |
+| **Medical Team** | 2+ Sailor | +10 Medical, First Aid doesn't consume Med Kits |
+| **Balanced Squad** | 1 of each job | +5 to ALL stats |
+| **Strike Force** | Cutlass + Marksman | Ambush bonus increases to +35 Combat |
+| **Field Hospital** | Sailor + any Sailor passive | Emergency Treatment can be used twice |
+| **Spec Ops** | Marksman + Sailor | Ghost can be used twice |
 
 ### Tier 2 Jobs
 
@@ -1472,23 +1663,42 @@ Combat begins when:
   - **Against wind:** 50% speed, requires tacking
 - Running aground damages hull
 
-### Naval Weapons
+### Naval Weapons (Post-Collapse 2085)
 
-| Weapon | Range | Damage | Special |
-|--------|-------|--------|---------|
-| **Cannons** | Medium | Medium | Reliable, cheap |
-| **Railgun** | Long | High | Requires Aetherium, piercing |
-| **Carronades** | Short | Very High | Devastating at close range |
-| **Harpoon** | Medium | Low | Prevents escape, enables boarding |
-| **Chain Shot** | Medium | Low | Targets sails, reduces speed |
+Ships in 2085 are sail-powered due to atmospheric instability making aircraft unreliable, but they carry modern and salvaged weapons. Ammunition and Aetherium are precious - most fights are decided by positioning and boarding rather than long-range duels.
+
+**Weapon Categories:**
+
+| Category | Examples | Ammo Cost | Notes |
+|----------|----------|-----------|-------|
+| **Ballistic** | Deck guns, autocannons | Medium | Pre-collapse military salvage |
+| **Aetherium** | Railguns, pulse cannons | Very High | Devastating but expensive |
+| **Kinetic** | Harpoons, bolt throwers | Low | Boarding-focused, recoverable |
+| **Improvised** | Molotov launchers, nail guns | Cheap | Scavenger weapons |
+| **Missiles** | Guided rockets | Extreme | Rare, one-shot kills |
+
+**Specific Weapons:**
+
+| Weapon | Range | Damage | Ammo | Special |
+|--------|-------|--------|------|---------|
+| **Deck Gun (76mm)** | 8 hex | 40 | Shell | Reliable, military standard |
+| **Autocannon** | 6 hex | 25 | Burst | Rapid fire, anti-personnel |
+| **Naval Railgun** | 12 hex | 70 | Aetherium | Pierces armor, expensive |
+| **Pulse Cannon** | 6 hex | 35 | Aetherium | EMP effect, disables systems |
+| **Harpoon Gun** | 5 hex | 15 | Harpoon | Grapple, enables boarding |
+| **Bolt Thrower** | 4 hex | 20 | Bolts | Targets sails/rigging |
+| **Flak Battery** | 4 hex | 30 | Shells | Anti-personnel, deck sweeper |
+| **Guided Missile** | 15 hex | 100 | Missile | Rare, usually 1-2 per ship max |
+| **Fire Launcher** | 3 hex | 20/turn | Fuel | Sets fires, area denial |
 
 ### Targeting Systems
 
-Choose what to target:
-- **Hull:** Damage ship, risk sinking
-- **Sails:** Reduce speed, enable escape/pursuit
-- **Deck:** Kill crew (reduces effectiveness, prepares for boarding)
-- **Weapons:** Disable specific armaments
+Choose what to target (affects damage distribution):
+- **Hull:** Structural damage, risk sinking. Best for: Deck guns, railguns
+- **Sails/Rigging:** Reduce speed, enable escape/pursuit. Best for: Bolt throwers, autocannons
+- **Deck:** Kill crew, prepare for boarding. Best for: Flak, fire launchers
+- **Weapons:** Disable armaments. Best for: Precision shots (railgun)
+- **Engine/Systems:** If ship has auxiliary power. Best for: Pulse weapons (EMP)
 
 ### Boarding Actions
 
@@ -1517,112 +1727,664 @@ Choose what to target:
 - Enemy may accept, demand ransom, or refuse
 - Capture scenario if accepted (escape opportunity)
 
+### Naval Combat Math
+
+The naval combat system draws inspiration from **Car Wars** (phased movement, turning costs), **BattleTech** (to-hit modifiers, location targeting), and **Seas of Havoc** (deck-building, ship asymmetry). The goal is tactical depth without excessive complexity.
+
+#### Movement Formulas
+
+**Base Movement Points (MP):**
+```
+MP = Ship_Base_Speed × Wind_Modifier × Hull_Condition
+```
+
+**Wind Modifiers:**
+| Wind Relation | Modifier | Description |
+|---------------|----------|-------------|
+| Running (with wind) | 1.0 | Full speed |
+| Broad Reach (45°) | 0.9 | Slight penalty |
+| Beam Reach (90°) | 0.75 | Significant reduction |
+| Close Hauled (135°) | 0.5 | Half speed |
+| In Irons (against) | 0.25 | Near stationary |
+
+**Turning Costs:**
+```
+Turn_Cost = Ship_Turn_Rate × Turn_Degrees / 60
+
+Where:
+- Turn_Rate varies by ship class (1-3 MP per 60°)
+- Sloop: 1 MP per 60°
+- Brigantine: 1.5 MP per 60°
+- Frigate: 2 MP per 60°
+- Galleon: 3 MP per 60°
+```
+
+#### To-Hit Formula (Inspired by BattleTech)
+
+**Base To-Hit:**
+```
+Hit_Chance = Base_Accuracy + Modifiers
+
+Base Accuracy by Weapon:
+- Deck Gun (76mm): 65%
+- Autocannon: 55% (burst compensates)
+- Naval Railgun: 60%
+- Pulse Cannon: 65%
+- Harpoon Gun: 70% (designed for grappling)
+- Bolt Thrower: 60%
+- Flak Battery: 75% (area effect)
+- Guided Missile: 85% (but rare/expensive)
+- Fire Launcher: 80% (area, short range)
+```
+
+**To-Hit Modifiers Table:**
+| Condition | Modifier |
+|-----------|----------|
+| Target stationary | +15% |
+| Target moving slow (1-3 MP used) | +5% |
+| Target moving fast (4+ MP used) | -10% |
+| Attacker stationary | +10% |
+| Attacker moved | -5% |
+| Attacker turned this phase | -10% |
+| Point-blank range (1 hex) | +20% |
+| Short range (2-3 hex) | +10% |
+| Medium range (4-6 hex) | +0% |
+| Long range (7-10 hex) | -15% |
+| Extreme range (11+ hex) | -30% |
+| Rough seas | -10% |
+| Storm conditions | -25% |
+| Targeting: specific system | -20% |
+| Crew quality (per tier) | ±5% |
+
+**Hit Chance Bounds:** 5% minimum, 95% maximum
+
+#### Weapon Arcs (Inspired by Car Wars)
+
+Ships have six firing arcs based on hex directions:
+
+```
+        Bow (Forward)
+            ╱ ╲
+     Port  ╱   ╲  Starboard
+    Bow   ╱     ╲  Bow
+         │ SHIP │
+    Port  ╲     ╱  Starboard
+    Stern  ╲   ╱  Stern
+            ╲ ╱
+        Stern (Rear)
+```
+
+**Arc Weapon Availability:**
+| Arc | Deck Guns | Support Weapons | Special Mounts |
+|-----|-----------|-----------------|----------------|
+| Bow | 1-2 | 0-2 | Railgun, Missile |
+| Port Broadside | 2-6 | 2-4 | Harpoons |
+| Starboard Broadside | 2-6 | 2-4 | Harpoons |
+| Stern | 0-1 | 1-2 | Fire Launcher |
+| Turret (360°) | 0-1 | 0-1 | Flak, Autocannon |
+
+**Broadside Advantage:**
+Firing a full broadside (all port OR all starboard weapons):
+- Requires target to be within 90° arc
+- +10% accuracy from concentrated fire
+- All weapons fire simultaneously
+
+#### Damage Formula
+
+**Base Damage:**
+```
+Damage = Weapon_Power × (1 + Random_Variance)
+       × Critical_Multiplier × Range_Falloff
+
+Where:
+- Random_Variance = ±15% (0.85 to 1.15)
+- Critical_Multiplier = 2.0 on natural 95%+ roll
+- Range_Falloff = 1.0 (short), 0.9 (medium), 0.75 (long)
+```
+
+**Damage Distribution by Target:**
+| Target Choice | Hull | Sails | Crew | Weapons |
+|---------------|------|-------|------|---------|
+| Hull (default) | 70% | 10% | 15% | 5% |
+| Sails | 15% | 70% | 10% | 5% |
+| Deck (crew) | 20% | 10% | 60% | 10% |
+| Weapons | 15% | 5% | 20% | 60% |
+
+**Armor Penetration:**
+```
+Effective_Damage = Damage × Penetration_Factor - Armor
+
+Where Penetration_Factor varies by weapon:
+- Deck Gun (76mm): 1.0
+- Autocannon: 0.8 (light rounds)
+- Naval Railgun: 1.8 (armor-piercing, Aetherium-powered)
+- Pulse Cannon: 1.2 (energy bypass)
+- Harpoon/Bolt: 0.6 (not designed to penetrate)
+- Flak Battery: 0.5 (anti-personnel)
+- Guided Missile: 2.0 (explosive penetrator)
+- Fire Launcher: 0.3 (damage over time, not penetration)
+```
+
+#### Ship Status Thresholds
+
+**Hull Integrity:**
+| HP Percentage | Status | Effect |
+|---------------|--------|--------|
+| 100-75% | Seaworthy | No penalties |
+| 74-50% | Damaged | -10% speed, -5% accuracy |
+| 49-25% | Critical | -25% speed, -15% accuracy, fires spread |
+| 24-1% | Sinking | -50% speed, must flee or abandon |
+| 0% | Lost | Ship sinks in 2 turns |
+
+**Crew Status:**
+| Crew Percentage | Status | Effect |
+|-----------------|--------|--------|
+| 100-75% | Full Strength | No penalties |
+| 74-50% | Undermanned | -10% reload speed, reduced boarders |
+| 49-25% | Skeleton Crew | -25% reload, cannot board, -10% accuracy |
+| 24-1% | Desperate | Ship actions halved, surrender likely |
+
+#### Boarding Combat Resolution
+
+**Boarding Strength:**
+```
+Boarding_Power = Crew_Count × Crew_Quality × (1 + Leader_Bonus)
+              × Morale_Modifier × Weapon_Modifier
+
+Where:
+- Crew_Quality: 0.8 (green) to 1.5 (elite)
+- Leader_Bonus: +0.1 to +0.3 per Bridge Crew member
+- Morale_Modifier: 0.7 to 1.3
+- Weapon_Modifier: 1.0 (standard) to 1.3 (cutlasses/pistols)
+```
+
+**Boarding Resolution:**
+```
+Attacker_Roll = Boarding_Power × (0.8 + 0.4 × Random)
+Defender_Roll = Defender_Power × (0.8 + 0.4 × Random)
+
+If Attacker_Roll > Defender_Roll × 1.5: Decisive Victory
+If Attacker_Roll > Defender_Roll: Victory (casualties)
+If Attacker_Roll > Defender_Roll × 0.75: Stalemate (both retreat)
+Else: Defeat (attacker retreats with heavy losses)
+```
+
 ---
 
-## 14. Land Combat Engine
+## 14. Away Party System
 
-### Mission Types
+Land-based gameplay uses a **Party-as-Unit** system rather than individual tactical combat. Your away party moves as a single token through location hexes, resolving encounters through combined party stats and player choices.
 
-| Type | Description | Typical Size |
-|------|-------------|--------------|
-| **Raid** | Assault enemy position for loot | 4-6 crew |
-| **Rescue** | Extract prisoner/ally from location | 4-5 crew |
-| **Sabotage** | Destroy target (fuel depot, ship in drydock) | 3-4 crew |
-| **Infiltration** | Sneak in, steal item/intel, sneak out | 2-3 crew |
-| **Defense** | Hold position against waves | 6 crew |
-| **Exploration** | Investigate ruins, find secrets | 4-5 crew |
+### Design Philosophy
 
-### Landing Party Selection
+Instead of XCOM-style individual tactics (which is an entire game unto itself), land gameplay focuses on:
+- **Party composition** - Who you bring matters
+- **Equipment choices** - Gear affects party capabilities
+- **Approach decisions** - Multiple ways to handle each encounter
+- **Meaningful consequences** - Injuries, deaths, and story impacts
 
-Before each land mission:
-1. See mission briefing (type, estimated difficulty, terrain)
-2. Select crew members (within mission limits)
-3. Choose loadout for each (weapons, equipment)
-4. Deploy to mission map
+This keeps the depth of crew management while dramatically reducing complexity.
 
-**The Ship Stays Behind:**
-- Landing party is on their own
-- Extraction point marked on map
-- If things go wrong, must reach extraction to escape
+---
 
-### Land Combat Map
+### The Party-as-Unit Concept
 
-**Hex Grid:**
-- Mission-specific size (~15x15 to 30x30)
-- Terrain: jungle, urban, industrial, ruins, beach
-- Cover system (half-cover, full-cover)
-- Elevation matters (high ground advantage)
-- Destructible objects
-
-**Turn Structure:**
-1. **Player Phase:** All player units act (any order)
-2. **Enemy Phase:** All enemies act
-3. (Repeat until victory or defeat)
-
-### Combat Actions
-
-Each crew member has:
-- **Movement Points:** How far they can move
-- **Action Points:** 2 per turn (attack, ability, item)
-- **Reaction:** One interrupt action (overwatch, counter)
-
-**Basic Actions:**
-- Move (costs MP)
-- Attack (costs 1 AP)
-- Use Ability (costs 1-2 AP)
-- Use Item (costs 1 AP)
-- Hunker Down (costs 2 AP, +50% defense)
-- Overwatch (costs 2 AP, shoot first enemy that moves)
-
-### Hit Chance & Damage
-
-**To-Hit Calculation:**
 ```
-Base Accuracy (class/weapon)
-+ Range Modifier (closer = better)
-+ Elevation Modifier (+10% high ground)
-+ Cover Modifier (-25% half, -50% full)
-+ Flanking Modifier (+25% from side/rear)
-+ Status Effects
-= Final Hit Chance (capped 5%-95%)
+┌─────────────────────────────────────────────────────────────┐
+│  AWAY PARTY: "Ironhull Infiltration"                        │
+│  ═══════════════════════════════════════════════════════    │
+│                                                             │
+│  CREW:                          PARTY STATS:                │
+│  ► Captain (You) - Cutlass      ┌─────────────────────┐     │
+│  ► First Mate - Sailor          │ Combat:    65       │     │
+│  ► Rosa - Marksman              │ Stealth:   42       │     │
+│  ► Doc Williams - Sailor        │ Tech:      38       │     │
+│                                 │ Medical:   55       │     │
+│  GEAR BONUSES:                  │ Social:    35       │     │
+│  ► Assault Rifles (+10 Combat)  └─────────────────────┘     │
+│  ► Med Kit (+15 Medical)                                    │
+│  ► Silencers (+8 Stealth)       SUPPLIES:                   │
+│                                 ► Ammo: 3 units             │
+│                                 ► Medkits: 2 units          │
+│                                 ► Grenades: 1 unit          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Damage:**
+Your party is represented by **one token** that moves through location hexes. All combat and challenges resolve using **Party Stats** rather than individual tactical actions.
+
+---
+
+### Party Stats
+
+Five stats represent your party's combined capabilities:
+
+| Stat | Derived From | Used For |
+|------|--------------|----------|
+| **Combat** | STR + DEX + Weapons + Job bonuses | Fighting, intimidation, breaching |
+| **Stealth** | DEX + INT + Gear + Job bonuses | Sneaking, ambushes, avoiding detection |
+| **Tech** | INT + Gear + Job bonuses | Hacking, sabotage, disabling systems |
+| **Medical** | INT + SPR + Gear + Job bonuses | Healing injuries, stabilizing, extraction |
+| **Social** | SPR + LCK + Job bonuses | Talking, bribing, negotiating, bluffing |
+
+**Calculating Party Stats:**
+
 ```
-Weapon Base Damage
-× Critical Multiplier (if crit)
-- Armor Reduction
-= Final Damage
+Party_Combat = Sum of (Each crew member's Combat contribution)
+             + Weapon bonuses
+             + Synergy bonuses
+
+Where individual Combat contribution:
+  = (STR + DEX) ÷ 2 + Job_Combat_Bonus + Equipment_Bonus
 ```
 
-### Land Mission Objectives
+**Example Calculation:**
 
-**Primary:** Must complete to succeed
-**Secondary:** Optional, bonus rewards
-**Hidden:** Discovered during mission
+| Crew Member | Combat Contrib | Stealth Contrib | Notes |
+|-------------|----------------|-----------------|-------|
+| Captain (Cutlass) | 18 | 8 | High STR, melee bonus |
+| First Mate (Sailor) | 12 | 10 | Balanced |
+| Rosa (Marksman) | 15 | 14 | High DEX |
+| Doc Williams (Sailor) | 10 | 10 | Support focus |
+| **Gear Bonuses** | +10 | +8 | Rifles, silencers |
+| **TOTAL** | **65** | **50** | |
 
-**Extraction:**
-- Reach extraction point with at least one crew member
-- Downed crew can be carried (costs movement)
-- Left-behind crew are captured or killed
+---
 
-### Consequences
+### Locations as Hex Clusters
 
-**Success:**
-- Loot acquired
-- XP for participants
-- Reputation change
+Locations (cities, bases, ruins) are represented as **clusters of hexes** on the world map. Each hex within a location has:
+- A **type** (market, checkpoint, residential, restricted, etc.)
+- Possible **encounters**
+- **Connections** to adjacent hexes
 
-**Partial Success:**
-- Some objectives complete
-- Casualties may occur
-- Reduced rewards
+**Example: Ironhull (AetherCorp Outpost)**
 
-**Failure:**
-- Surviving crew extracted
-- Casualties permanent
-- Reputation hit
-- Story consequences
+```
+                    [Restricted]
+                         │
+    [Market]────[Plaza]────[Lab District]
+        │          │            │
+   [Docks]────[Gate]────[Admin]────[Compound]
+        │                              │
+    [Your                         [Objective]
+     Ship]                     (Dr. Vasquez)
+```
+
+**Hex Types:**
+
+| Type | Common Encounters | Notes |
+|------|-------------------|-------|
+| **Docks** | Inspection, smuggling check | Entry/exit point |
+| **Market** | Social encounters, shopping, intel | Safe zone usually |
+| **Gate/Checkpoint** | Security check, combat or stealth | Bottleneck |
+| **Residential** | Civilians, hiding spots, witnesses | Low security |
+| **Admin/Office** | Social, tech encounters | Medium security |
+| **Restricted** | Combat, stealth, tech | High security |
+| **Objective** | Mission-critical encounter | Varies |
+
+---
+
+### Movement & Alert Level
+
+**Moving Through Hexes:**
+- Party moves one hex at a time
+- Each hex may trigger an encounter
+- Some hexes require passing a check to enter
+
+**Alert Level (0-5):**
+
+The location has an overall Alert Level that increases when things go wrong:
+
+| Alert | Status | Effect |
+|-------|--------|--------|
+| 0 | **Unaware** | Normal patrols, easy checks |
+| 1 | **Suspicious** | +10 to all check difficulties |
+| 2 | **Searching** | +20 difficulty, extra patrols |
+| 3 | **Alert** | +30 difficulty, reinforcements arrive |
+| 4 | **Lockdown** | +40 difficulty, can't enter some hexes |
+| 5 | **Hostile** | Combat encounters in every hex |
+
+**Alert Increases:**
+- Failed Stealth check: +1
+- Combat (even if won): +1 or +2
+- Alarm triggered: +2
+- Body discovered: +1
+- Witnessed by civilian: +1 (unless handled)
+
+**Alert Decreases:**
+- Time passing (some missions): -1 per X turns
+- Disabling alarm system (Tech check): -1
+- "All clear" event: -1
+
+---
+
+### Encounter Types
+
+Each hex can trigger one of several encounter types:
+
+#### Combat Encounters
+
+Your party faces an enemy group. Resolved by comparing Combat stats.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  COMBAT: Security Patrol                                    │
+│  ═══════════════════════════════════════════════════════    │
+│                                                             │
+│  YOUR PARTY              ENEMY GROUP                        │
+│  Combat: 65              Combat: 45                         │
+│  ────────────────────────────────────────                   │
+│  Advantage: +20 (Strong)                                    │
+│                                                             │
+│  APPROACH:                                                  │
+│  [A] Direct assault                                         │
+│      → Victory likely, Alert +2                             │
+│                                                             │
+│  [B] Ambush (requires Stealth 40) ✓                         │
+│      → Victory likely, Alert +1, bonus loot                 │
+│                                                             │
+│  [C] Avoid entirely (requires Stealth 55) ✗ Risky           │
+│      → Skip combat, no Alert change                         │
+│                                                             │
+│  [D] Retreat to previous hex                                │
+│      → No combat, may trigger different encounter           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Combat Resolution:**
+
+```
+Combat_Difference = Party_Combat - Enemy_Combat
+Roll = Random(1-100)
+
+If Combat_Difference >= 20:  (Strong advantage)
+  Victory on Roll <= 90
+  Flawless Victory on Roll <= 50
+
+If Combat_Difference >= 0:   (Advantage)
+  Victory on Roll <= 75
+  Flawless Victory on Roll <= 25
+
+If Combat_Difference >= -20: (Disadvantage)
+  Victory on Roll <= 50
+  Flawless Victory on Roll <= 10
+
+If Combat_Difference < -20:  (Severe disadvantage)
+  Victory on Roll <= 25
+  Flawless Victory: Impossible
+```
+
+**Combat Outcomes:**
+
+| Outcome | Result |
+|---------|--------|
+| **Flawless Victory** | No injuries, +bonus loot, minimal Alert |
+| **Victory** | Minor injuries (1-2 crew lose 10-25% HP), Alert +1 |
+| **Costly Victory** | Significant injuries (all crew lose 20-40% HP), Alert +2 |
+| **Pyrrhic Victory** | Major injuries, 1 crew incapacitated, Alert +2 |
+| **Defeat** | Party forced to retreat, 1-2 crew incapacitated, Alert +3 |
+| **Rout** | Party scattered, all crew injured, possible captures |
+
+---
+
+#### Stealth Encounters
+
+Avoiding detection, sneaking past guards, or remaining hidden.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STEALTH: Guard Post                                        │
+│  Required: Stealth 45                                       │
+│  Your Stealth: 50 ✓                                         │
+│  ────────────────────────────────────────                   │
+│                                                             │
+│  [A] Sneak past (Stealth check)                             │
+│      → Success: Pass undetected                             │
+│      → Failure: Combat encounter, Alert +1                  │
+│                                                             │
+│  [B] Create distraction (uses 1 Grenade)                    │
+│      → Auto-success, but Alert +1                           │
+│                                                             │
+│  [C] Wait for shift change (costs 1 Turn)                   │
+│      → Stealth requirement drops to 35                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Stealth Check:**
+```
+Roll = Random(1-100)
+Success if Roll <= (Party_Stealth - Difficulty + 50)
+```
+
+---
+
+#### Tech Encounters
+
+Hacking terminals, disabling alarms, sabotaging equipment.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  TECH: Security Terminal                                    │
+│  Required: Tech 40                                          │
+│  Your Tech: 38 ✗ Risky                                      │
+│  ────────────────────────────────────────                   │
+│                                                             │
+│  [A] Hack the system (Tech check)                           │
+│      → Success: Disable cameras, Alert -1                   │
+│      → Failure: Alarm triggered, Alert +2                   │
+│                                                             │
+│  [B] Brute force (Combat, destroys terminal)                │
+│      → Auto-success, but Alert +1, no intel gained          │
+│                                                             │
+│  [C] Find another way (skip this hex's bonus)               │
+│      → No risk, no reward                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Social Encounters
+
+Talking, bribing, intimidating, or deceiving NPCs.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  SOCIAL: Checkpoint Guard                                   │
+│  ────────────────────────────────────────                   │
+│  "Papers? What's your business in the lab district?"        │
+│                                                             │
+│  [A] Bluff - "Maintenance crew, here's our work order"      │
+│      Requires: Social 45 | Your Social: 35 ✗ Risky          │
+│                                                             │
+│  [B] Bribe - "Maybe this helps with the paperwork"          │
+│      Cost: 200 doubloons | Auto-success                     │
+│                                                             │
+│  [C] Intimidate - "You really want to make this difficult?" │
+│      Requires: Combat 60 | Your Combat: 65 ✓                │
+│      → Success: Pass, but guard remembers you               │
+│      → Failure: Combat encounter                            │
+│                                                             │
+│  [D] Show legitimate papers (if you have them)              │
+│      → Auto-success                                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Medical Encounters
+
+Handling injuries, rescuing people, or dealing with hazards.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MEDICAL: Injured Crew Member                               │
+│  Rosa is incapacitated and bleeding out.                    │
+│  ────────────────────────────────────────                   │
+│                                                             │
+│  [A] Field surgery (Medical 50 required)                    │
+│      Your Medical: 55 ✓                                     │
+│      → Success: Rosa stabilized at 25% HP                   │
+│      → Failure: Rosa dies                                   │
+│                                                             │
+│  [B] Use Med Kit (consumes 1 Med Kit)                       │
+│      → Auto-success: Rosa at 50% HP                         │
+│                                                             │
+│  [C] Carry her (party movement slowed)                      │
+│      → Rosa survives but can't contribute to checks         │
+│                                                             │
+│  [D] Leave her behind                                       │
+│      → Rosa is captured or dies (permanent)                 │
+│      → Party moves faster                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Equipment & Loadout
+
+Before deploying, you select gear that affects party stats:
+
+**Weapons (affect Combat, sometimes Stealth):**
+
+| Weapon | Combat Bonus | Stealth Mod | Special |
+|--------|--------------|-------------|---------|
+| Pistols | +5 | +0 | Concealable |
+| SMGs | +8 | -5 | Loud |
+| Assault Rifles | +12 | -10 | Loud, +5 vs armored |
+| Shotguns | +10 | -10 | +10 in close quarters |
+| Sniper Rifle | +8 | +0 | +15 for ambushes |
+| Crossbows | +6 | +5 | Silent |
+| Melee (machetes, etc.) | +5 | +5 | Silent, last resort |
+| Silenced weapons | +8 | +5 | Expensive ammo |
+
+**Armor (affect Combat, Stealth, survival):**
+
+| Armor | Combat Bonus | Stealth Mod | Injury Reduction |
+|-------|--------------|-------------|------------------|
+| Light/None | +0 | +5 | 0% |
+| Ballistic Vest | +3 | +0 | 20% |
+| Combat Armor | +5 | -5 | 35% |
+| Heavy Armor | +8 | -15 | 50% |
+
+**Gear (consumables and tools):**
+
+| Item | Effect | Uses |
+|------|--------|------|
+| Med Kit | Auto-success on Medical check OR heal 50% HP | 1 |
+| Grenade | +20 Combat for one fight OR create distraction | 1 |
+| Hacking Tool | +15 Tech for one check | 3 |
+| Disguise Kit | +15 Social for one check | 2 |
+| Smoke Bomb | Auto-escape from combat OR +20 Stealth | 1 |
+| Bribe Money | Auto-success on bribable Social checks | Varies |
+
+---
+
+### Crew Synergies
+
+Certain crew combinations provide bonuses:
+
+| Synergy | Requirement | Bonus |
+|---------|-------------|-------|
+| **Battle Buddies** | 2+ crew with Support Level A+ | +10 Combat |
+| **Silent Professionals** | All crew have Stealth training | +10 Stealth |
+| **Medical Team** | 2+ Sailors in party | +15 Medical |
+| **Tech Specialists** | Crew with INT 14+ | +10 Tech |
+| **Silver Tongues** | Crew with SPR 14+ | +10 Social |
+| **Full Squad** | Maximum party size (5) | +5 all stats |
+| **Small Team** | Only 2 crew | +10 Stealth, -10 Combat |
+
+---
+
+### Injuries & Consequences
+
+**During Mission:**
+
+| Injury Level | Effect | Recovery |
+|--------------|--------|----------|
+| **Healthy** | Full contribution | - |
+| **Wounded** (75-50% HP) | -25% stat contribution | Heals after mission |
+| **Injured** (50-25% HP) | -50% stat contribution | 1-2 missions to recover |
+| **Critical** (<25% HP) | No contribution, must be carried | 3+ missions to recover |
+| **Incapacitated** (0 HP) | Dead or captured (context) | Permanent or rescue mission |
+
+**After Mission:**
+
+- **Flawless:** All crew healthy, bonus XP
+- **Standard:** Minor wounds heal immediately
+- **Rough:** Injured crew need recovery time (sit out next mission)
+- **Disaster:** Crew deaths are permanent, captures require rescue
+
+---
+
+### Mission Flow Example
+
+**Mission: Extract Dr. Vasquez**
+
+```
+TURN 1: Start at [Docks]
+        → Inspection encounter (Social)
+        → Bluff successful, proceed
+
+TURN 2: Move to [Market]
+        → Intel encounter (Social)
+        → Learn guard patrol patterns (+5 Stealth for this mission)
+
+TURN 3: Move to [Gate]
+        → Checkpoint encounter (Stealth or Social)
+        → Bribe guard (200 doubloons), proceed
+
+TURN 4: Move to [Lab District]
+        → Patrol encounter (Combat or Stealth)
+        → Ambush successful, Alert +1
+
+TURN 5: Move to [Compound]
+        → Security system (Tech)
+        → Hack successful, cameras disabled
+
+TURN 6: Reach [Objective]
+        → Story encounter: Find Elena
+        → Choice: What about David Chen?
+
+TURN 7-9: Extraction (reverse path)
+        → Alert Level 2, encounters are harder
+        → Combat encounter at Gate
+        → Victory with injuries
+
+MISSION COMPLETE
+        → Elena extracted
+        → Rosa injured (2 mission recovery)
+        → 350 XP earned
+        → Alert Level: 3 (AetherCorp knows something happened)
+```
+
+---
+
+### Why This System Works
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Depth preserved** | Party composition, gear, and crew relationships all matter |
+| **Quick resolution** | Encounters resolve in 30 seconds, not 30 minutes |
+| **Meaningful choices** | Multiple approaches reward different builds |
+| **Crew still at risk** | Injuries and deaths have weight |
+| **Reuses hex system** | Locations are just hex clusters |
+| **Easy to expand** | Add encounters, locations, and gear without new systems |
+| **Story-friendly** | Narrative moments integrate naturally |
+
+---
+
+### Comparison: Old vs New
+
+| Aspect | Old (Tactical Grid) | New (Party-as-Unit) |
+|--------|---------------------|---------------------|
+| Combat time | 20-40 minutes | 1-3 minutes |
+| Development effort | ~12 months | ~3 months |
+| Individual positioning | Yes (complex) | No (abstracted) |
+| Party composition matters | Yes | Yes |
+| Equipment matters | Yes | Yes |
+| Crew death risk | Yes | Yes |
+| Player choices | Per-action | Per-encounter |
+| Replayability | High (tactics vary) | High (approaches vary) |
 
 ---
 
@@ -2438,24 +3200,444 @@ The game releases in stages. The MVP is a complete, polished experience - not a 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### Shaw's Task (The Core Mission)
+#### Shaw's Task: "The Defector"
 
-The specific task should be morally gray - something that:
-- Serves a good cause (ultimately)
-- Requires questionable methods
-- Could be interpreted multiple ways
-- Has consequences for innocent people
+Shaw needs you to extract **Dr. Elena Vasquez**, an AetherCorp bioweapons researcher who wants to defect. She has evidence of Project Stormbreak - a plan to poison the Vita-Algae supply of independent settlements, forcing them to depend on AetherCorp or starve.
 
-**Example Task Options:**
+**The Gray:** Elena's husband Marco and daughter Sofia (age 12) are still inside the AetherCorp compound. If Elena disappears, they become hostages - or worse. Elena knows this. She's choosing the lives of thousands over her own family. And she's asking you to help her make that choice.
 
-| Task | The Ask | The Gray |
-|------|---------|----------|
-| **The Defector** | Extract an AetherCorp scientist | She has family still inside who'll suffer |
-| **The Evidence** | Steal data proving AetherCorp crimes | The facility also houses civilian workers |
-| **The Cargo** | Deliver weapons to resistance | Those weapons will kill people |
-| **The Message** | Assassinate a corporate commander | He's brutal, but his replacement might be worse |
+---
 
-*[Specific task TBD based on narrative development]*
+##### The Encounter: Meeting Shaw
+
+**Location:** Haven - The Rusty Anchor tavern, back room
+**Trigger:** Player reaches Reputation Level 2 OR completes 3 trade runs
+
+*Shaw finds you. He's not what the legends describe - older, tired, but his eyes miss nothing.*
+
+**Shaw:** "You're the captain of the [Ship Name]. Small ship. Crew that survived the Wavecutter mutiny. You've been making quiet runs, staying out of trouble. I need someone who can stay out of trouble a little longer."
+
+**Shaw's Pitch:**
+- A scientist wants out of AetherCorp
+- She has information that could save thousands of lives
+- The Confederation can't be seen involved - it would mean open war before they're ready
+- He needs a nobody. A small ship that won't draw attention.
+- Payment: 5,000 doubloons + a favor from Corbin Shaw (valuable in this world)
+
+**Player Choices:**
+
+| Choice | Response | Effect |
+|--------|----------|--------|
+| **Accept** | "What do you need me to do?" | Main story proceeds |
+| **Ask questions first** | "Why can't you do this yourself?" | Shaw explains the political situation, +Cunning |
+| **Negotiate** | "5,000 isn't enough for this risk." | Can negotiate to 7,500, Shaw respects it, +Ambition |
+| **Refuse** | "Find someone else." | Shaw leaves. Side content only. Can change mind later at Haven. |
+
+---
+
+##### Mission 1: "The Cover" (Trade Mission)
+
+**Objective:** Establish a legitimate reason to approach Ironhull (AetherCorp outpost)
+
+**Shaw's Instructions:**
+*"You can't just sail into an AetherCorp port asking questions. You need a reason to be there. There's a merchant in Drift - Old Reyes - who has a shipment of machine parts AetherCorp wants. Buy the cargo, deliver it to Ironhull. That's your cover."*
+
+**Mission Flow:**
+
+1. **Travel to Drift** (Pirate haven)
+   - Optional: Random pirate encounter (flee or fight)
+
+2. **Find Old Reyes** (Dialogue)
+   - Reyes is suspicious - why does a small-timer want his cargo?
+   - **Choices:**
+     - Lie convincingly (Cunning check) - Lower price
+     - Tell partial truth ("Got a buyer in Ironhull") - Normal price
+     - Intimidate (Courage check) - Lower price but Reyes remembers
+     - Pay extra for no questions - Higher price but clean
+
+3. **Purchase Cargo:** 800-1,200 doubloons depending on approach
+
+4. **Travel to Ironhull**
+   - AetherCorp patrol encounter (scripted)
+   - They scan your cargo - machine parts check out
+   - Tense moment, then cleared to proceed
+
+**Mission Rewards:**
+- Access to Ironhull port
+- 200 XP
+- Introduction to AetherCorp security patterns
+
+---
+
+##### Mission 2: "The Contact" (Infiltration/Social)
+
+**Objective:** Make contact with Dr. Vasquez without alerting AetherCorp security
+
+**Location:** Ironhull - AetherCorp research outpost
+
+**The Setup:**
+Ironhull is a working port but heavily monitored. Scientists occasionally visit the market district during off-hours. Elena will be there tomorrow evening - but so will security.
+
+**Mission Flow:**
+
+1. **Deliver the Machine Parts** (Cover maintained)
+   - Get paid for legitimate delivery (+1,500 doubloons)
+   - Establishes you as a trader, not a threat
+
+2. **Gather Intel** (Exploration)
+   - Talk to locals: Learn guard patrol patterns
+   - Bribe a dock worker: Learn where scientists shop
+   - Observe the market: Identify security checkpoints
+   - *Each approach gives different intel bonuses for Mission 3*
+
+3. **The Meeting** (Timed Social Encounter)
+   - Elena appears at a fabric stall (cover: buying clothes for Sofia)
+   - Security detail nearby but not watching closely
+   - **You have 3 dialogue exchanges before security gets suspicious**
+
+   **Exchange 1 - Recognition:**
+   - "Looking for something specific, ma'am?" (Innocent opener)
+   - Elena: "Something... durable. For a long journey."
+
+   **Exchange 2 - Confirmation:**
+   - "I hear the southern islands are nice this time of year." (Shaw's code phrase)
+   - Elena's eyes widen. She knows.
+   - Elena: "I've heard. But traveling is... complicated. Family obligations."
+
+   **Exchange 3 - Critical Choice:**
+
+   | Choice | What You Say | Elena's Response | Consequence |
+   |--------|--------------|------------------|-------------|
+   | **Promise safety** | "Everyone travels together. No one left behind." | Relief, gratitude. "Then I'll send word when I'm ready." | You've implied you'll extract the family too. Can you? |
+   | **Be honest** | "I can get you out. I can't promise more." | Pain, then resolve. "I know. I've made my choice." | Elena trusts your honesty. Family stays behind. |
+   | **Push her** | "The information is what matters. You're just the carrier." | Anger, hurt. "You're just like them." | Elena cooperates but doesn't trust you. Complications later. |
+
+4. **Exfiltration from Market**
+   - Security notices you've been talking too long
+   - **Quick Choice:**
+     - Buy something and leave casually (Cunning check)
+     - Cause a distraction (Courage check)
+     - Just walk away (Security suspicion +1)
+
+**Mission Rewards:**
+- Contact established
+- Intel for Mission 3
+- 250 XP
+- Moral weight: Your promise (or lack thereof) will matter
+
+---
+
+##### Mission 3: "The Extraction" (Land Combat Mission)
+
+**Objective:** Extract Dr. Elena Vasquez from AetherCorp compound
+
+**Timeline:** 2 days after contact - Elena has arranged to be in the auxiliary lab (less security)
+
+**Approach Options:**
+
+The compound has three entry points. Intel gathered in Mission 2 affects difficulty:
+
+| Entry Point | Base Difficulty | Intel Bonus |
+|-------------|-----------------|-------------|
+| **Main Gate** | Hard (heavy security) | Bribed guard (-1 enemy squad) |
+| **Service Tunnel** | Medium (tight spaces) | Maintenance schedule (avoid 2 patrols) |
+| **Sea Wall** | Medium (climbing, exposure) | Tide charts (bonus movement) |
+
+**Landing Party:** Select 3-4 crew (including yourself)
+- Recommended: 1 Cutlass, 1 Marksman, 1 Sailor
+- Your First Mate insists on coming
+
+---
+
+**Phase 1: Infiltration**
+- Reach the auxiliary lab without raising full alarm
+- Stealth possible but not required
+- **Alarm Levels:**
+  - **0 (Silent):** No reinforcements
+  - **1 (Suspicious):** +1 enemy squad at extraction
+  - **2 (Alert):** +2 enemy squads, Elena panics
+  - **3 (Lockdown):** Mission becomes extraction under fire, Elena may die
+
+**Phase 2: The Lab**
+- Find Elena in the auxiliary research wing
+- She has a data chip with Project Stormbreak evidence
+- **Complication:** Her assistant, young researcher **David Chen**, is there
+
+  **David:** "Dr. Vasquez? What's happening? Who are these people?"
+
+  | Choice | Action | Consequence |
+  |--------|--------|-------------|
+  | **Knock him out** | Quick, quiet | David wakes up, reports everything. AetherCorp knows it was extraction, not kidnapping. |
+  | **Take him too** | "You're coming with us." | Unwilling hostage. Slows movement. But he can't report. |
+  | **Let Elena decide** | "He's your assistant." | Elena hesitates, then tells him to stay quiet. He might. Or might not. |
+  | **Kill him** | No witnesses | Elena is horrified. "What kind of people ARE you?" Trust permanently damaged. Fast and clean though. |
+
+**Phase 3: Extraction**
+- Return to entry point with Elena (and David?)
+- Difficulty based on alarm level and entry choice
+- **Combat encounters:** 2-4 fights depending on stealth
+
+**Extraction Combat Encounters:**
+
+| Alarm Level | Enemies |
+|-------------|---------|
+| 0 | 1 Security patrol (4 guards) |
+| 1 | 2 Patrols (8 guards) |
+| 2 | 2 Patrols + 1 Marine squad (12 enemies) |
+| 3 | Full response: 3 squads + Sergeant Knox (boss) |
+
+**Phase 4: The Choice at the Wall**
+
+*If you promised to save Elena's family:*
+
+As you reach the extraction point, Elena stops.
+
+**Elena:** "Marco and Sofia. You said—"
+
+**Your First Mate:** "Captain, we don't have time. The compound is waking up."
+
+The family quarters are 200 meters away. Going there means fighting through more security. Not going means breaking your word.
+
+| Choice | Action | Consequence |
+|--------|--------|-------------|
+| **Keep your word** | "We're getting them. Move." | Additional combat encounter + timed escape. If successful: Elena and family extracted. If failed: Casualties likely. |
+| **Break your word** | "I said I'd try. We can't." | Elena extracted. Her family becomes AetherCorp leverage. Elena never fully trusts you. Shaw understands but is disappointed. |
+| **Offer alternative** | "We come back for them. I promise." | Elena extracted. Side mission unlocks post-MVP: Family Rescue |
+
+*If you were honest about not saving the family:*
+- Elena is grim but prepared
+- No additional choice required
+- Extraction proceeds
+
+---
+
+**Mission Rewards:**
+- Elena extracted (or killed if mission fails badly)
+- Project Stormbreak data
+- 500 XP
+- Bridge Crew unlock: **David Chen** (if taken and survives) - Scientist, unique abilities
+- Heavy narrative consequences based on choices
+
+---
+
+##### Mission 4: "The Run" (Naval Combat/Chase)
+
+**Objective:** Escape the Shattered Isles with Elena and the data
+
+**The Setup:**
+AetherCorp knows someone took their scientist. Patrols are out. Your description is circulating. The direct route to the rendezvous with Shaw is blocked.
+
+**Mission Flow:**
+
+1. **Choose Your Route:**
+
+| Route | Distance | Danger | Advantage |
+|-------|----------|--------|-----------|
+| **The Shallows** | Short | Medium | Your small ship can navigate; their frigates can't |
+| **The Storm Belt** | Medium | High (weather) | Patrols avoid it; you might not survive it either |
+| **The Long Way** | Long | Low (but more encounters) | Safest, but more chances to be spotted |
+
+2. **Naval Encounters (varies by route):**
+
+**The Shallows Route:**
+- 1 Patrol Boat encounter (can be evaded with good navigation)
+- Reef hazard (ship damage if failed check)
+- Pirate ambush at the narrows (fight or pay toll)
+
+**The Storm Belt Route:**
+- Storm damage event (crew injuries, ship damage)
+- Single Cutter encounter (they're desperate too)
+- Navigation challenge (fail = blown off course, +1 encounter)
+
+**The Long Way Route:**
+- 2-3 Patrol Boat encounters
+- Merchant ship (potential witness - bribe, threaten, or ignore)
+- Final Frigate encounter near rendezvous (unavoidable fight or chase)
+
+3. **The AetherCorp Ultimatum:**
+
+Midway through any route, you receive a radio transmission:
+
+**AetherCorp Commander:** "Unknown vessel carrying stolen corporate property. This is Commander Reis of the ACS Vigilance. You have one hour to surrender Dr. Vasquez and the data she stole. Do this, and your crew goes free. Refuse, and we will hunt you to the edge of the world."
+
+*If Elena's family was left behind:*
+**Reis:** "Dr. Vasquez. Your husband asked me to tell you: Sofia misses her mother. Come home. We can still fix this."
+
+| Choice | Action | Consequence |
+|--------|--------|-------------|
+| **Ignore** | Maintain radio silence | No immediate effect. Reis wasn't bluffing - pursuit intensifies. |
+| **Defiant response** | "Come and get us." | +Courage. Reis respects it. Still hunting you. Elena appreciates it. |
+| **Elena decides** | Hand her the radio | Elena's choice depends on your earlier actions and her family status. 10% chance she surrenders if family is hostage AND you broke promises. |
+
+4. **Final Chase/Battle:**
+
+Before reaching Shaw's rendezvous, one final encounter:
+
+**ACS Cutter "Ironside"** - Tier 2 ship, aggressive captain
+
+Options:
+- **Fight:** Winnable but costly naval battle
+- **Outrun:** Speed check + navigation; small ships have advantage
+- **Trick:** Lure them into the shallows/storm (requires earlier route knowledge)
+- **Decoy:** If David Chen is aboard, he can broadcast fake distress signal to draw them off
+
+---
+
+**Mission Rewards:**
+- Reach Shaw's rendezvous
+- 400 XP
+- Ship upgrade opportunity (Shaw provides)
+- Reputation: AetherCorp now knows your name
+
+---
+
+##### The Handoff: Shaw's Rendezvous
+
+**Location:** Open water, coordinates provided
+**Shaw's Ship:** The *Tempest* - A Confederation frigate, impressive but showing its years
+
+**The Meeting:**
+
+Shaw comes aboard your ship. He wants to meet Elena personally.
+
+**Shaw to Elena:** "Dr. Vasquez. I know what you've given up to be here. I can't give you your family back. But I can promise their sacrifice won't be meaningless."
+
+**Elena:** "Just stop them. Stop Stormbreak. That's all I ask."
+
+Shaw reviews the data. His expression darkens.
+
+**Shaw to You:** "This is worse than I thought. They're not just planning to poison settlements - they're going to blame it on the Confederation. Use it as justification for full military action. We'd be fighting a war while our own people think we're the monsters."
+
+**Shaw's Offer:**
+
+"You've done more than I asked. The smart thing would be to take your money and disappear. But I could use someone like you. Someone AetherCorp doesn't know. Someone who can go places the Confederation can't."
+
+"This is bigger than one scientist or one data chip. I'm building something - a network of people who can fight this war in the shadows. No flags. No uniforms. Just people doing what needs to be done."
+
+"I'm not asking for an answer now. Finish your business in the Isles. When you're ready - if you're ready - find me."
+
+**Payment:** 5,000 doubloons (or 7,500 if negotiated) + Shaw's Favor (unique item, unlocks options later)
+
+---
+
+##### Act 3: Consequences
+
+After the handoff, returning to the Shattered Isles triggers the final act.
+
+**Immediate Effects:**
+
+1. **Haven:** Word has spread that you "crossed" AetherCorp
+   - Some people avoid you (fear)
+   - Some people seek you out (respect)
+   - New mission opportunities from anti-Corp factions
+
+2. **Ironhull:** You are HOSTILE
+   - Cannot dock
+   - AetherCorp ships attack on sight in their waters
+   - Bounty on your head: 2,000 doubloons
+
+3. **Drift:** Pirates are impressed
+   - Better prices
+   - Access to black market
+   - Potential recruits
+
+**The Approach:**
+
+Within a few days, three parties contact you:
+
+---
+
+**Option A: Shaw's Network**
+
+*Message delivered by unmarked skiff:*
+
+"The data checked out. Stormbreak is real. We're moving against it, but we need more. There's a supply depot on Cayo Muerto that ships Stormbreak materials. It needs to disappear. Quietly. Are you in? - S"
+
+**Accepting Shaw Path:**
+- Leads to raid on Cayo Muerto (bonus mission)
+- Firmly allies you with Confederation
+- Sets up full game story
+
+---
+
+**Option B: AetherCorp's Offer**
+
+*Commander Reis contacts you directly:*
+
+"Captain. You've made an enemy of AetherCorp. That's usually fatal. But I'm a practical man. Dr. Vasquez was a traitor. The data she stole was... sensitive. We want it back. More importantly, we want to know what Shaw is planning."
+
+"Work for us. Feed us information. In return: your bounty disappears, your record is clean, and you'll have access to ports and resources you can't imagine. AetherCorp takes care of its friends."
+
+**Accepting Corp Path:**
+- Become a double agent (or genuine turncoat)
+- Access to AetherCorp equipment and ports
+- Eventually forced to betray Shaw or blow cover
+- Different ending
+
+---
+
+**Option C: Independent**
+
+*Your First Mate:*
+
+"Captain, I've been thinking. We've got a ship, a crew, and a reputation now. We don't owe Shaw anything - we did the job, we got paid. And I don't trust AetherCorp as far as I could throw their frigate."
+
+"What if we just... didn't pick a side? The Isles are full of opportunities. We could build something here. Something that belongs to us."
+
+**Staying Independent:**
+- Refuse both offers
+- Focus on building your own operation
+- Both factions become neutral-hostile (suspicious)
+- Hardest path but most freedom
+- Can still choose a side later
+
+---
+
+##### Endings (MVP)
+
+**Ending A: "The Shadow Fleet"**
+*Chose Shaw Path*
+
+You raid Cayo Muerto. The depot burns. Stormbreak is delayed, not stopped - but you've bought time. Shaw's message arrives: "Well done, Captain. The war is just beginning. When it's over, people will know what you did. For now, stay in the shadows. I'll be in touch."
+
+*Epilogue: Your ship sails into the darkness. In the distance, AetherCorp searchlights sweep the water. They're looking for ghosts. They're looking for you.*
+
+**Ending B: "The Corporate Captain"**
+*Chose AetherCorp Path*
+
+Reis is pleased. Your first "assignment" - report on Confederation ship movements. Easy money. Clean conscience? That's harder. Elena's face haunts you. But you're alive, your crew is fed, and in this world, that's not nothing.
+
+*Epilogue: Your ship enters Ironhull, flying AetherCorp colors. The guards salute. You've joined the winning side. At least, that's what you tell yourself.*
+
+**Ending C: "The Free Captain"**
+*Stayed Independent*
+
+Neither side trusts you. Both sides want you. You sail the Shattered Isles, taking jobs from whoever pays, answering to no one. It's dangerous. It's uncertain. But it's yours.
+
+*Epilogue: Your ship anchors in a hidden cove. Your crew gathers around a fire. Your First Mate raises a bottle. "To the [Ship Name]. To freedom. And to whatever comes next." You drink. The stars are bright. The future is unwritten.*
+
+---
+
+**All Endings Include:**
+
+*"Your name means something now. In the taverns of Haven, in the corridors of Ironhull, in the shadows where Shaw builds his network - people know the captain of the [Ship Name]. What happens next is up to you."*
+
+*"THE GRAY TIDE - Chapter 1 Complete"*
+*"To be continued..."*
+
+---
+
+##### Choices Summary & Consequences
+
+| Choice Point | Options | Long-term Impact |
+|--------------|---------|------------------|
+| Shaw negotiation | Accept/Question/Negotiate/Refuse | Payment amount, Shaw's respect |
+| Reyes approach | Lie/Truth/Intimidate/Pay | Drift reputation, future prices |
+| Elena's family promise | Promise/Honest/Dismiss | Trust, ending options, side mission |
+| David Chen | KO/Take/Let decide/Kill | Crew member, witness report, Elena trust |
+| Family rescue attempt | Keep word/Break word/Promise later | Elena loyalty, Shaw respect, side mission |
+| Escape route | Shallows/Storm/Long way | Encounters, ship damage, time |
+| Final choice | Shaw/AetherCorp/Independent | Ending, faction status, game sequel setup |
 
 #### MVP Scope Details
 
@@ -2473,11 +3655,7 @@ The specific task should be morally gray - something that:
 - **Brigantine** (upgrade) - Balanced, more weapons
 - **Schooner** (upgrade) - Fast trader, good cargo
 
-**Enemies:**
-- AetherCorp patrol boats
-- AetherCorp marine squads (land)
-- Generic pirates (early game threats)
-- Corporate security (land missions)
+**Enemies:** See detailed enemy roster below.
 
 **Bridge Crew (MVP):**
 - Your First Mate (from prologue)
@@ -2488,6 +3666,209 @@ The specific task should be morally gray - something that:
 - Tier 1 only: Cutlass, Marksman, Sailor
 - 5-6 abilities each
 - Enough depth to demonstrate the system
+
+---
+
+### Enemy Roster
+
+Enemies are divided into **Naval** (ship-to-ship combat) and **Ground** (land missions) categories. Each enemy type has variants for different difficulty tiers.
+
+#### Faction: AetherCorp
+
+The dominant corporate power, AetherCorp controls Aetherium production and fields professional military forces. They are the primary antagonist faction.
+
+**Naval - AetherCorp Fleet:**
+
+| Ship Class | Tier | Hull | Speed | Weapons | Crew | Threat Level |
+|------------|------|------|-------|---------|------|--------------|
+| **Skiff** | 1 | 80 | Fast | 1× Autocannon, 1× Harpoon | 8 | Low |
+| **Patrol Boat** | 1 | 150 | Medium | 2× Deck Gun, 1× Flak | 15 | Medium |
+| **Cutter** | 2 | 200 | Fast | 2× Deck Gun, 2× Autocannon, Missiles (2) | 20 | Medium-High |
+| **Frigate** | 2 | 350 | Medium | 4× Deck Gun, 1× Railgun, Flak | 40 | High |
+| **Destroyer** | 3 | 500 | Medium | 6× Deck Gun, 2× Railgun, Missiles (4), Flak | 60 | Very High |
+| **Cruiser** | 3 | 800 | Slow | 8× Deck Gun, 2× Railgun, Missiles (8), 2× Flak | 100 | Extreme |
+
+**AetherCorp Ship Behavior:**
+- Patrol in pairs or groups
+- Call for reinforcements when outmatched
+- Prefer to disable and board (capture cargo/prisoners)
+- Won't pursue into shallow waters or reefs
+
+**Ground - AetherCorp Personnel:**
+
+| Unit Type | Tier | HP | Armor | Weapon | Special | Count |
+|-----------|------|-----|-------|--------|---------|-------|
+| **Security Guard** | 1 | 40 | Vest (15) | Pistol, Baton | Calls backup | 2-4 |
+| **Corp Marine** | 1 | 60 | Combat (25) | Assault Rifle | Frag grenades | 3-5 |
+| **Marine Sergeant** | 2 | 80 | Combat (25) | SMG, Shotgun | Commands squad, +10% ally accuracy | 1 |
+| **Heavy Gunner** | 2 | 100 | Combat (25) | LMG | Suppressing fire, immobile when firing | 1-2 |
+| **Combat Medic** | 2 | 50 | Combat (25) | Pistol | Heals 30 HP/turn to allies | 1 |
+| **Shock Trooper** | 2 | 80 | Powered (40) | Pulse Rifle | EMP grenades, breaches doors | 2-3 |
+| **Sniper** | 2 | 45 | Light (10) | Sniper Rifle | Overwatch, +50% damage vs stationary | 1 |
+| **Enforcer** | 3 | 120 | Powered (40) | Railgun, Shock Baton | Armor-piercing, melee counter | 1-2 |
+| **Commander** | 3 | 100 | Powered (40) | Pulse Pistol | Buffs all allies +15% damage/accuracy | 1 |
+
+**AetherCorp Ground Tactics:**
+- Use cover effectively
+- Marines advance while heavies suppress
+- Medics stay in rear
+- Shock troopers flank
+- Commanders stay protected, buff allies
+
+---
+
+#### Faction: Pirates / Raiders
+
+Desperate survivors, opportunists, and criminals. Less organized than AetherCorp but unpredictable and numerous.
+
+**Naval - Pirate Vessels:**
+
+| Ship Class | Tier | Hull | Speed | Weapons | Crew | Threat Level |
+|------------|------|------|-------|---------|------|--------------|
+| **Dinghy** | 1 | 40 | Very Fast | Small arms only | 4 | Very Low |
+| **Skiff** | 1 | 60 | Fast | 1× Bolt Thrower, Molotovs | 6 | Low |
+| **Raider** | 1 | 120 | Fast | 2× Autocannon, Harpoon, Fire Launcher | 12 | Medium |
+| **Corsair** | 2 | 200 | Medium | 2× Deck Gun, 2× Harpoon, Flak | 25 | Medium |
+| **Marauder** | 2 | 300 | Medium | 4× Deck Gun, Fire Launcher, Harpoons | 35 | High |
+| **Dreadnought** | 3 | 450 | Slow | 6× Deck Gun, 2× Salvaged Railgun | 50 | High |
+
+**Pirate Ship Behavior:**
+- Aggressive, prefer to board and capture
+- Flee when outgunned (hull < 40%)
+- Use fire weapons liberally
+- Ambush from island cover
+- Some may parley (pay toll to pass)
+
+**Ground - Pirate Personnel:**
+
+| Unit Type | Tier | HP | Armor | Weapon | Special | Count |
+|-----------|------|-----|-------|--------|---------|-------|
+| **Scav** | 1 | 30 | None | Pistol or Knife | Flees at 50% HP | 3-5 |
+| **Raider** | 1 | 50 | Salvage (20) | SMG, Machete | Aggressive, charges melee | 2-4 |
+| **Gunner** | 1 | 45 | Light (10) | Shotgun | Close range specialist | 2-3 |
+| **Brute** | 2 | 90 | Salvage (20) | Boarding Axe, Pistol | High melee damage, slow | 1-2 |
+| **Sharpshooter** | 2 | 40 | None | Hunting Rifle | Long range, flees if approached | 1 |
+| **Firebug** | 2 | 50 | Light (10) | Flamethrower, Molotovs | Area denial, sets fires | 1 |
+| **Pirate Captain** | 2 | 80 | Combat (25) | Dual Pistols | +20% ally morale, won't flee | 1 |
+| **Berserker** | 3 | 70 | None | Powered Gauntlet | Rage: +50% damage when wounded | 1 |
+
+**Pirate Ground Tactics:**
+- Swarm tactics, overwhelm with numbers
+- Brutes charge while gunners flank
+- Will flee if captain dies
+- Unpredictable - may surrender or fight to death
+- Sometimes have hostages
+
+---
+
+#### Faction: Scavengers
+
+Not truly hostile - desperate survivors picking through the bones of civilization. Will fight if cornered but prefer to avoid conflict.
+
+**Naval - Scavenger Boats:**
+
+| Ship Class | Tier | Hull | Speed | Weapons | Crew | Threat Level |
+|------------|------|------|-------|---------|------|--------------|
+| **Raft** | 1 | 20 | Slow | None | 2-3 | Minimal |
+| **Salvage Skiff** | 1 | 50 | Medium | 1× Bolt Thrower | 5 | Very Low |
+| **Hauler** | 1 | 100 | Slow | 1× Deck Gun (often broken) | 8 | Low |
+
+**Scavenger Behavior:**
+- Flee on contact
+- Will trade if approached peacefully
+- Might have valuable salvage
+- Occasionally ambush if desperate
+- Good source of information
+
+**Ground - Scavenger Personnel:**
+
+| Unit Type | Tier | HP | Armor | Weapon | Special | Count |
+|-----------|------|-----|-------|--------|---------|-------|
+| **Scavenger** | 1 | 25 | None | Crossbow, Knife | Hides, non-aggressive | 2-4 |
+| **Pack Leader** | 1 | 40 | Salvage (20) | Pistol | Commands group to flee or fight | 1 |
+| **Feral** | 2 | 60 | None | Teeth, Claws | Diseased bite (poison), animalistic | 1-2 |
+
+**Scavenger Tactics:**
+- Avoid combat if possible
+- Use terrain to escape
+- Ferals are unpredictable (collapsed mentally)
+- Can be recruited or bribed
+
+---
+
+#### Environmental / Wildlife Threats
+
+The post-collapse Caribbean has dangers beyond human enemies.
+
+**Naval Hazards:**
+
+| Threat | Tier | Description | Effect |
+|--------|------|-------------|--------|
+| **Storm** | 1-3 | Weather event | Movement penalties, damage over time, visibility reduced |
+| **Reef** | 1 | Shallow waters | Hull damage if entered, blocks large ships |
+| **Debris Field** | 1 | Floating wreckage | Slows movement, may hide salvage or enemies |
+| **Sargasso** | 2 | Dense seaweed mass | Traps ships, requires cutting free (takes turns) |
+| **Rogue Wave** | 2 | Sudden large wave | Heavy damage, can capsize small ships |
+| **Whirlpool** | 3 | Dangerous current | Pulls ships toward center, damage + movement loss |
+
+**Ground Hazards:**
+
+| Threat | Tier | HP | Description | Behavior |
+|--------|------|-----|-------------|----------|
+| **Guard Dog** | 1 | 20 | Trained attack animal | Alerts enemies, fast, weak |
+| **Feral Dog Pack** | 1 | 15 each | Wild dogs | Hunt in packs (4-6), flee if 2+ killed |
+| **Gator** | 2 | 60 | Swamp predator | Ambush from water, grab attack |
+| **Coral Wasp Swarm** | 2 | 40 | Mutated insects | Poison damage, hard to hit, attracted to noise |
+| **Reef Shark** | 2 | 50 | In shallow water areas | Attacks wounded targets, blood frenzy |
+| **Bull Shark** | 3 | 80 | Aggressive predator | Attacks anything in water |
+
+---
+
+#### Elite / Boss Enemies
+
+Unique enemies for story missions and climactic battles.
+
+**Naval Bosses:**
+
+| Name | Faction | Ship | Special Abilities |
+|------|---------|------|-------------------|
+| **The Taxman** | AetherCorp | Modified Destroyer "Revenue" | Calls reinforcements every 3 turns, EMP pulse disables player weapons for 1 turn |
+| **Captain Raze** | Pirate | Dreadnought "Cinderheart" | All weapons are fire-based, leaves burning hexes, immune to fire |
+| **The Ghost** | Independent | Stealth Frigate "Specter" | Cloaking (invisible until attacks), always acts first |
+| **Commodore Vale** | AetherCorp | Cruiser "Dominance" | Command aura (+25% to all allied ships), personal shield (absorbs first 100 damage) |
+
+**Ground Bosses:**
+
+| Name | Faction | Type | HP | Armor | Special Abilities |
+|------|---------|------|-----|-------|-------------------|
+| **Sergeant Knox** | AetherCorp | Heavy Infantry | 150 | Powered (40) | Minigun (suppresses 3 targets), calls airstrikes (3 turn cooldown) |
+| **"Stitches"** | Pirate | Combat Medic | 100 | Combat (25) | Heals self 20/turn, resurrects fallen pirates once |
+| **The Collector** | Independent | Slaver | 120 | Salvage (20) | Shock net (immobilizes), attempts to capture not kill |
+| **Dr. Vance** | AetherCorp | Scientist | 60 | None | Deploys combat drones (3), hacks player equipment, must be captured alive (story) |
+| **Ironjaw** | Pirate | Berserker Chief | 180 | Salvage (20) | Enrage (double damage at <50% HP), intimidate (enemies flee), regenerates 10 HP/turn |
+
+---
+
+#### Enemy Scaling
+
+Enemies scale based on player progression and story act:
+
+| Act | Enemy Tier | Typical Encounters |
+|-----|------------|-------------------|
+| **Prologue** | Tutorial | Scripted, cannot lose |
+| **Act 1** | Tier 1 | Scavengers, lone pirates, security guards |
+| **Act 2** | Tier 1-2 | Pirate groups, AetherCorp patrols, marine squads |
+| **Act 3** | Tier 2 | Coordinated enemies, bosses, mixed forces |
+| **Endgame** | Tier 2-3 | Elite enemies, capital ships, boss encounters |
+
+**Difficulty Modifiers:**
+
+| Difficulty | HP Modifier | Damage Modifier | AI Behavior |
+|------------|-------------|-----------------|-------------|
+| **Story** | -25% | -25% | Passive, makes mistakes |
+| **Normal** | 0% | 0% | Standard tactics |
+| **Veteran** | +25% | +15% | Aggressive, coordinates |
+| **Ironman** | +50% | +25% | Perfect tactics, no mercy |
 
 ---
 
@@ -2610,13 +3991,22 @@ The same tools we use to build official campaigns are available to modders:
 | Game | What We Take |
 |------|--------------|
 | **Ultima IV: Quest of the Avatar** | Virtue-based character creation, moral dilemmas shape identity |
-| **Final Fantasy Tactics** | Deep job system, ability cross-pollination, JP economy |
+| **Final Fantasy Tactics** | Deep job system, ability cross-pollination, JP economy, Faith/Brave modifiers |
 | **Sid Meier's Pirates!** | Open world Caribbean, ship capture, reputation |
-| **XCOM 1/2** | Tactical land combat, permadeath weight, base management |
-| **Fire Emblem** | Character relationships, permadeath consequences, class progression |
+| **XCOM 1/2** | Tactical land combat, permadeath weight, base management, action point economy |
+| **Fire Emblem** | Character relationships, permadeath consequences, class progression, weapon triangle, True Hit system, doubling attacks, support bonuses |
 | **Mass Effect** | Crew loyalty missions, dialogue importance, ship as home |
 | **FTL** | Ship management under pressure, crew as resource |
 | **Valkyria Chronicles** | Beautiful tactical battles, named squad members |
+
+### Combat System Influences
+| Game | What We Take |
+|------|--------------|
+| **Fire Emblem (series)** | Simple Atk-Def damage formula, weapon triangle (+15%/-15%), True Hit system (RNG smoothing), attack speed doubling, support bonuses, displayed vs actual hit rates |
+| **Final Fantasy Tactics** | Faith modifier for abilities (caster × target), terrain height advantages, status effect durations, ability JP costs |
+| **BattleTech (tabletop)** | To-hit modifier tables, location-based damage, movement penalties, piloting skill rolls, hex-based arcs |
+| **Car Wars** | Phased movement, turning costs based on vehicle type, weapon arcs (bow/stern/broadside), momentum and speed management |
+| **Seas of Havoc** | Ship asymmetry (captain + ship cards), broadside mechanics, deck-building progression, worker placement for repairs/upgrades |
 
 ### Technical/Architecture Influences
 | System | What We Take |
@@ -2625,6 +4015,22 @@ The same tools we use to build official campaigns are available to modders:
 | **Paradox Games** | Data-driven design, event systems, campaign mods |
 | **Unity Asset Store Model** | Content as packages, mix official + community |
 | **Rimworld** | Storyteller system, emergent narrative from systems |
+
+### Combat Math Design Philosophy
+
+The combat system is designed around these principles:
+
+1. **Readability**: Players should be able to predict outcomes before committing. No hidden dice rolls on basic attacks. Damage ranges are narrow (±10%) so surprises are tactical, not random.
+
+2. **Meaningful Choices**: Every modifier in the to-hit formula represents a tactical decision (positioning, cover, support). No "stat check" battles where higher numbers always win.
+
+3. **Bounded Outcomes**: Hit chances are capped (5%-95%) so there's always hope and always risk. Critical hits are powerful (3x) but capped at 50% chance maximum.
+
+4. **Asymmetric Balance**: Naval and land combat use different formulas reflecting their different natures:
+   - **Naval**: Momentum-based, positional (arcs matter), crew as resource
+   - **Land**: Action-point based, cover-centric, individual abilities matter
+
+5. **Moddable Math**: All formulas use clearly named constants that can be overridden by campaign data. A "grittier" mod can reduce HP scaling; a "heroic" mod can increase critical multipliers.
 
 ---
 
@@ -2647,4 +4053,10 @@ The same tools we use to build official campaigns are available to modders:
 | 0.3 | 2026-01-30 | Major restructure: Engine Philosophy, Canonical Lore (9-book novel series), Campaign & Story Engine, "Build the Engine, Not the Things" approach |
 | 0.4 | 2026-01-30 | Ship as Character (deep customization, ship reputation, ship death matters), clarified Shaw is NOT First Mate but legendary figure |
 | 0.5 | 2026-01-30 | Complete Prologue system replacing Oracle - character creation through gameplay with your friend (future First Mate). Defined MVP: "The Gray Tide" campaign with Shaw encounter and singular task. |
+| 0.6 | 2026-01-30 | Comprehensive Combat Math: Naval combat formulas (movement/wind, to-hit modifiers, weapon arcs, boarding resolution) inspired by Car Wars, BattleTech, Seas of Havoc. Land combat formulas (True Hit system, armor interaction, doubling, support bonuses) inspired by Fire Emblem, FFT. Updated weapons to post-collapse 2085 tech: modern firearms, Aetherium weapons, ballistic/improvised options, ammunition economy. Added Combat Design Philosophy to Appendix A. |
+| 0.7 | 2026-01-30 | Complete Enemy Roster: AetherCorp (naval fleet + ground forces), Pirates/Raiders, Scavengers, Environmental/Wildlife hazards, Elite/Boss enemies. Includes stats, behaviors, tactics, and difficulty scaling. |
+| 0.8 | 2026-01-30 | Complete Tier 1 Job Abilities: Cutlass (10 active, 3 reaction, 4 passive), Marksman (10 active, 3 reaction, 4 passive), Sailor (10 active, 3 reaction, 4 passive). Includes JP costs, unlock levels, detailed effects, cross-equipping system, and JP economy. All abilities integrate with combat math formulas. |
+| 0.9 | 2026-01-30 | Complete Shaw's Task: "The Defector" - Full 4-mission story arc with Dr. Elena Vasquez extraction. Includes: The Encounter (Shaw meeting), Mission 1 "The Cover" (trade), Mission 2 "The Contact" (infiltration), Mission 3 "The Extraction" (land combat with family choice), Mission 4 "The Run" (naval chase). Three endings (Shaw/Corp/Independent), branching choices, consequences table. Core MVP narrative complete. |
+| 1.0 | 2026-01-30 | **MAJOR SCOPE REVISION:** Replaced tactical grid Land Combat with **Away Party System**. Party moves as single unit through location hex clusters. Five party stats (Combat, Stealth, Tech, Medical, Social) derived from crew + gear. Encounters resolve through stat checks + player choices, not individual tactics. Reduces development time ~75% while preserving depth of party composition, equipment, and consequences. |
+| 1.1 | 2026-01-30 | Revised Job System for Party-as-Unit: Jobs now provide Party Stat Contributions + Mission Abilities (limited uses per mission) + Passive Bonuses. Removed tactical abilities (Overwatch, Cleave, etc.). Added Job Synergies for party composition bonuses. Simplified leveling (1-10 instead of 1-20). Naval boarding uses same system as land. |
 
