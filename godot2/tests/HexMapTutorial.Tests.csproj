@@ -38,6 +38,10 @@
     <Compile Include="..\src\Rendering\RenderingConfig.cs" Link="Source\RenderingConfig.cs" />
     <Compile Include="..\src\Rendering\PerformanceStatistics.cs" Link="Source\PerformanceStatistics.cs" />
     <Compile Include="..\src\Rendering\ChunkMath.cs" Link="Source\ChunkMath.cs" />
+    <!-- Region streaming system -->
+    <Compile Include="..\src\Region\RegionConfig.cs" Link="Source\RegionConfig.cs" />
+    <Compile Include="..\src\Region\RegionData.cs" Link="Source\RegionData.cs" />
+    <Compile Include="..\src\Region\RegionSerializer.cs" Link="Source\RegionSerializer.cs" />
   </ItemGroup>
 
 </Project>
