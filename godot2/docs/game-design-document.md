@@ -287,24 +287,39 @@ The engine must support campaigns in ANY of these eras:
 
 ## 6. Canonical Characters
 
-These characters span the novel series. In campaigns, they may be:
-- The player character (playing AS Corbin Shaw)
-- Major NPCs (interacting with Shaw)
-- Historical figures (referenced in later-era campaigns)
+### Player vs. Canonical Characters
+
+**Critical Design Decision:** The player is NOT Corbin Shaw. The player creates their OWN captain through the Oracle system. Canonical characters from the novels serve as:
+
+| Role | Examples | Function |
+|------|----------|----------|
+| **First Mate / Partner** | Corbin Shaw (in Abyssal War era) | Your right hand, advisor, combat companion |
+| **Mentor** | Dr. Thorne, Elder Shaw | Teach skills, provide quests, exposition |
+| **Rival** | Other captains, Valerius | Competition, antagonism, possible ally |
+| **Quest Giver** | Maria Flores, faction leaders | Drive story forward |
+| **Legend** | Shaw (in post-Shaw eras) | Historical figure, inspiration |
+
+This means:
+- YOU are the main character of your story
+- The novels' heroes are part of YOUR crew or YOUR world
+- Different campaigns can position Shaw differently (young rival, peer captain, legendary mentor, historical figure)
 
 ### Corbin Shaw - "Nemo"
-*The Hero of the Saga*
+*The Legend of the Saga*
 
-| Era | Role | Status |
-|-----|------|--------|
-| Long Fall | Young oil rig engineer | Survivor, learning leadership |
-| Age of Sail | Captain of *Stargazer*, pirate legend | Active protagonist |
-| Abyssal War | Elder statesman, founder of Confederation | Mentor figure |
+| Era | Role IN GAME | Relationship to Player |
+|-----|--------------|----------------------|
+| Long Fall | Young survivor | Fellow refugee, possible crew |
+| Age of Sail | Captain of *Stargazer* | Rival captain, ally, mentor |
+| Abyssal War | Founder of Confederation | **First Mate**, legendary partner |
+| Post-Shaw | Historical legend | Statue in port, stories told |
 
-**Character Arc:** Humble worker → Reluctant survivor → Pirate captain "Nemo" → Founder of a nation → Elder watching his legacy tested
+**In the Base Game (Abyssal War ~2085):** Shaw is your First Mate. He's old, legendary, and has seen everything. He joins YOUR ship because he sees something in you. His experience complements your fresh perspective. He's the Obi-Wan to your Luke, the Spock to your Kirk.
+
+**Character Arc (in novels):** Humble worker → Reluctant survivor → Pirate captain "Nemo" → Founder of a nation → Elder watching his legacy tested
 
 **Virtues:** Honor, Sacrifice, Courage
-**Ship:** *Stargazer* (later legendary vessel)
+**Legendary Ship:** *Stargazer* (may be encountered as NPC ship, or inherited in some campaigns)
 
 ### Dr. Aris Thorne
 *The Cassandra*
@@ -456,50 +471,294 @@ The game world is a **strategic hex map** of the Caribbean:
 
 ## 9. The Ship System
 
-### Ship as Central Hub
+### The Ship as Character
 
-The ship serves multiple functions:
-- **Transport:** Moves the party across the strategic map
-- **Base:** Where crew lives, trains, and recovers
-- **Combat Unit:** Fights in naval battles
-- **Identity:** Visual representation of player's journey
+**The ship is not a vehicle. The ship is a character.**
 
-### Ship Statistics
+Like the Enterprise in Star Trek, the Edelweiss in Valkyria Chronicles, or the Normandy in Mass Effect - your ship has:
+- A **name** and **identity**
+- A **history** that grows with you
+- **Personality** expressed through customization
+- **Capabilities** that define your playstyle
+- **Crew** who call it home
+- **Scars** from battles survived
+- **Trophies** from victories won
 
-| Stat | Description |
-|------|-------------|
-| **Hull Integrity** | Health pool. Damaged in combat, repaired in port. |
-| **Speed** | Hexes moved per turn on strategic map. Affects combat initiative. |
-| **Maneuverability** | Turning radius in combat. Affects evasion. |
-| **Cargo Capacity** | How much loot/trade goods you can carry. |
-| **Crew Capacity** | Maximum crew size (background + bridge crew). |
-| **Armament Slots** | Number and size of weapon hardpoints. |
-| **Aetherium Tank** | Fuel capacity for special systems. |
+The ship is your second protagonist. When people speak of you, they speak of your ship.
 
-### Ship Upgrades
+### Ship Philosophy: Three Archetypes
 
-**Hull Types (Progression):**
-1. **Salvaged Sloop** - Starting vessel. Fast but fragile. 2 weapon slots.
-2. **Refitted Brigantine** - Balanced. 4 weapon slots. Small cargo.
-3. **Armored Schooner** - Tough. 4 weapon slots. Medium cargo.
-4. **War Galleon** - Massive. 8 weapon slots. Large cargo. Slow.
-5. **Hybrid Catamaran** - Fast, maneuverable, good cargo. Expensive.
+Ships aren't just stat blocks - they represent playstyles:
 
-**Systems (Modular):**
-- **Sails:** Affects speed and maneuverability
-- **Armor Plating:** Reduces incoming damage
-- **Weapons:** Cannons, railguns, harpoons, boarding systems
-- **Engine Room:** Aetherium-powered boosts
-- **Medical Bay:** Crew recovery speed
-- **Crew Quarters:** Morale and capacity bonuses
+| Archetype | Philosophy | Strengths | Weaknesses |
+|-----------|------------|-----------|------------|
+| **Raider** | Strike fast, vanish | Speed, boarding, escape | Fragile, small cargo |
+| **Trader** | Profit over glory | Cargo, range, endurance | Slow, weak weapons |
+| **Warship** | Dominate the seas | Firepower, armor, crew | Slow, expensive, conspicuous |
 
-### Ship Customization
+Every ship falls somewhere on this triangle. Customization moves you around it.
 
-Players can rename their ship and customize:
-- Sail colors/patterns
-- Figurehead
-- Hull markings
-- Trophy displays (from major victories)
+### Ship Statistics (Core)
+
+| Stat | Description | Affects |
+|------|-------------|---------|
+| **Hull Integrity** | Health pool. Your ship's life. | Survival, repair costs |
+| **Hull Class** | Size category (Sloop → Galleon) | Everything - base for all stats |
+| **Speed** | Base movement in hexes | Strategic travel, combat initiative |
+| **Maneuverability** | Turning, evasion | Combat positioning, escape |
+| **Cargo Capacity** | Tons of goods carried | Trade profit, mission loot |
+| **Crew Capacity** | Sailors + Bridge Crew | Combat effectiveness, operations |
+| **Armament Slots** | Weapon hardpoints (fore/aft/broadside) | Combat loadout options |
+| **System Slots** | Internal module capacity | Customization depth |
+| **Aetherium Tank** | Fuel for special systems | Burst speed, special weapons |
+| **Stealth Profile** | How visible/detectable | Avoiding encounters, ambush |
+
+### Ship Statistics (Derived)
+
+| Stat | Derived From | Description |
+|------|--------------|-------------|
+| **Combat Rating** | Weapons + Crew + Hull | Overall threat assessment |
+| **Trade Value** | Cargo + Speed + Range | Profit potential per voyage |
+| **Boarding Strength** | Crew + Equipment + Ship design | Effectiveness at taking ships |
+| **Survivability** | Hull + Armor + Escape options | Chance of surviving losing fight |
+
+### Hull Classes
+
+Ships come in distinct size classes. You can upgrade WITHIN a class extensively, but changing CLASS requires a new ship.
+
+| Class | Size | Crew | Cargo | Weapons | Role |
+|-------|------|------|-------|---------|------|
+| **Skiff** | Tiny | 5-10 | 5t | 1 | Scout, courier, escape craft |
+| **Sloop** | Small | 15-30 | 20t | 2-3 | Raider, fast trader |
+| **Brigantine** | Medium | 40-60 | 50t | 4-5 | Balanced, versatile |
+| **Schooner** | Medium | 50-80 | 80t | 4-6 | Fast trader, light combat |
+| **Frigate** | Large | 80-120 | 60t | 6-8 | Warship, escort |
+| **Galleon** | Huge | 150-250 | 200t | 8-12 | Heavy warship, bulk trader |
+| **Catamaran** | Medium | 40-70 | 100t | 4-6 | Fast, stable, modern design |
+| **Submarine** | Medium | 30-50 | 40t | 4 (torpedoes) | Stealth, special missions (Abyssal era) |
+
+### Ship Acquisition
+
+How you get ships:
+
+| Method | Description | Ship Condition |
+|--------|-------------|----------------|
+| **Purchase** | Buy from shipyard | New or refurbished, clean history |
+| **Capture** | Board and take enemy ship | Damaged, has history (good or bad) |
+| **Commission** | Order custom-built | Exactly to spec, expensive, takes time |
+| **Inherit** | Story/quest reward | Often legendary, comes with expectations |
+| **Salvage** | Find derelict | Heavily damaged, cheap/free, mysterious |
+
+**Ship History:** Captured and salvaged ships come with HISTORY. A ship that belonged to a famous pirate carries their reputation. A ship that massacred innocents is cursed in sailors' minds. This affects crew morale and NPC reactions.
+
+### Modular Ship Systems
+
+Every ship has SLOTS for modular systems. Larger ships have more slots.
+
+#### Propulsion Systems
+| System | Effect | Notes |
+|--------|--------|-------|
+| **Standard Sails** | Base speed | Default |
+| **Racing Sails** | +20% speed, -10% durability | Fast but fragile |
+| **Storm Sails** | -10% speed, weather immunity | Never shredded by storms |
+| **Automated Rigging** | +10% speed, -2 crew requirement | High-tech, expensive |
+| **Aetherium Booster** | Emergency +50% speed (burns fuel) | Escape or pursuit |
+
+#### Armor & Defense
+| System | Effect | Notes |
+|--------|--------|-------|
+| **No Armor** | Base hull only | Lightest, fastest |
+| **Wooden Reinforcement** | +15% hull, -5% speed | Cheap, available everywhere |
+| **Iron Plating** | +30% hull, -15% speed | Heavy but tough |
+| **Composite Armor** | +25% hull, -5% speed | Modern, expensive |
+| **Reactive Plating** | +20% hull, -50% damage from first hit | High-tech |
+
+#### Weapons (Hardpoint Systems)
+| Weapon | Range | Damage | Special |
+|--------|-------|--------|---------|
+| **Cannons** | Medium | Medium | Reliable, cheap ammo |
+| **Carronades** | Short | Very High | Devastating broadside |
+| **Long Guns** | Long | Medium | Snipe before engagement |
+| **Railgun** | Long | High | Aetherium-powered, piercing |
+| **Chain Shot** | Medium | Low | Destroys sails, cripples speed |
+| **Grapeshot** | Short | Low (hull), High (crew) | Anti-boarding prep |
+| **Harpoon Launcher** | Medium | Low | Grapple for boarding |
+| **Torpedo Tubes** | Long | Very High | Submarine only, limited ammo |
+
+#### Internal Systems
+| System | Slot Cost | Effect |
+|--------|-----------|--------|
+| **Extended Cargo Hold** | 2 | +50% cargo capacity |
+| **Armory** | 1 | +20% boarding damage |
+| **Medical Bay** | 1 | Crew heals faster, revive downed |
+| **Brig** | 1 | Hold prisoners for ransom |
+| **Navigator's Station** | 1 | +10% speed, see weather further |
+| **Hidden Compartments** | 1 | Smuggle contraband, hide from searches |
+| **Reinforced Powder Magazine** | 1 | Immune to ammo explosion crits |
+| **Luxury Quarters** | 2 | +crew morale, recruit better officers |
+| **Workshop** | 2 | Craft/repair items at sea |
+| **Diving Bell** | 2 | Access underwater salvage sites |
+| **Aetherium Refinery** | 3 | Convert raw Grav-Coral to fuel (rare) |
+
+### Ship Customization (Visual)
+
+Your ship's appearance tells your story:
+
+**Hull Appearance:**
+- Paint scheme (colors, patterns)
+- Battle damage (scars from major fights - optional to repair or keep)
+- Weathering (pristine, seasoned, battered)
+- Modifications (visible armor plating, extra rigging)
+
+**Figurehead:**
+- Unlocked through achievements, purchases, quests
+- Examples: Sea serpent, Mermaid, Storm goddess, Abstract prow
+- Some have minor gameplay effects (+1 crew morale, etc.)
+
+**Sails:**
+- Colors and patterns
+- Symbol/sigil (faction, personal, intimidating)
+- Quality appearance (new, patched, ragged)
+
+**Flags:**
+- National/faction flag
+- Personal standard
+- Signal flags
+- The black flag (declare piracy)
+
+**Trophies:**
+- Mounted on deck/hull
+- Taken from defeated enemies
+- Examples: Enemy figurehead, captured banner, mounted weapon
+- Each tells a story; crew and NPCs comment on them
+
+### Ship Naming & Legend
+
+**Ship Names:**
+- You name your ship at acquisition
+- Can rename at significant moments (major refit, new era of your career)
+- Name appears in game UI, dialogue, and world
+
+**Ship Reputation:**
+Ships build reputation independent of (but linked to) captain:
+
+| Reputation Type | How Earned | Effect |
+|-----------------|------------|--------|
+| **Feared** | Victories, destruction | Enemies may flee or surrender |
+| **Respected** | Fair dealing, skill | Better recruitment, faction standing |
+| **Cursed** | Atrocities, betrayals | Crew superstitious, hard to recruit |
+| **Lucky** | Surviving impossible odds | Crew morale bonus |
+| **Legendary** | Achieving great feats | Everyone knows your ship |
+
+**Famous Ships in Lore:**
+- *Stargazer* (Corbin Shaw's legendary vessel)
+- *ACS Sovereign* (AetherCorp flagship)
+- *Void Kraken* (First Confederation submarine)
+
+### Ship Death & Legacy
+
+When your ship is destroyed:
+- Dramatic sinking scene
+- Surviving crew evacuate (some may die)
+- You lose the ship and its customization
+- Any trophies, history, reputation - gone
+- Must acquire a new ship (captured, purchased, provided by allies)
+
+**The loss of a beloved ship should HURT.** It's losing a character.
+
+### Ship as Home (The Management Layer)
+
+Between missions, you manage your ship:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    THE SHIP SCREEN                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │   BRIDGE    │  │    DECK     │  │   CARGO     │         │
+│  │             │  │             │  │             │         │
+│  │ Navigation  │  │ Weapons     │  │ Trade goods │         │
+│  │ Ship status │  │ Crew posts  │  │ Supplies    │         │
+│  │ World map   │  │ Trophies    │  │ Contraband  │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │   QUARTERS  │  │  MEDICAL    │  │  WORKSHOP   │         │
+│  │             │  │             │  │             │         │
+│  │ Crew roster │  │ Injured     │  │ Upgrades    │         │
+│  │ Morale      │  │ Treatment   │  │ Repairs     │         │
+│  │ Assignments │  │ Supplies    │  │ Crafting    │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Each location on the ship is a management interface:**
+- **Bridge:** Navigation, ship status, strategic decisions
+- **Deck:** Weapon loadout, crew assignments, visual customization
+- **Cargo Hold:** Inventory, trade goods, smuggling
+- **Crew Quarters:** Crew management, morale, relationships
+- **Medical Bay:** Heal injured, manage supplies
+- **Workshop:** Upgrades, repairs, crafting (if equipped)
+
+### Ship Progression
+
+Your ship grows with you:
+
+| Progression Type | How It Works |
+|------------------|--------------|
+| **Upgrades** | Purchase/install better systems |
+| **Repairs** | Fix damage, can choose to keep scars |
+| **Refit** | Major overhaul - change multiple systems at once |
+| **Capture Better Ship** | Transfer crew to captured vessel |
+| **Commission New Ship** | Order custom-built at major shipyard |
+| **Legendary Status** | After major achievements, ship becomes "known" |
+
+### Ship Data Definition (For Modding)
+
+Ships are defined in JSON:
+
+```json
+{
+  "id": "ship_brigantine_standard",
+  "name": "Brigantine",
+  "class": "medium",
+  "archetype_bias": { "raider": 0.3, "trader": 0.4, "warship": 0.3 },
+
+  "base_stats": {
+    "hull": 200,
+    "speed": 8,
+    "maneuverability": 6,
+    "cargo": 50,
+    "crew_min": 25,
+    "crew_max": 60,
+    "stealth": 4
+  },
+
+  "slots": {
+    "weapon_fore": 1,
+    "weapon_broadside": 2,
+    "weapon_aft": 1,
+    "system": 4
+  },
+
+  "default_systems": [
+    "sails_standard",
+    "armor_wooden_light"
+  ],
+
+  "visuals": {
+    "model": "models/ships/brigantine.glb",
+    "figurehead_slot": true,
+    "sail_slots": 2,
+    "trophy_slots": 3
+  },
+
+  "cost": 15000,
+  "availability": ["free_ports", "aethercorp_yards"],
+  "era": ["age_of_sail", "abyssal_war"]
+}
 
 ---
 
