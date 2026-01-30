@@ -1,6 +1,6 @@
 # ABYSSAL TIDE - Game Design Document
 
-**Version:** 0.3 (Draft)
+**Version:** 0.5 (Draft)
 **Last Updated:** 2026-01-30
 **Genre:** Turn-Based Tactical Strategy / Open World
 **Platform:** PC (Godot 4.x / C#)
@@ -762,124 +762,271 @@ Ships are defined in JSON:
 
 ---
 
-## 10. Captain Creation
+## 10. Captain Creation & The Prologue
 
-### The Oracle's Cards (Ultima IV Inspiration)
+### Philosophy: Character Creation IS Gameplay
 
-Character creation happens through an in-world narrative framing: **The Oracle of Nassau** - an old woman who reads the future in cards. She asks you questions, and your answers determine who you are.
+Unlike traditional RPGs where you answer abstract questions, **ABYSSAL TIDE creates your character through play**. The prologue is simultaneously:
 
-### The Eight Virtues of the Sea
+1. **Character creation** - Your choices determine your virtues
+2. **Tutorial** - Each stage teaches a game mechanic
+3. **Origin story** - You learn how you became a captain
+4. **Relationship building** - You forge your bond with your First Mate
 
-Your answers weight eight core virtues. Your highest virtues define your starting bonuses and available dialogue options throughout the game.
+This is inspired by Ultima IV's gypsy, but instead of answering hypothetical questions, you LIVE the dilemmas with your friend at your side.
+
+### Your Friend (The Future First Mate)
+
+At the start of the game, you define two characters:
+
+**Yourself:**
+- Name
+- Appearance (gender, face, hair, skin tone)
+- Voice set
+
+**Your Friend:**
+- Name
+- Appearance
+- Personality type (affects their dialogue and reactions):
+  - **The Conscience** - Questions ruthless choices, praises mercy
+  - **The Pragmatist** - Questions idealism, praises practical choices
+  - **The Loyalist** - Supports whatever you decide, emphasizes friendship
+
+Your friend is not a blank slate - they have opinions. But they're YOUR friend. They stay with you regardless of your choices. Their reactions show you how the world might see you, but they never leave.
+
+### The Eight Virtues
+
+Your choices in the prologue build these virtue scores:
 
 | Virtue | Description | Mechanical Benefit |
 |--------|-------------|-------------------|
 | **Courage** | Facing danger without flinching | +Combat initiative, boarding bonuses |
 | **Compassion** | Caring for crew and captives | +Crew morale, healing effectiveness |
 | **Honor** | Keeping your word, fair dealing | +Faction reputation gains, parley success |
-| **Justice** | Punishing the guilty, protecting innocent | +Damage vs. pirates/slavers, defense bonuses |
+| **Justice** | Punishing the guilty, protecting innocent | +Damage vs. criminals, defense bonuses |
 | **Sacrifice** | Giving up gain for others | +Crew loyalty, reduced desertion |
-| **Honesty** | Speaking truth, keeping promises | +Trade prices, information quality |
-| **Spirituality** | Connection to the changed world | +Aetherium efficiency, navigation bonuses |
-| **Humility** | Knowing your limits, learning from others | +XP gain, crew skill sharing |
+| **Cunning** | Using wits over force | +Stealth, smuggling, escape success |
+| **Ambition** | Reaching for more | +Trade profits, recruitment options |
+| **Resilience** | Enduring hardship | +HP, survival, recovery speed |
 
-### The Seven Dilemmas
+### The Prologue: "Before the Storm"
 
-The Oracle presents seven scenarios, each forcing a choice between two virtues. There are no wrong answers - only different paths.
+**Setting:** You and your friend are crew on a merchant vessel called the *Wavecutter*. You're not captains - just skilled sailors trying to survive. Over eight stages, circumstances will transform you.
 
-**Example Dilemmas:**
+---
 
-**Dilemma 1: The Burning Ship**
-> *"A merchant vessel burns on the horizon. Her crew calls for rescue, but storm clouds gather. Do you..."*
-> - **A)** Risk the storm to save them all *(Courage vs. Prudence)*
-> - **B)** Save who you can before the storm hits *(Compassion vs. Courage)*
+#### Stage 1: The Wreck (Tutorial: Salvage/Exploration)
 
-**Dilemma 2: The Prisoner's Plea**
-> *"You've captured a corporate officer. He offers secrets for his freedom. Your crew demands justice for fallen comrades. Do you..."*
-> - **A)** Honor your crew's wishes *(Justice vs. Pragmatism)*
-> - **B)** Take the deal - information saves lives *(Honesty vs. Justice)*
+*The Wavecutter investigates a sinking ship. You and your friend are sent to salvage what you can.*
 
-**Dilemma 3: The Stolen Medicine**
-> *"A dying child needs Vita-Algae you promised to deliver elsewhere. The buyer is powerful and expects their cargo. Do you..."*
-> - **A)** Keep your contract *(Honor vs. Compassion)*
-> - **B)** Save the child *(Compassion vs. Honor)*
+**Situation:** Below decks, you find survivors trapped behind debris - but also a lockbox of valuable cargo. Water is rising. You can't save both.
 
-**Dilemma 4: The Informant**
-> *"A crew member has been selling information to AetherCorp. Confronted, they weep - their family is hostage. Do you..."*
-> - **A)** Execute them as a traitor *(Justice vs. Compassion)*
-> - **B)** Forgive and plan a rescue *(Compassion vs. Security)*
+**Friend:** "There's people back there... but that cargo could change our lives. Water's coming fast. What do we do?"
 
-**Dilemma 5: The Rival Captain**
-> *"Your greatest rival lies wounded on a captured deck. Killing them ends a threat forever. Sparing them... they might change. Do you..."*
-> - **A)** End it now *(Pragmatism vs. Mercy)*
-> - **B)** Show mercy *(Humility vs. Justice)*
+| Choice | Action | Virtue Gained |
+|--------|--------|---------------|
+| Save the survivors | Leave the cargo, rescue the trapped sailors | **Compassion** |
+| Take the cargo | Secure the valuables, the survivors are too far gone | **Ambition** |
+| Try for both | Risky - might save both, might lose everything | **Courage** |
 
-**Dilemma 6: The Secret Cargo**
-> *"Your hold contains weapons bound for rebels fighting AetherCorp. A Free Port inspector boards. Do you..."*
-> - **A)** Lie to protect the cause *(Sacrifice vs. Honesty)*
-> - **B)** Confess and face consequences *(Honesty vs. Sacrifice)*
+*[Teaches: Movement, interaction, time pressure, risk/reward]*
 
-**Dilemma 7: The Final Question**
-> *"The sea has taken everything from you once. It may again. Why do you sail?"*
-> - **A)** For wealth and freedom *(Ambition)*
-> - **B)** For revenge against those who wronged me *(Justice)*
-> - **C)** To protect those who cannot protect themselves *(Compassion)*
-> - **D)** To find the truth the corporations hide *(Spirituality)*
+---
 
-### Virtue Scores & Starting Profile
+#### Stage 2: The Stowaway (Tutorial: Dialogue/Choice)
 
-After all dilemmas:
-- Two highest virtues become your **Defining Virtues** (visible to NPCs)
+*Back on the Wavecutter, you discover a young stowaway hiding in the hold. A runaway from an AetherCorp labor platform. Corporate patrol boats are signaling to search your ship.*
+
+**Friend:** "If they find her, we're all in chains. But if we turn her over..."
+
+| Choice | Action | Virtue Gained |
+|--------|--------|---------------|
+| Hide and protect her | Risk everything to shelter the child | **Sacrifice** |
+| Turn her over | Corporate favor, no risk to ship | **Cunning** (self-preservation) |
+| Help her escape | Lower a boat, give her a chance alone | **Compassion** |
+
+*[Teaches: Dialogue trees, faction reputation consequences]*
+
+---
+
+#### Stage 3: The Storm (Tutorial: Ship Management)
+
+*A massive storm hits. The captain freezes. Someone has to give orders or the ship goes down.*
+
+**Friend:** "Captain's useless. Crew's looking at us. Do we take over or..."
+
+| Choice | Action | Virtue Gained |
+|--------|--------|---------------|
+| Take command | Step up, give orders, save the ship | **Courage** |
+| Support the captain | Try to help them function, share the burden | **Honor** |
+| Rally the crew | Get everyone working together, no single leader | **Humility** |
+
+*[Teaches: Ship systems, crew management, emergency decisions]*
+
+---
+
+#### Stage 4: The Mutiny (Tutorial: Combat Basics)
+
+*After the storm, tensions explode. A faction of the crew wants to take the ship. The captain is held at knifepoint. Violence is inevitable.*
+
+**Friend:** "This is it. Which side are we on?"
+
+| Choice | Action | Virtue Gained |
+|--------|--------|---------------|
+| Defend the captain | Fight the mutineers, restore order | **Honor** |
+| Join the mutiny | The captain nearly killed us all, time for change | **Justice** |
+| Try to negotiate | Step between, find a middle ground | **Compassion** |
+
+*[Teaches: Basic combat, positioning, resolving conflict]*
+
+---
+
+#### Stage 5: The Aftermath (Tutorial: Trade/Economy)
+
+*The mutiny is over. The Wavecutter limps into a Free Port for repairs. You have cargo to sell, but the port is full of desperate refugees who need medicine you're carrying.*
+
+**Friend:** "We could sell to the highest bidder. Or... those people need help. What do we do?"
+
+| Choice | Action | Virtue Gained |
+|--------|--------|---------------|
+| Sell to the highest bidder | Maximize profit, it's just business | **Ambition** |
+| Give to the refugees | They need it more than we need money | **Sacrifice** |
+| Sell at fair price to refugees | Balance compassion with practicality | **Honor** |
+
+*[Teaches: Trading, economy, reputation effects]*
+
+---
+
+#### Stage 6: The Prisoner (Tutorial: Boarding/Tactical Combat)
+
+*Pirates attack the Wavecutter. During the desperate fight, you capture their leader. He has information that could lead to their hidden base - and their treasure.*
+
+**Friend:** "He knows where they keep their loot. But he won't talk easy. What do we do?"
+
+| Choice | Action | Virtue Gained |
+|--------|--------|---------------|
+| Interrogate harshly | Do what's necessary to get answers | **Cunning** |
+| Offer a deal | His freedom for the information | **Cunning** |
+| Hand him to authorities | Let the law handle it | **Justice** |
+| Let him go | We're not torturers or jailers | **Compassion** |
+
+*[Teaches: Boarding combat, prisoner mechanics, moral weight]*
+
+---
+
+#### Stage 7: The Captain Falls (Tutorial: Naval Combat)
+
+*Another attack - AetherCorp this time, hunting the stowaway you helped (or the pirates seeking revenge, or authorities for your choices). In the battle, the captain is killed.*
+
+**Friend:** "Captain's dead. Ship's in chaos. Crew's looking at YOU."
+
+**[Naval combat plays out - player commands the defense]**
+
+*After the battle, surviving crew gathers.*
+
+| Choice | Action | Virtue Gained |
+|--------|--------|---------------|
+| Claim command | "I'll lead us. Follow me." | **Ambition** + **Courage** |
+| Suggest your friend | "They should lead. I'll support them." | **Humility** |
+| Call for a vote | "We decide together who leads." | **Justice** |
+
+*Your friend refuses command if offered:* "No. I saw you in that fight. The crew saw you. This is YOUR ship now. I'm with you - but I'm not the captain. You are."
+
+*[Teaches: Naval combat, command decisions]*
+
+---
+
+#### Stage 8: The Naming (Character Finalization)
+
+*The Wavecutter is yours now. Battered, scarred, but seaworthy. Your friend stands beside you on the deck. The crew waits.*
+
+**Friend:** "She's yours now. Ours. But she needs a new name - a new beginning. What do we call her?"
+
+*[Player names the ship]*
+
+**Friend:** "[Ship name]. I like it. So, Captain... where do we sail?"
+
+**You:** *[Player chooses starting region on map]*
+
+**Friend:** "Then let's see what's out there. Together."
+
+*[End of Prologue - Game begins properly]*
+
+---
+
+### Virtue Results
+
+After the prologue, your virtue scores are tallied:
+
+- **Two highest virtues** become your **Defining Virtues**
 - These unlock unique dialogue options throughout the game
-- Starting crew members have compatible/conflicting virtues
-- Some story paths require specific virtue thresholds
+- They affect how NPCs perceive you initially
+- They determine your starting **Captain Ability**
 
-**Example Starting Profiles:**
+**Example Profiles Based on Choices:**
 
-| Profile | Primary Virtues | Starting Bonus | Ship Name Suggestion |
-|---------|-----------------|----------------|----------------------|
-| **The Protector** | Compassion + Sacrifice | +1 Surgeon crew, healing items | *Mercy's Hand* |
-| **The Avenger** | Justice + Courage | +1 Cutlass crew, weapon upgrade | *Retribution* |
-| **The Seeker** | Spirituality + Honesty | +Navigator, chart of hidden location | *Truth's Wake* |
-| **The Merchant** | Humility + Honor | +Starting doubloons, trade contacts | *Fair Dealing* |
+| Profile | Primary Virtues | Captain Ability | Ship Name Tendency |
+|---------|-----------------|-----------------|-------------------|
+| **The Protector** | Compassion + Sacrifice | *Rally the Fallen* | Mercy-themed |
+| **The Avenger** | Justice + Courage | *Mark for Death* | Vengeance-themed |
+| **The Opportunist** | Ambition + Cunning | *Read the Angles* | Fortune-themed |
+| **The Survivor** | Resilience + Courage | *Against All Odds* | Endurance-themed |
 
-### Visual Character Creation
+### Your First Mate
 
-After the Oracle determines your virtues, you customize appearance:
+Your friend emerges from the prologue as your **First Mate** - not because you recruited them, but because you survived together. They know exactly who you are because they watched you become it.
 
-**Basic Customization:**
-- Gender (affects nothing mechanically)
-- Skin tone
-- Hair style/color
-- Facial features
-- Scars/tattoos (can add more as game progresses)
-- Voice set (for combat barks)
+**First Mate Role:**
+- Permanent Bridge Crew member (cannot be dismissed)
+- Cannot die (if defeated, captured - triggers rescue mission)
+- Gives advice based on their personality type
+- Comments on your choices, remembering the prologue
+- Has their own skill progression and abilities
+- Romance option (optional, player choice)
 
-**Name:**
-- Enter captain's name
-- Title options unlock based on virtue profile
+**First Mate in Combat:**
+- Always available for deployment
+- Specialization based on their personality type:
+  - Conscience → Surgeon/Support
+  - Pragmatist → Quartermaster/Utility
+  - Loyalist → Player's choice during prologue
 
 ### The Captain as a Unit
 
 Your captain is a Bridge Crew member who:
 - **Cannot die** (defeat = captured, rescue mission required)
-- Starts at Level 5 (ahead of other crew)
-- Has unique **Captain-only abilities** based on virtues
-- Must participate in boarding actions (can sit out land missions)
-- Virtue scores can shift based on in-game choices
+- Starts at Level 3 (after prologue experience)
+- Has unique **Captain Ability** based on defining virtues
+- Must participate in boarding actions (can sit out some land missions)
+- Virtue scores can shift based on ongoing choices
 
-### Captain-Only Abilities (Examples)
+### Captain Abilities (Based on Defining Virtues)
 
-| Virtue | Ability | Effect |
-|--------|---------|--------|
-| **Courage** | *Into the Breach* | Captain boards first, grants +2 initiative to party |
-| **Compassion** | *Rally the Fallen* | Revive downed ally once per mission |
-| **Honor** | *Parley* | Force conversation before combat (chance to avoid fight) |
-| **Justice** | *Mark for Death* | Target enemy takes +50% damage from all sources |
-| **Sacrifice** | *Take the Blow* | Intercept attack meant for adjacent ally |
-| **Honesty** | *Read Intentions* | See enemy planned actions for one turn |
-| **Spirituality** | *Sea's Blessing* | Party gains +20% accuracy for 3 turns |
-| **Humility** | *Learn from Failure* | Missed attacks grant +10% to next attack |
+| Virtue Pair | Ability | Effect |
+|-------------|---------|--------|
+| Courage + Justice | *Into the Breach* | First to board, +2 initiative to party |
+| Compassion + Sacrifice | *Rally the Fallen* | Revive downed ally once per mission |
+| Honor + Compassion | *Parley* | Force conversation before combat |
+| Justice + Cunning | *Mark for Death* | Target takes +50% damage |
+| Sacrifice + Courage | *Take the Blow* | Intercept attack meant for ally |
+| Cunning + Ambition | *Read the Angles* | See enemy planned actions |
+| Resilience + Courage | *Against All Odds* | +50% defense when below 25% HP |
+| Humility + Compassion | *Shared Strength* | Adjacent allies share healing |
+
+### Visual Customization
+
+**At Prologue Start:**
+- Gender (affects nothing mechanically)
+- Skin tone
+- Face shape (5-6 options)
+- Hair style/color
+- Starting outfit
+
+**After Prologue (unlocks over time):**
+- Scars (from battles survived)
+- Tattoos (from ports visited)
+- Captain's coat/hat (purchased or earned)
+- Trophies worn (from victories)
 
 ---
 
@@ -2198,41 +2345,203 @@ Planned features:
 
 ## 19. Base Game Content
 
-The base game ships with a single complete campaign to demonstrate all engine features. Additional campaigns (novel adaptations) release as official DLC/mods.
+### MVP vs Full Game
 
-### Launch Campaign: "Abyssal Tide"
+The game releases in stages. The MVP is a complete, polished experience - not a demo.
 
-**Era:** Early Abyssal War (~2085)
-**Protagonist Mode:** Created (Oracle system)
-**Scope:** Full Caribbean, ~30 hours main story
+| Aspect | MVP | Full Game |
+|--------|-----|-----------|
+| **Map Size** | ~100 hexes, 1 region | 500+ hexes, full Caribbean |
+| **Ports** | 3-4 | 20+ |
+| **Story Length** | 8-12 hours | 30+ hours |
+| **Ships Available** | 3 hull classes | 8+ hull classes |
+| **Jobs** | Tier 1 only (3 jobs) | All 3 tiers (9+ jobs) |
+| **Endings** | 2 | Multiple branches |
 
-**Premise:** You're a small-time captain who stumbles into the cold war between AetherCorp and the Trident Confederation. Both sides want you - as an asset or eliminated. Choose your path.
+---
 
-**Features Demonstrated:**
-- All combat systems (naval, land, boarding)
-- Full job system
-- Ship upgrades
-- Faction reputation
-- Multiple endings
+### MVP Campaign: "The Gray Tide"
+
+**Era:** Book 7 (~2085) - The Abyssal War
+**Timeline Position:** Side story during *The Kraken Project*
+**Relationship to Novels:** Canonical but separate - your story, not Shaw's
+
+#### The Complete MVP Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PROLOGUE: "Before the Storm" (Character Creation)          │
+│  8 stages with your friend, choices shape your virtues      │
+│  End: You become captain, friend becomes First Mate         │
+│  You name your ship                                         │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  ACT 1: "Small Fish"                                        │
+│  Your small ship in the Shattered Isles (tutorial region)   │
+│  Learn: Trading, navigation, minor encounters               │
+│  Goal: Make enough to survive, establish yourself           │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  THE ENCOUNTER: Corbin Shaw finds you                       │
+│  The legendary captain needs something done quietly         │
+│  He can't use Confederation ships - too visible             │
+│  He offers a job: [THE TASK]                                │
+│  You can refuse (game continues, harder path)               │
+│  Or accept (main story path)                                │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  ACT 2: "Shaw's Task" (Core MVP Content)                    │
+│                                                             │
+│  The task requires:                                         │
+│  • TRADE: Acquire specific cargo as cover story             │
+│  • NAVAL: Evade or fight AetherCorp patrols                 │
+│  • LAND: Infiltrate a location to [objective]               │
+│  • CHOICE: Moral gray area - what Shaw asked isn't clean    │
+│                                                             │
+│  You learn WHY Shaw needed this done                        │
+│  You learn something about the larger war                   │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  ACT 3: "Consequences"                                      │
+│                                                             │
+│  Completing the task draws attention:                       │
+│  • AetherCorp knows someone helped Shaw                     │
+│  • Other factions are curious about you                     │
+│  • You have information/cargo that's valuable               │
+│                                                             │
+│  Final choice:                                              │
+│  • HELP SHAW: Deliver the goods, become a secret ally       │
+│  • SELL OUT: Take AetherCorp's offer (they found you)       │
+│  • WALK AWAY: Try to disappear with what you have           │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  ENDING                                                     │
+│                                                             │
+│  Based on your choice:                                      │
+│  • SHAW PATH: You're now part of something bigger           │
+│  • CORP PATH: You have power, but at what cost?             │
+│  • INDEPENDENT: You're free, but alone and hunted           │
+│                                                             │
+│  All endings: "Your name means something now..."            │
+│  Cliffhanger: The larger war is just beginning              │
+│  "To be continued..."                                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Shaw's Task (The Core Mission)
+
+The specific task should be morally gray - something that:
+- Serves a good cause (ultimately)
+- Requires questionable methods
+- Could be interpreted multiple ways
+- Has consequences for innocent people
+
+**Example Task Options:**
+
+| Task | The Ask | The Gray |
+|------|---------|----------|
+| **The Defector** | Extract an AetherCorp scientist | She has family still inside who'll suffer |
+| **The Evidence** | Steal data proving AetherCorp crimes | The facility also houses civilian workers |
+| **The Cargo** | Deliver weapons to resistance | Those weapons will kill people |
+| **The Message** | Assassinate a corporate commander | He's brutal, but his replacement might be worse |
+
+*[Specific task TBD based on narrative development]*
+
+#### MVP Scope Details
+
+**Map: The Shattered Isles**
+- A fictional archipelago in the southern Caribbean
+- ~100 sea hexes
+- 3-4 ports:
+  - **Haven** (Free Port - neutral, starting area)
+  - **Ironhull** (AetherCorp outpost - hostile/cautious)
+  - **Drift** (Pirate haven - rough but free)
+  - **The Bones** (Ruins - salvage site)
+
+**Ships Available:**
+- **Sloop** (starting class) - Fast, fragile, small crew
+- **Brigantine** (upgrade) - Balanced, more weapons
+- **Schooner** (upgrade) - Fast trader, good cargo
+
+**Enemies:**
+- AetherCorp patrol boats
+- AetherCorp marine squads (land)
+- Generic pirates (early game threats)
+- Corporate security (land missions)
+
+**Bridge Crew (MVP):**
+- Your First Mate (from prologue)
+- 2-3 recruitable characters in the Isles
+- Max roster: 5-6 for MVP
+
+**Jobs (MVP):**
+- Tier 1 only: Cutlass, Marksman, Sailor
+- 5-6 abilities each
+- Enough depth to demonstrate the system
+
+---
+
+### Full Game Campaign: "Abyssal Tide"
+
+**Era:** Book 7-8 (~2085-2090)
+**Scope:** Full Caribbean, 30+ hours
+**Structure:** MVP story continues + expands
+
+The full game:
+- Continues from MVP ending
+- Opens up the full Caribbean map
+- Introduces more factions, characters, complexity
+- Multiple major story arcs
+- The Kraken Project events in background
+- Player can influence the larger war
+
+---
 
 ### Future Official Campaigns (DLC)
 
-| Campaign | Novel | Era | Unique Features |
-|----------|-------|-----|-----------------|
-| The Coral Crown | Book 4 | 2055 | Play as young Corbin Shaw |
-| The Broken Bridge | Book 5 | 2060s | Canal guerilla warfare |
-| The Trident Pact | Book 6 | 2076 | Political/diplomatic focus |
-| The Kraken Project | Book 7 | 2080s | Submarine introduction |
-| The Serpent's Passage | Book 8 | 2090s | Full submarine gameplay |
-| Abyssal Dawn | Book 9 | 2100 | Endgame content |
+Each novel becomes an official campaign mod:
+
+| Campaign | Novel | Era | Protagonist | Unique Features |
+|----------|-------|-----|-------------|-----------------|
+| The Coral Crown | Book 4 | 2055 | New captain (Shaw is NPC) | Discovery era, no Confederation |
+| The Broken Bridge | Book 5 | 2060s | New captain | Canal guerilla warfare |
+| The Trident Pact | Book 6 | 2076 | New captain | Political focus, forming Confederation |
+| The Kraken Project | Book 7 | 2080s | New captain | Submarine introduction |
+| The Serpent's Passage | Book 8 | 2090s | New captain | Full submarine gameplay |
+| Abyssal Dawn | Book 9 | 2100 | New captain | Endgame content, final war |
+
+**Note:** In novel campaigns, you play a NEW captain in that era - not the novel protagonists. Shaw and other novel characters are NPCs you encounter. This keeps the player as the hero while staying true to the novels.
+
+---
 
 ### Modding Community Vision
 
-The tools and API we ship allow community to create:
-- New campaigns (original stories)
-- New time periods (pre-collapse, far future)
+The same tools we use to build official campaigns are available to modders:
+
+**Community Can Create:**
+- New campaigns (original stories in the universe)
+- New time periods (pre-collapse survival, far future)
+- Alternate history (what if the Canal never fell?)
 - Total conversions (different settings entirely)
-- Additional content for official campaigns
+- Additional content for official campaigns (side quests, characters)
+
+**We Provide:**
+- Full campaign editor
+- Character/ship/item definition tools
+- Dialogue tree editor
+- Mission builder
+- Documentation and tutorials
+- Curated mod showcase
 
 ---
 
@@ -2336,4 +2645,6 @@ The tools and API we ship allow community to create:
 | 0.1 | 2026-01-30 | Initial draft |
 | 0.2 | 2026-01-30 | Added Captain Creation (Ultima IV-style virtues), Job & Ability System (FFT-style), Modding Architecture |
 | 0.3 | 2026-01-30 | Major restructure: Engine Philosophy, Canonical Lore (9-book novel series), Campaign & Story Engine, "Build the Engine, Not the Things" approach |
+| 0.4 | 2026-01-30 | Ship as Character (deep customization, ship reputation, ship death matters), clarified Shaw is NOT First Mate but legendary figure |
+| 0.5 | 2026-01-30 | Complete Prologue system replacing Oracle - character creation through gameplay with your friend (future First Mate). Defined MVP: "The Gray Tide" campaign with Shaw encounter and singular task. |
 
