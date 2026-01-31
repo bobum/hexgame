@@ -4,7 +4,8 @@ render_mode cull_disabled, blend_mix, depth_draw_always;
 // Water shore shader - Catlike Coding Hex Map Tutorial 8
 // UV.y = shore distance: 0 at water, 1 at land
 
-uniform vec4 water_color : source_color = vec4(0.2, 0.5, 0.8, 0.5);
+// Caribbean turquoise water
+uniform vec4 water_color : source_color = vec4(0.15, 0.55, 0.75, 0.6);
 uniform sampler2D noise_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
 
 // Hex metrics for tiling scale

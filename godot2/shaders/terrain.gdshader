@@ -4,6 +4,7 @@ shader_type spatial;
 // Implements splat mapping with texture array for hex terrain
 // Ported from Catlike Coding Hex Map Tutorial 14
 // Tutorial 15: Added grid overlay support
+// Caribbean Theme: Updated colors and added roughness variation
 
 // Terrain texture array containing all terrain types
 // Index 0 = sand, 1 = grass, 2 = mud, 3 = stone, 4 = snow
@@ -16,12 +17,19 @@ uniform bool show_grid = false;
 // Flag to use textures or fallback to colors
 uniform bool use_textures = false;
 
-// Fallback colors for each terrain type (when textures not available)
-uniform vec3 color_sand = vec3(0.93, 0.87, 0.73);   // Index 0
-uniform vec3 color_grass = vec3(0.4, 0.7, 0.3);    // Index 1
-uniform vec3 color_mud = vec3(0.5, 0.4, 0.3);      // Index 2
-uniform vec3 color_stone = vec3(0.6, 0.6, 0.6);    // Index 3
-uniform vec3 color_snow = vec3(0.95, 0.95, 0.95);  // Index 4
+// Caribbean color palette for each terrain type
+uniform vec3 color_sand = vec3(0.96, 0.91, 0.76);   // Index 0 - Warm beach sand
+uniform vec3 color_grass = vec3(0.35, 0.65, 0.30);  // Index 1 - Lush tropical green
+uniform vec3 color_mud = vec3(0.45, 0.35, 0.25);    // Index 2 - Rich earth
+uniform vec3 color_stone = vec3(0.55, 0.52, 0.48);  // Index 3 - Volcanic gray
+uniform vec3 color_snow = vec3(0.95, 0.88, 0.82);   // Index 4 - Coral/white sand
+
+// Per-terrain roughness (0 = shiny/wet, 1 = rough/matte)
+uniform float roughness_sand = 0.85;   // Dry granular sand
+uniform float roughness_grass = 0.70;  // Leafy vegetation
+uniform float roughness_mud = 0.40;    // Wet = more reflective
+uniform float roughness_stone = 0.65;  // Rocky surface
+uniform float roughness_snow = 0.50;   // Smooth coral sand
 
 // Scale for world-space UV coordinates (smaller = larger textures)
 uniform float texture_scale : hint_range(0.001, 0.1) = 0.02;
@@ -41,6 +49,16 @@ vec3 get_terrain_color(float index) {
     if (i == 2) return color_mud;
     if (i == 3) return color_stone;
     return color_snow; // Index 4 or fallback
+}
+
+// Get roughness for a terrain type index
+float get_terrain_roughness(float index) {
+    int i = int(index + 0.5); // Round to nearest int
+    if (i == 0) return roughness_sand;
+    if (i == 1) return roughness_grass;
+    if (i == 2) return roughness_mud;
+    if (i == 3) return roughness_stone;
+    return roughness_snow; // Index 4 or fallback
 }
 
 void vertex() {
@@ -101,5 +119,13 @@ void fragment() {
         blended = blended * grid.rgb;
     }
 
+    // Calculate blended roughness from terrain types
+    float r1 = get_terrain_roughness(terrain_indices.x);
+    float r2 = get_terrain_roughness(terrain_indices.y);
+    float r3 = get_terrain_roughness(terrain_indices.z);
+    float blended_roughness = r1 * splat.r + r2 * splat.g + r3 * splat.b;
+
     ALBEDO = blended;
+    ROUGHNESS = blended_roughness;
+    METALLIC = 0.0;
 }

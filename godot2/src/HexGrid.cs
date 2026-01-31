@@ -86,6 +86,11 @@ public partial class HexGrid : Node3D
     private MeshInstance3D? _endHighlight;
     private List<MeshInstance3D> _pathHighlights = new();
 
+    // Hover highlight - Yellow outline for cell under mouse cursor
+    private MeshInstance3D? _hoverHighlight;
+    private HexCell? _hoveredCell;
+    private GameUI? _gameUI;
+
     // Tutorial 16: Cached hex mesh and material for highlights (shared across instances)
     private static ArrayMesh? _hexHighlightMesh;
     private static ShaderMaterial? _highlightBaseMaterial;
@@ -270,6 +275,17 @@ public partial class HexGrid : Node3D
         _terrainRenderer.Build();
 
         GD.Print($"[HexGrid] Terrain renderer initialized with {_terrainRenderer.GetTotalChunkCount()} chunks");
+
+        // Create hover highlight (yellow outline)
+        _hoverHighlight = CreateHighlightHex(new Color(1.0f, 0.9f, 0.2f)); // Yellow
+        AddChild(_hoverHighlight);
+
+        // Find GameUI for hover info display
+        _gameUI = GetTree().Root.FindChild("GameUI", true, false) as GameUI;
+        if (_gameUI == null)
+        {
+            GD.Print("[HexGrid] GameUI not found - hover info won't display in panel");
+        }
     }
 
     public override void _Process(double delta)
@@ -279,6 +295,84 @@ public partial class HexGrid : Node3D
         {
             _terrainRenderer.UpdateVisibility(_mainCamera);
         }
+
+        // Update hover highlight based on mouse position
+        UpdateHover();
+    }
+
+    /// <summary>
+    /// Updates the hover highlight to show the cell under the mouse cursor.
+    /// </summary>
+    private void UpdateHover()
+    {
+        if (_mainCamera == null || _hoverHighlight == null)
+            return;
+
+        var mousePos = GetViewport().GetMousePosition();
+        var from = _mainCamera.ProjectRayOrigin(mousePos);
+        var dir = _mainCamera.ProjectRayNormal(mousePos);
+        var to = from + dir * 2000f;
+
+        var spaceState = GetWorld3D().DirectSpaceState;
+        var query = PhysicsRayQueryParameters3D.Create(from, to);
+        var result = spaceState.IntersectRay(query);
+
+        if (result.Count == 0)
+        {
+            // No hit - hide hover and clear UI
+            if (_hoveredCell != null)
+            {
+                _hoveredCell = null;
+                _hoverHighlight.Visible = false;
+                _gameUI?.ClearHoveredHex();
+            }
+            return;
+        }
+
+        Vector3 hitPos = (Vector3)result["position"];
+        HexCell? cell = GetCell(hitPos);
+
+        if (cell == null)
+        {
+            if (_hoveredCell != null)
+            {
+                _hoveredCell = null;
+                _hoverHighlight.Visible = false;
+                _gameUI?.ClearHoveredHex();
+            }
+            return;
+        }
+
+        // Only update if hovering a different cell
+        if (cell != _hoveredCell)
+        {
+            _hoveredCell = cell;
+
+            // Position the hover highlight
+            Vector3 cellPos = cell.Position;
+            _hoverHighlight.GlobalPosition = new Vector3(cellPos.X, cellPos.Y + 0.15f, cellPos.Z);
+            _hoverHighlight.Visible = true;
+
+            // Update UI with cell info
+            string terrainName = GetTerrainName(cell.TerrainTypeIndex);
+            _gameUI?.SetHoveredHex(cell.Coordinates.X, cell.Coordinates.Z, terrainName);
+        }
+    }
+
+    /// <summary>
+    /// Gets the display name for a terrain type index.
+    /// </summary>
+    private static string GetTerrainName(int terrainIndex)
+    {
+        return terrainIndex switch
+        {
+            0 => "Sand",
+            1 => "Grass",
+            2 => "Mud",
+            3 => "Stone",
+            4 => "Snow",
+            _ => "Unknown"
+        };
     }
 
     /// <summary>

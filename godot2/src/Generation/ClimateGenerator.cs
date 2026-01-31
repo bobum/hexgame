@@ -217,10 +217,16 @@ public class ClimateGenerator
     /// <returns>TerrainTypeIndex: 0=Sand, 1=Grass, 2=Mud, 3=Stone, 4=Snow</returns>
     private static int GetBiome(int elevation, float moisture)
     {
-        // Underwater cells - use sand (will be covered by water anyway)
+        // Underwater cells - use mud (ocean floor)
         if (elevation < GenerationConfig.WaterLevel)
         {
-            return 0; // Sand (underwater)
+            return 2; // Mud (underwater/ocean floor)
+        }
+
+        // Beach level - cells at water level are sandy beaches
+        if (elevation == GenerationConfig.WaterLevel)
+        {
+            return 0; // Sand (beach)
         }
 
         // Very high elevation - snow

@@ -4,7 +4,8 @@ render_mode cull_disabled, blend_mix, depth_draw_always;
 // River shader - Catlike Coding Hex Map Tutorial 6
 // Uses UV for flow animation
 
-uniform vec4 water_color : source_color = vec4(0.2, 0.5, 0.8, 0.5);
+// Caribbean river water - slightly more green than ocean
+uniform vec4 water_color : source_color = vec4(0.12, 0.50, 0.65, 0.55);
 uniform sampler2D noise_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
 
 // River function - direct port from Water.cginc

@@ -75,10 +75,6 @@ public partial class HexMapEditor : Node3D
         {
             switch (key.Keycode)
             {
-                case Key.Space:
-                    // Generate new map with random seed
-                    GenerateMap(0);
-                    break;
                 case Key.G:
                     // Regenerate with same seed (for debugging)
                     GenerateMap(_lastSeed);
