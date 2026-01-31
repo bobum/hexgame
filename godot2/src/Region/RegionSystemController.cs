@@ -196,6 +196,10 @@ public partial class RegionSystemController : Node
         // Save updated world map
         await SaveWorldMapAsync();
 
+        // Refresh map UI if it's open
+        _mapUI?.RefreshIfVisible();
+
+        GD.Print($"[RegionSystemController] Added region '{name}' to world");
         return entry;
     }
 
@@ -206,6 +210,7 @@ public partial class RegionSystemController : Node
     {
         if (_worldMap == null || _regionManager == null || _travelUI == null)
         {
+            GD.PrintErr("[RegionSystemController] Travel failed: system not initialized");
             return false;
         }
 
@@ -224,25 +229,62 @@ public partial class RegionSystemController : Node
             return false;
         }
 
+        GD.Print($"[RegionSystemController] Starting travel from '{fromEntry.Name}' to '{toEntry.Name}'");
+        GD.Print($"[RegionSystemController] Target file: {toEntry.FilePath}");
+
+        // Check if region file exists
+        var fullPath = _regionManager.GetRegionPath(toEntry.FilePath);
+        if (!_regionManager.RegionFileExists(toEntry.FilePath))
+        {
+            GD.PrintErr($"[RegionSystemController] Region file not found: {fullPath}");
+            return false;
+        }
+
         // Close map if open
         _mapUI?.Hide();
 
-        // Show travel UI and load region
-        await _travelUI.ShowTravelAsync(fromEntry, toEntry, async () =>
+        // Set up progress handler (store reference for cleanup)
+        void OnProgress(string stage, float progress)
         {
-            // Update travel UI progress based on region manager signals
-            _regionManager.RegionProgress += (stage, progress) =>
+            _travelUI?.UpdateProgress(stage, progress);
+        }
+        _regionManager.RegionProgress += OnProgress;
+
+        bool loadSuccess = false;
+        try
+        {
+            // Show travel UI and load region
+            await _travelUI.ShowTravelAsync(fromEntry, toEntry, async () =>
             {
-                _travelUI.UpdateProgress(stage, progress);
-            };
+                try
+                {
+                    return await _regionManager.LoadAndApplyRegionAsync(toEntry.FilePath, saveCurrentFirst: true);
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"[RegionSystemController] Load failed: {ex.Message}");
+                    return false;
+                }
+            });
 
-            return await _regionManager.LoadAndApplyRegionAsync(toEntry.FilePath, saveCurrentFirst: true);
-        });
+            // Check if travel was cancelled
+            if (_travelUI.Visible)
+            {
+                GD.Print("[RegionSystemController] Travel was cancelled");
+                return false;
+            }
 
-        // Check if travel was cancelled
-        if (_travelUI.Visible)
+            loadSuccess = true;
+        }
+        finally
         {
-            return false; // Still showing means it was cancelled or failed
+            // Always unsubscribe from progress events
+            _regionManager.RegionProgress -= OnProgress;
+        }
+
+        if (!loadSuccess)
+        {
+            return false;
         }
 
         // Update world map state

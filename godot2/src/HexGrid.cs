@@ -303,7 +303,8 @@ public partial class HexGrid : Node3D
 
         if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
         {
-            if (keyEvent.Keycode == Key.L)
+            // Shift+L toggles cell labels (L alone is used by Region System)
+            if (keyEvent.Keycode == Key.L && keyEvent.ShiftPressed)
             {
                 _labelsVisible = !_labelsVisible;
                 ShowUI(_labelsVisible);

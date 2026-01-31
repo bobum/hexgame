@@ -321,16 +321,37 @@ public partial class RegionManager : Node
         try
         {
             var path = GetRegionPath(filename);
+            GD.Print($"[RegionManager] Loading region from: {path}");
+
+            // Check if file exists first
+            if (!RegionFileExists(filename))
+            {
+                GD.PrintErr($"[RegionManager] Region file not found: {path}");
+                EmitSignal(SignalName.RegionError, $"File not found: {filename}");
+                return null;
+            }
+
             EmitSignal(SignalName.RegionLoading, filename);
 
             var region = await _serializer.LoadAsync(path, _operationCts.Token);
 
             if (region != null)
             {
-                GD.Print($"[RegionManager] Loaded region '{region.Name}' from {path}");
+                GD.Print($"[RegionManager] Loaded region '{region.Name}' ({region.Width}x{region.Height}) from {path}");
+            }
+            else
+            {
+                GD.PrintErr($"[RegionManager] Failed to deserialize region from {path}");
+                EmitSignal(SignalName.RegionError, "Failed to deserialize region file");
             }
 
             return region;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[RegionManager] Load exception: {ex.Message}");
+            EmitSignal(SignalName.RegionError, ex.Message);
+            return null;
         }
         finally
         {
