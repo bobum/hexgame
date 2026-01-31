@@ -22,20 +22,19 @@ public static class RenderingConfig
     /// Distance threshold for switching from HIGH to MEDIUM detail.
     /// Below this distance, full terrain detail with terraces is shown.
     /// </summary>
-    public const float LodHighToMedium = 400.0f;
+    public const float LodHighToMedium = 1000.0f;
 
     /// <summary>
     /// Distance threshold for switching from MEDIUM to LOW detail.
     /// Below this distance, flat hexagons are shown.
     /// </summary>
-    public const float LodMediumToLow = 800.0f;
+    public const float LodMediumToLow = 2000.0f;
 
     /// <summary>
     /// Maximum distance at which chunks are rendered.
     /// Chunks beyond this distance are culled entirely.
-    /// Fog (800) fully obscures before this distance, hiding geometry cutoff.
     /// </summary>
-    public const float MaxRenderDistance = 1500.0f;
+    public const float MaxRenderDistance = 4000.0f;
 
     #endregion
 
@@ -43,15 +42,15 @@ public static class RenderingConfig
 
     /// <summary>
     /// Default distance at which fog begins.
-    /// Set to match where HIGH LOD transitions to MEDIUM (300 units).
+    /// Set beyond normal view distance for clear gameplay.
     /// </summary>
-    public const float DefaultFogNear = 300.0f;
+    public const float DefaultFogNear = 1500.0f;
 
     /// <summary>
     /// Default distance at which fog is fully opaque.
-    /// Set to match max render distance so fog hides geometry cutoff.
+    /// Set before max render distance to hide geometry cutoff.
     /// </summary>
-    public const float DefaultFogFar = 800.0f;
+    public const float DefaultFogFar = 3000.0f;
 
     /// <summary>
     /// Default fog density (0-1). Visible tropical haze.
@@ -71,12 +70,12 @@ public static class RenderingConfig
     /// <summary>
     /// Minimum fog far distance for UI slider.
     /// </summary>
-    public const float FogFarMin = 200.0f;
+    public const float FogFarMin = 500.0f;
 
     /// <summary>
     /// Maximum fog far distance for UI slider.
     /// </summary>
-    public const float FogFarMax = 1500.0f;
+    public const float FogFarMax = 5000.0f;
 
     #endregion
 
@@ -127,13 +126,15 @@ public static class RenderingConfig
 
     /// <summary>
     /// Default map width in cells.
+    /// Per GDD: Island regions are ~200x200 hexes.
     /// </summary>
-    public const int DefaultMapWidth = 32;
+    public const int DefaultMapWidth = 200;
 
     /// <summary>
     /// Default map height in cells.
+    /// Per GDD: Island regions are ~200x200 hexes.
     /// </summary>
-    public const int DefaultMapHeight = 32;
+    public const int DefaultMapHeight = 200;
 
     /// <summary>
     /// Minimum map width.
@@ -143,7 +144,7 @@ public static class RenderingConfig
     /// <summary>
     /// Maximum map width.
     /// </summary>
-    public const int MaxMapWidth = 80;
+    public const int MaxMapWidth = 500;
 
     /// <summary>
     /// Minimum map height.
@@ -153,7 +154,7 @@ public static class RenderingConfig
     /// <summary>
     /// Maximum map height.
     /// </summary>
-    public const int MaxMapHeight = 60;
+    public const int MaxMapHeight = 500;
 
     #endregion
 }

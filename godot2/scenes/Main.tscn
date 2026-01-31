@@ -36,8 +36,8 @@ fog_sky_affect = 0.8
 
 [node name="HexGrid" type="Node3D" parent="."]
 script = ExtResource("1_hexgrid")
-ChunkCountX = 10
-ChunkCountZ = 8
+ChunkCountX = -1
+ChunkCountZ = -1
 CellPrefab = ExtResource("4_cellprefab")
 CellLabelPrefab = ExtResource("5_labelprefab")
 HexMaterial = SubResource("ShaderMaterial_1")

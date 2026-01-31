@@ -10,8 +10,10 @@ using HexGame.Rendering;
 /// </summary>
 public partial class HexGrid : Node3D
 {
-    [Export] public int ChunkCountX = 4;
-    [Export] public int ChunkCountZ = 3;
+    // Chunk counts calculated from RenderingConfig at runtime
+    // Use -1 as sentinel to mean "use RenderingConfig defaults"
+    [Export] public int ChunkCountX = -1;
+    [Export] public int ChunkCountZ = -1;
     [Export] public PackedScene? CellPrefab;
     [Export] public PackedScene? CellLabelPrefab;
     [Export] public Texture2D? NoiseSource;
@@ -104,8 +106,19 @@ public partial class HexGrid : Node3D
         HexGridChunk.PreloadMaterials();
         HexFeatureManager.PreloadPrefabs();
 
+        // Calculate chunk counts from RenderingConfig if not explicitly set
+        if (ChunkCountX <= 0)
+        {
+            ChunkCountX = (RenderingConfig.DefaultMapWidth + HexMetrics.ChunkSizeX - 1) / HexMetrics.ChunkSizeX;
+        }
+        if (ChunkCountZ <= 0)
+        {
+            ChunkCountZ = (RenderingConfig.DefaultMapHeight + HexMetrics.ChunkSizeZ - 1) / HexMetrics.ChunkSizeZ;
+        }
+
         _cellCountX = ChunkCountX * HexMetrics.ChunkSizeX;
         _cellCountZ = ChunkCountZ * HexMetrics.ChunkSizeZ;
+        GD.Print($"[HexGrid] Map size: {_cellCountX}x{_cellCountZ} cells ({ChunkCountX}x{ChunkCountZ} chunks)");
 
         CreateChunks();
 
