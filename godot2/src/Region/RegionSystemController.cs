@@ -37,6 +37,7 @@ public partial class RegionSystemController : Node
     private RegionMapSerializer _worldMapSerializer = new();
     private RegionMapUI? _mapUI;
     private RegionTravelUI? _travelUI;
+    private Label? _errorLabel;
     private string _worldMapPath = "";
 
     #endregion
@@ -210,7 +211,7 @@ public partial class RegionSystemController : Node
     {
         if (_worldMap == null || _regionManager == null || _travelUI == null)
         {
-            GD.PrintErr("[RegionSystemController] Travel failed: system not initialized");
+            ShowError("Travel system not initialized");
             return false;
         }
 
@@ -219,26 +220,20 @@ public partial class RegionSystemController : Node
 
         if (fromEntry == null || toEntry == null)
         {
-            GD.PrintErr("[RegionSystemController] Invalid travel: missing region entries");
+            ShowError("Invalid travel: missing region data");
             return false;
         }
 
         if (!_worldMap.CanTravelTo(fromEntry.RegionId, targetRegionId))
         {
-            GD.PrintErr("[RegionSystemController] Cannot travel: regions not connected");
+            ShowError("Cannot travel: regions not connected");
             return false;
         }
 
         GD.Print($"[RegionSystemController] Starting travel from '{fromEntry.Name}' to '{toEntry.Name}'");
         GD.Print($"[RegionSystemController] Target file: {toEntry.FilePath}");
-
-        // Check if region file exists
-        var fullPath = _regionManager.GetRegionPath(toEntry.FilePath);
-        if (!_regionManager.RegionFileExists(toEntry.FilePath))
-        {
-            GD.PrintErr($"[RegionSystemController] Region file not found: {fullPath}");
-            return false;
-        }
+        GD.Print($"[RegionSystemController] Full path: {_regionManager.GetRegionPath(toEntry.FilePath)}");
+        GD.Print($"[RegionSystemController] File exists: {_regionManager.RegionFileExists(toEntry.FilePath)}");
 
         // Close map if open
         _mapUI?.Hide();
@@ -394,6 +389,45 @@ public partial class RegionSystemController : Node
         }
         _travelUI.TravelCancelled += OnTravelCancelled;
         _travelUI.TravelCompleted += OnTravelCompleted;
+
+        // Create error notification label
+        _errorLabel = new Label
+        {
+            Name = "ErrorLabel",
+            Visible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _errorLabel.SetAnchorsPreset(Control.LayoutPreset.Center);
+        _errorLabel.AddThemeFontSizeOverride("font_size", 24);
+        _errorLabel.AddThemeColorOverride("font_color", new Color(1, 0.3f, 0.3f));
+
+        var errorPanel = new PanelContainer { Name = "ErrorPanel" };
+        errorPanel.SetAnchorsPreset(Control.LayoutPreset.Center);
+        var panelStyle = new StyleBoxFlat
+        {
+            BgColor = new Color(0, 0, 0, 0.8f),
+            ContentMarginLeft = 30,
+            ContentMarginRight = 30,
+            ContentMarginTop = 20,
+            ContentMarginBottom = 20
+        };
+        errorPanel.AddThemeStyleboxOverride("panel", panelStyle);
+        errorPanel.AddChild(_errorLabel);
+        errorPanel.Visible = false;
+        AddChild(errorPanel);
+    }
+
+    private async void ShowError(string message)
+    {
+        if (_errorLabel?.GetParent() is Control panel)
+        {
+            _errorLabel.Text = message;
+            panel.Visible = true;
+            await ToSignal(GetTree().CreateTimer(3.0f), Godot.Timer.SignalName.Timeout);
+            panel.Visible = false;
+        }
+        GD.PrintErr($"[RegionSystem] {message}");
     }
 
     private void OnMapTravelRequested(string targetRegionIdStr)
