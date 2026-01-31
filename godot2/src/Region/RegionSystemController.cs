@@ -305,15 +305,29 @@ public partial class RegionSystemController : Node
     /// </summary>
     public void ToggleMap()
     {
-        if (_mapUI == null || _worldMap == null) return;
+        GD.Print($"[RegionSystemController] ToggleMap called: _mapUI={_mapUI != null}, _worldMap={_worldMap != null}");
+
+        if (_mapUI == null)
+        {
+            GD.PrintErr("[RegionSystemController] ToggleMap: _mapUI is null!");
+            return;
+        }
+
+        if (_worldMap == null)
+        {
+            ShowError("No world loaded. Press N first.");
+            return;
+        }
 
         if (_mapUI.Visible)
         {
             _mapUI.Hide();
+            GD.Print("[RegionSystemController] Map hidden");
         }
         else
         {
             _mapUI.ShowMap(_worldMap);
+            GD.Print("[RegionSystemController] Map shown");
         }
     }
 
