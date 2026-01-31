@@ -1,0 +1,379 @@
+using Godot;
+using System;
+using System.Threading.Tasks;
+using HexGame.UI;
+
+namespace HexGame.Region;
+
+/// <summary>
+/// High-level controller that integrates all Region System components.
+/// Handles keybinds, coordinates UI, and manages region transitions.
+///
+/// Usage:
+/// - Add as a child node in your main scene
+/// - Call Initialize() with HexGrid reference
+/// - Add RegionMapUI and RegionTravelUI as children (auto-created if missing)
+///
+/// Keybinds:
+/// - M: Toggle world map
+/// - Escape: Close world map
+/// </summary>
+public partial class RegionSystemController : Node
+{
+    #region Signals
+
+    /// <summary>
+    /// Emitted when the player completes travel to a new region.
+    /// </summary>
+    [Signal]
+    public delegate void RegionChangedEventHandler(string regionId, string regionName);
+
+    #endregion
+
+    #region Fields
+
+    private RegionManager? _regionManager;
+    private RegionMap? _worldMap;
+    private RegionMapSerializer _worldMapSerializer = new();
+    private RegionMapUI? _mapUI;
+    private RegionTravelUI? _travelUI;
+    private string _worldMapPath = "";
+
+    #endregion
+
+    #region Properties
+
+    /// <summary>
+    /// The current world map data.
+    /// </summary>
+    public RegionMap? WorldMap => _worldMap;
+
+    /// <summary>
+    /// Whether the world map UI is currently visible.
+    /// </summary>
+    public bool IsMapOpen => _mapUI?.Visible ?? false;
+
+    /// <summary>
+    /// Whether a travel transition is in progress.
+    /// </summary>
+    public bool IsTraveling => _travelUI?.Visible ?? false;
+
+    #endregion
+
+    public override void _Ready()
+    {
+        // Find or create RegionManager
+        _regionManager = RegionManager.Instance ?? GetNodeOrNull<RegionManager>("RegionManager");
+        if (_regionManager == null)
+        {
+            _regionManager = new RegionManager { Name = "RegionManager" };
+            AddChild(_regionManager);
+        }
+
+        // Find or create UI components
+        SetupUIComponents();
+
+        GD.Print("[RegionSystemController] Ready");
+    }
+
+    public override void _Input(InputEvent @event)
+    {
+        if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
+        {
+            switch (keyEvent.Keycode)
+            {
+                case Key.M:
+                    if (!IsTraveling)
+                    {
+                        ToggleMap();
+                    }
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Initializes the controller with a HexGrid and optional world data.
+    /// </summary>
+    /// <param name="grid">The HexGrid to manage.</param>
+    /// <param name="worldMapPath">Optional path to load/save world map data.</param>
+    public void Initialize(HexGrid grid, string worldMapPath = "")
+    {
+        _regionManager?.Initialize(grid);
+        _worldMapPath = worldMapPath;
+
+        if (!string.IsNullOrEmpty(worldMapPath))
+        {
+            _ = LoadWorldMapAsync(worldMapPath);
+        }
+    }
+
+    /// <summary>
+    /// Creates a new world with an initial region.
+    /// </summary>
+    public async Task<bool> CreateNewWorldAsync(
+        string worldName,
+        string startingRegionName,
+        int regionWidth = 0,
+        int regionHeight = 0,
+        int seed = 0)
+    {
+        if (_regionManager == null) return false;
+
+        // Generate starting region
+        var region = await _regionManager.GenerateNewRegionAsync(
+            startingRegionName,
+            regionWidth,
+            regionHeight,
+            seed
+        );
+
+        if (region == null)
+        {
+            GD.PrintErr("[RegionSystemController] Failed to generate starting region");
+            return false;
+        }
+
+        // Create world map
+        var startEntry = RegionMapEntry.FromRegionData(region);
+        startEntry.PrimaryBiome = RegionBiome.Coastal;
+        startEntry.Description = "Where your journey begins.";
+        startEntry.DifficultyRating = 1;
+
+        _worldMap = RegionMap.CreateNew(worldName, startEntry);
+
+        // Apply region to grid
+        var applied = await _regionManager.ApplyRegionAsync(region, saveCurrentFirst: false);
+        if (!applied)
+        {
+            GD.PrintErr("[RegionSystemController] Failed to apply starting region");
+            return false;
+        }
+
+        // Save region and world map
+        await _regionManager.SaveRegionAsync(region, startEntry.FilePath);
+        await SaveWorldMapAsync();
+
+        GD.Print($"[RegionSystemController] Created new world '{worldName}' with starting region '{startingRegionName}'");
+        return true;
+    }
+
+    /// <summary>
+    /// Adds a new region to the world and optionally connects it to existing regions.
+    /// </summary>
+    public async Task<RegionMapEntry?> AddRegionToWorldAsync(
+        string name,
+        float mapX,
+        float mapY,
+        RegionBiome biome,
+        int difficulty,
+        int seed = 0,
+        Guid? connectTo = null,
+        float travelTime = 60f)
+    {
+        if (_regionManager == null || _worldMap == null) return null;
+
+        // Generate region
+        var region = await _regionManager.GenerateNewRegionAsync(name, seed: seed);
+        if (region == null) return null;
+
+        // Create map entry
+        var entry = RegionMapEntry.FromRegionData(region, mapX, mapY);
+        entry.PrimaryBiome = biome;
+        entry.DifficultyRating = difficulty;
+
+        _worldMap.AddRegion(entry);
+
+        // Connect to existing region if specified
+        if (connectTo.HasValue)
+        {
+            _worldMap.ConnectRegions(connectTo.Value, entry.RegionId, travelTime);
+        }
+
+        // Save the region file
+        await _regionManager.SaveRegionAsync(region, entry.FilePath);
+
+        // Save updated world map
+        await SaveWorldMapAsync();
+
+        return entry;
+    }
+
+    /// <summary>
+    /// Initiates travel to a connected region.
+    /// </summary>
+    public async Task<bool> TravelToRegionAsync(Guid targetRegionId)
+    {
+        if (_worldMap == null || _regionManager == null || _travelUI == null)
+        {
+            return false;
+        }
+
+        var fromEntry = _worldMap.GetCurrentRegion();
+        var toEntry = _worldMap.GetRegionById(targetRegionId);
+
+        if (fromEntry == null || toEntry == null)
+        {
+            GD.PrintErr("[RegionSystemController] Invalid travel: missing region entries");
+            return false;
+        }
+
+        if (!_worldMap.CanTravelTo(fromEntry.RegionId, targetRegionId))
+        {
+            GD.PrintErr("[RegionSystemController] Cannot travel: regions not connected");
+            return false;
+        }
+
+        // Close map if open
+        _mapUI?.Hide();
+
+        // Show travel UI and load region
+        await _travelUI.ShowTravelAsync(fromEntry, toEntry, async () =>
+        {
+            // Update travel UI progress based on region manager signals
+            _regionManager.RegionProgress += (stage, progress) =>
+            {
+                _travelUI.UpdateProgress(stage, progress);
+            };
+
+            return await _regionManager.LoadAndApplyRegionAsync(toEntry.FilePath, saveCurrentFirst: true);
+        });
+
+        // Check if travel was cancelled
+        if (_travelUI.Visible)
+        {
+            return false; // Still showing means it was cancelled or failed
+        }
+
+        // Update world map state
+        _worldMap.SetCurrentRegion(targetRegionId);
+        await SaveWorldMapAsync();
+
+        EmitSignal(SignalName.RegionChanged, targetRegionId.ToString(), toEntry.Name);
+
+        GD.Print($"[RegionSystemController] Traveled to '{toEntry.Name}'");
+        return true;
+    }
+
+    /// <summary>
+    /// Toggles the world map visibility.
+    /// </summary>
+    public void ToggleMap()
+    {
+        if (_mapUI == null || _worldMap == null) return;
+
+        if (_mapUI.Visible)
+        {
+            _mapUI.Hide();
+        }
+        else
+        {
+            _mapUI.ShowMap(_worldMap);
+        }
+    }
+
+    /// <summary>
+    /// Opens the world map.
+    /// </summary>
+    public void ShowMap()
+    {
+        if (_mapUI != null && _worldMap != null)
+        {
+            _mapUI.ShowMap(_worldMap);
+        }
+    }
+
+    /// <summary>
+    /// Closes the world map.
+    /// </summary>
+    public void HideMap()
+    {
+        _mapUI?.Hide();
+    }
+
+    /// <summary>
+    /// Loads world map data from disk.
+    /// </summary>
+    public async Task<bool> LoadWorldMapAsync(string path)
+    {
+        _worldMapPath = path;
+        var loaded = await _worldMapSerializer.LoadAsync(path);
+
+        if (loaded != null)
+        {
+            _worldMap = loaded;
+            GD.Print($"[RegionSystemController] Loaded world map '{loaded.WorldName}' with {loaded.Regions.Count} regions");
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Saves world map data to disk.
+    /// </summary>
+    public async Task<bool> SaveWorldMapAsync()
+    {
+        if (_worldMap == null || string.IsNullOrEmpty(_worldMapPath))
+        {
+            return false;
+        }
+
+        return await _worldMapSerializer.SaveAsync(_worldMap, _worldMapPath);
+    }
+
+    /// <summary>
+    /// Saves the current region (called automatically on travel, can be called manually).
+    /// </summary>
+    public async Task<bool> SaveCurrentRegionAsync()
+    {
+        if (_regionManager == null) return false;
+        return await _regionManager.SaveCurrentRegionAsync();
+    }
+
+    private void SetupUIComponents()
+    {
+        // Find or create RegionMapUI
+        _mapUI = GetNodeOrNull<RegionMapUI>("RegionMapUI");
+        if (_mapUI == null)
+        {
+            _mapUI = new RegionMapUI { Name = "RegionMapUI" };
+            AddChild(_mapUI);
+        }
+        _mapUI.TravelRequested += OnMapTravelRequested;
+        _mapUI.MapClosed += OnMapClosed;
+
+        // Find or create RegionTravelUI
+        _travelUI = GetNodeOrNull<RegionTravelUI>("RegionTravelUI");
+        if (_travelUI == null)
+        {
+            _travelUI = new RegionTravelUI { Name = "RegionTravelUI" };
+            AddChild(_travelUI);
+        }
+        _travelUI.TravelCancelled += OnTravelCancelled;
+        _travelUI.TravelCompleted += OnTravelCompleted;
+    }
+
+    private void OnMapTravelRequested(string targetRegionIdStr)
+    {
+        if (Guid.TryParse(targetRegionIdStr, out var targetId))
+        {
+            _ = TravelToRegionAsync(targetId);
+        }
+    }
+
+    private void OnMapClosed()
+    {
+        GD.Print("[RegionSystemController] Map closed");
+    }
+
+    private void OnTravelCancelled()
+    {
+        GD.Print("[RegionSystemController] Travel cancelled");
+    }
+
+    private void OnTravelCompleted()
+    {
+        GD.Print("[RegionSystemController] Travel completed");
+    }
+}
