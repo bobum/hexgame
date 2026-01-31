@@ -10,6 +10,11 @@ shader_type spatial;
 // Index 0 = sand, 1 = grass, 2 = mud, 3 = stone, 4 = snow
 uniform sampler2DArray terrain_textures : source_color, filter_linear_mipmap, repeat_enable;
 
+// Normal map array for terrain depth/detail
+uniform sampler2DArray terrain_normals : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform bool use_normals = false;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.8;
+
 // Tutorial 15: Grid overlay texture
 uniform sampler2D grid_texture : source_color, filter_linear_mipmap, repeat_enable;
 uniform bool show_grid = false;
@@ -128,4 +133,24 @@ void fragment() {
     ALBEDO = blended;
     ROUGHNESS = blended_roughness;
     METALLIC = 0.0;
+
+    // Apply normal maps if enabled
+    if (use_normals) {
+        vec2 world_uv = world_position.xz * texture_scale;
+
+        // Sample normal maps for each terrain type
+        vec3 n1 = texture(terrain_normals, vec3(world_uv, terrain_indices.x)).rgb * 2.0 - 1.0;
+        vec3 n2 = texture(terrain_normals, vec3(world_uv, terrain_indices.y)).rgb * 2.0 - 1.0;
+        vec3 n3 = texture(terrain_normals, vec3(world_uv, terrain_indices.z)).rgb * 2.0 - 1.0;
+
+        // Blend normals using splat weights
+        vec3 blended_normal = normalize(n1 * splat.r + n2 * splat.g + n3 * splat.b);
+
+        // Apply normal strength (scale XY, keep Z normalized)
+        blended_normal.xy *= normal_strength;
+        blended_normal = normalize(blended_normal);
+
+        // Convert back to 0-1 range for NORMAL_MAP
+        NORMAL_MAP = blended_normal * 0.5 + 0.5;
+    }
 }

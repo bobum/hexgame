@@ -50,7 +50,7 @@ public static class RenderingConfig
     /// Default distance at which fog is fully opaque.
     /// Set before max render distance to hide geometry cutoff.
     /// </summary>
-    public const float DefaultFogFar = 3000.0f;
+    public const float DefaultFogFar = 1000.0f;
 
     /// <summary>
     /// Default fog density (0-1). Visible tropical haze.

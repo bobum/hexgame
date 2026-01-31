@@ -243,6 +243,19 @@ public partial class HexGridChunk : Node3D
                 HexDebug.PrintMaterial("[TERRAIN] Using color fallback (texture array failed to load)");
             }
 
+            // Load and assign normal map array
+            var normalArray = TerrainTextureArray.GetNormalArray();
+            if (normalArray != null)
+            {
+                shaderMat.SetShaderParameter("terrain_normals", normalArray);
+                shaderMat.SetShaderParameter("use_normals", true);
+                HexDebug.PrintMaterial("[TERRAIN] Normal array assigned and normals enabled");
+            }
+            else
+            {
+                HexDebug.PrintMaterial("[TERRAIN] Normal maps not available");
+            }
+
             // Tutorial 15: Load and assign grid texture (always try, regardless of terrain textures)
             if (_gridTexture == null)
             {
