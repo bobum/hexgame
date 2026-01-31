@@ -63,7 +63,7 @@ public partial class GameUI : Control
     private HSlider? _mountainLevelSlider;
 
     // Sliders - Fog
-    private HSlider? _fogNearSlider;
+    // Near slider removed - exponential fog doesn't support "near" distance
     private HSlider? _fogFarSlider;
     private HSlider? _fogDensitySlider;
 
@@ -76,7 +76,7 @@ public partial class GameUI : Control
     {
         BuildUI();
         FindWorldEnvironment();
-        // Don't call ApplyFogSettings() on startup - let scene file settings be used as-is
+        ApplyFogSettings();  // Apply fog with slider defaults
     }
 
     private void FindWorldEnvironment()
@@ -96,17 +96,33 @@ public partial class GameUI : Control
 
     private void ApplyFogSettings()
     {
-        if (_environment == null) return;
+        if (_environment == null)
+        {
+            GD.PrintErr("[GameUI] ApplyFogSettings: _environment is null!");
+            return;
+        }
 
-        float near = (float)(_fogNearSlider?.Value ?? RenderingConfig.DefaultFogNear);
-        float far = (float)(_fogFarSlider?.Value ?? RenderingConfig.DefaultFogFar);
+        float distance = (float)(_fogFarSlider?.Value ?? RenderingConfig.DefaultFogFar);
         float density = (float)(_fogDensitySlider?.Value ?? RenderingConfig.DefaultFogDensity);
 
-        // Match reference exactly - only update these 3 values
-        // All other fog settings come from scene file
-        _environment.FogDepthBegin = near;
-        _environment.FogDepthEnd = far;
-        _environment.FogLightEnergy = density;
+        _environment.FogEnabled = true;
+
+        // Pure depth fog - clear near camera, fog only at distance
+        _environment.FogMode = Godot.Environment.FogModeEnum.Depth;
+
+        // Density controls max fog opacity (1.0 = fully opaque at far distance)
+        _environment.FogDensity = density;
+
+        // Distance slider controls where fog starts (at 40% of value) and ends (at 100%)
+        _environment.FogDepthBegin = distance * 0.4f;
+        _environment.FogDepthEnd = distance;
+        _environment.FogDepthCurve = 2.0f;  // Gradual ramp
+
+        _environment.FogLightColor = new Color(0.70f, 0.85f, 0.95f);
+        _environment.FogLightEnergy = 1.0f;
+        _environment.FogSkyAffect = 0.8f;
+
+        GD.Print($"[GameUI] Depth fog: density={density}, begin={_environment.FogDepthBegin}, end={distance}");
     }
 
     public override void _Process(double delta)
@@ -306,10 +322,9 @@ public partial class GameUI : Control
     {
         var content = CreateFolder("Fog", true);
 
-        _fogNearSlider = AddSlider(content, "Near", RenderingConfig.FogNearMin, RenderingConfig.FogNearMax,
-            RenderingConfig.DefaultFogNear, 1.0f, OnFogNearChanged);
-        _fogFarSlider = AddSlider(content, "Far", RenderingConfig.FogFarMin, RenderingConfig.FogFarMax,
-            RenderingConfig.DefaultFogFar, 1.0f, OnFogFarChanged);
+        // "Distance" controls how far fog extends (higher = fog further away)
+        _fogFarSlider = AddSlider(content, "Distance", RenderingConfig.FogFarMin, RenderingConfig.FogFarMax,
+            RenderingConfig.DefaultFogFar, 10.0f, OnFogFarChanged);
         _fogDensitySlider = AddSlider(content, "Density", 0.0f, 1.0f,
             RenderingConfig.DefaultFogDensity, 0.05f, OnFogDensityChanged);
     }
@@ -552,22 +567,16 @@ public partial class GameUI : Control
         EmitSignal(SignalName.NoiseParamChanged, "mountain_level", (float)value);
     }
 
-    private void OnFogNearChanged(double value)
-    {
-        if (_fogNearSlider != null) UpdateSliderLabel(_fogNearSlider, value, true);
-        if (_environment != null) _environment.FogDepthBegin = (float)value;
-    }
-
     private void OnFogFarChanged(double value)
     {
         if (_fogFarSlider != null) UpdateSliderLabel(_fogFarSlider, value, true);
-        if (_environment != null) _environment.FogDepthEnd = (float)value;
+        ApplyFogSettings();
     }
 
     private void OnFogDensityChanged(double value)
     {
         if (_fogDensitySlider != null) UpdateSliderLabel(_fogDensitySlider, value);
-        if (_environment != null) _environment.FogLightEnergy = (float)value;
+        ApplyFogSettings();
     }
 
     #endregion

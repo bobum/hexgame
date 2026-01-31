@@ -293,7 +293,7 @@ public class RenderingSystem
 
     /// <summary>
     /// Updates the fog settings in the world environment.
-    /// Uses depth-based fog to create clear near-field with fog at distance.
+    /// Uses depth-based fog for precise control over where fog begins.
     /// </summary>
     private void UpdateFog()
     {
@@ -302,23 +302,19 @@ public class RenderingSystem
 
         var env = _worldEnvironment.Environment;
 
-        // Enable fog if density > 0
-        if (_fogDensity > 0.01f)
-        {
-            env.FogEnabled = true;
-            // Exponential density scaled for visible fog at distance
-            env.FogDensity = _fogDensity * 0.008f;
-            env.FogAerialPerspective = 0.3f;
+        env.FogEnabled = true;
+        env.FogMode = Godot.Environment.FogModeEnum.Depth;
 
-            // Depth fog: clear until FogNear, then fade to opaque at FogFar
-            env.FogDepthBegin = _fogNear;
-            env.FogDepthEnd = _fogFar;
-            env.FogDepthCurve = 1.5f;
-        }
-        else
-        {
-            env.FogEnabled = false;
-        }
+        // Caribbean fog settings
+        env.FogLightColor = new Color(0.70f, 0.85f, 0.95f); // Light blue haze
+        env.FogLightEnergy = 1.0f;
+        env.FogDensity = 0.001f;  // Small density to enable fog rendering
+
+        // Depth fog: clear until _fogNear, fully fogged at _fogFar
+        env.FogDepthBegin = _fogNear;
+        env.FogDepthEnd = _fogFar;
+        env.FogDepthCurve = 1.0f;  // Linear falloff
+        env.FogSkyAffect = 0.8f;   // Blend with sky at horizon
     }
 
     /// <summary>

@@ -13,7 +13,7 @@ public partial class MapCamera : Camera3D
 {
     [Export] public float MinZoom { get; set; } = 10.0f;
     [Export] public float MaxZoom { get; set; } = 1000.0f;
-    [Export] public float MinPitch { get; set; } = 20.0f;
+    [Export] public float MinPitch { get; set; } = 5.0f;
     [Export] public float MaxPitch { get; set; } = 85.0f;
     [Export] public float PanSpeed { get; set; } = 1.5f;
     [Export] public float RotateSpeed { get; set; } = 0.3f;

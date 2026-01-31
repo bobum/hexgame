@@ -38,28 +38,29 @@ public static class RenderingConfig
 
     #endregion
 
-    #region Fog
+    #region Fog - Caribbean Atmosphere
 
     /// <summary>
     /// Default distance at which fog begins.
-    /// Keep tight like reference (12-30 range) for atmospheric effect.
+    /// Set to match where HIGH LOD transitions to MEDIUM (300 units).
     /// </summary>
-    public const float DefaultFogNear = 15.0f;
+    public const float DefaultFogNear = 300.0f;
 
     /// <summary>
     /// Default distance at which fog is fully opaque.
+    /// Set to match max render distance so fog hides geometry cutoff.
     /// </summary>
-    public const float DefaultFogFar = 50.0f;
+    public const float DefaultFogFar = 800.0f;
 
     /// <summary>
-    /// Default fog density (0-1).
+    /// Default fog density (0-1). Visible tropical haze.
     /// </summary>
     public const float DefaultFogDensity = 0.5f;
 
     /// <summary>
     /// Minimum fog near distance for UI slider.
     /// </summary>
-    public const float FogNearMin = 5.0f;
+    public const float FogNearMin = 50.0f;
 
     /// <summary>
     /// Maximum fog near distance for UI slider.
@@ -69,12 +70,12 @@ public static class RenderingConfig
     /// <summary>
     /// Minimum fog far distance for UI slider.
     /// </summary>
-    public const float FogFarMin = 20.0f;
+    public const float FogFarMin = 200.0f;
 
     /// <summary>
     /// Maximum fog far distance for UI slider.
     /// </summary>
-    public const float FogFarMax = 1000.0f;
+    public const float FogFarMax = 1500.0f;
 
     #endregion
 
