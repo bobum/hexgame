@@ -254,9 +254,11 @@ public partial class RegionManager : Node
     /// <returns>True if save succeeded.</returns>
     public async Task<bool> SaveRegionAsync(RegionData region, string? filename = null)
     {
+        GD.Print($"[RegionManager] SaveRegionAsync called: region='{region.Name}', filename={filename ?? "null"}, _isOperating={_isOperating}");
+
         if (_isOperating)
         {
-            GD.PrintErr("[RegionManager] Operation already in progress");
+            GD.PrintErr("[RegionManager] SaveRegionAsync: Operation already in progress!");
             return false;
         }
 
@@ -267,6 +269,7 @@ public partial class RegionManager : Node
         {
             filename ??= $"{region.RegionId}{RegionConfig.FileExtension}";
             var path = GetRegionPath(filename);
+            GD.Print($"[RegionManager] SaveRegionAsync: Saving to path={path}");
 
             // Ensure directory exists
             EnsureRegionDirectoryExists();
@@ -275,7 +278,11 @@ public partial class RegionManager : Node
 
             if (result)
             {
-                GD.Print($"[RegionManager] Saved region '{region.Name}' to {path}");
+                GD.Print($"[RegionManager] SaveRegionAsync: SUCCESS - Saved region '{region.Name}' to {path}");
+            }
+            else
+            {
+                GD.PrintErr($"[RegionManager] SaveRegionAsync: FAILED - Could not save region '{region.Name}' to {path}");
             }
 
             return result;
@@ -466,13 +473,19 @@ public partial class RegionManager : Node
     /// </summary>
     public async Task<bool> LoadAndApplyRegionAsync(string filename, bool saveCurrentFirst = true)
     {
+        GD.Print($"[RegionManager] LoadAndApplyRegionAsync: filename={filename}, saveCurrentFirst={saveCurrentFirst}");
+
         var region = await LoadRegionFromFileAsync(filename);
         if (region == null)
         {
+            GD.PrintErr($"[RegionManager] LoadAndApplyRegionAsync: LoadRegionFromFileAsync returned null for {filename}");
             return false;
         }
 
-        return await ApplyRegionAsync(region, saveCurrentFirst);
+        GD.Print($"[RegionManager] LoadAndApplyRegionAsync: Loaded region '{region.Name}', now applying...");
+        var result = await ApplyRegionAsync(region, saveCurrentFirst);
+        GD.Print($"[RegionManager] LoadAndApplyRegionAsync: ApplyRegionAsync returned {result}");
+        return result;
     }
 
     /// <summary>

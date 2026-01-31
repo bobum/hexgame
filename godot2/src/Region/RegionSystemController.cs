@@ -71,10 +71,18 @@ public partial class RegionSystemController : Node
             AddChild(_regionManager);
         }
 
+        // Subscribe to RegionManager errors for visual display
+        _regionManager.RegionError += OnRegionError;
+
         // Find or create UI components
         SetupUIComponents();
 
         GD.Print("[RegionSystemController] Ready");
+    }
+
+    private void OnRegionError(string error)
+    {
+        ShowError(error);
     }
 
     public override void _Input(InputEvent @event)
