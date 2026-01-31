@@ -29,7 +29,18 @@ public class RegionMapSerializer
     {
         try
         {
-            var dir = Path.GetDirectoryName(path);
+            // Use forward-slash split for Godot paths, Path.GetDirectoryName for system paths
+            string? dir;
+            if (path.StartsWith("user://") || path.StartsWith("res://"))
+            {
+                var lastSlash = path.LastIndexOf('/');
+                dir = lastSlash > 0 ? path.Substring(0, lastSlash) : null;
+            }
+            else
+            {
+                dir = Path.GetDirectoryName(path);
+            }
+
             if (!string.IsNullOrEmpty(dir))
             {
                 EnsureDirectoryExists(dir);
