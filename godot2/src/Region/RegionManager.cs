@@ -403,18 +403,19 @@ public partial class RegionManager : Node
             return false;
         }
 
+        // Save current region BEFORE setting _isOperating flag
+        // so the save operation doesn't conflict with itself
+        if (saveCurrentFirst && _currentRegion != null)
+        {
+            ReportProgress("Saving current region", 0f);
+            await SaveCurrentRegionAsync();
+            EmitSignal(SignalName.RegionUnloaded, _currentRegion.Name);
+        }
+
         _isOperating = true;
 
         try
         {
-            // Save current region if requested
-            if (saveCurrentFirst && _currentRegion != null)
-            {
-                ReportProgress("Saving current region", 0f);
-                await SaveCurrentRegionAsync();
-                EmitSignal(SignalName.RegionUnloaded, _currentRegion.Name);
-            }
-
             EmitSignal(SignalName.RegionLoading, region.Name);
             ReportProgress("Applying region", 0.2f);
 

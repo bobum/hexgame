@@ -99,13 +99,28 @@ public partial class RegionMapUI : Control
     /// </summary>
     public void ShowMap(RegionMap regionMap)
     {
-        _regionMap = regionMap;
-        _currentRegionId = regionMap.CurrentRegionId;
-        _selectedRegionId = _currentRegionId;
+        try
+        {
+            GD.Print($"[RegionMapUI] ShowMap called with {regionMap?.Regions?.Count ?? 0} regions");
+            if (regionMap == null)
+            {
+                GD.PrintErr("[RegionMapUI] ShowMap called with null regionMap!");
+                return;
+            }
+            _regionMap = regionMap;
+            _currentRegionId = regionMap.CurrentRegionId;
+            _selectedRegionId = _currentRegionId;
 
-        RefreshMapDisplay();
-        UpdateInfoPanel();
-        Show();
+            RefreshMapDisplay();
+            UpdateInfoPanel();
+            Show();
+            GD.Print("[RegionMapUI] ShowMap completed");
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[RegionMapUI] ShowMap crashed: {ex.Message}\n{ex.StackTrace}");
+            throw;
+        }
     }
 
     /// <summary>
@@ -279,34 +294,47 @@ public partial class RegionMapUI : Control
 
     private void RefreshMapDisplay()
     {
-        if (_regionMap == null || _mapArea == null) return;
-
-        // Clear existing icons
-        foreach (var icon in _regionIcons.Values)
+        try
         {
-            icon.QueueFree();
-        }
-        _regionIcons.Clear();
+            GD.Print($"[RegionMapUI] RefreshMapDisplay called, _regionMap={_regionMap != null}, _mapArea={_mapArea != null}");
+            if (_regionMap == null || _mapArea == null) return;
 
-        // Calculate bounds for discovered regions
-        var mapAreaSize = _mapArea.Size;
-        if (mapAreaSize.X <= 0 || mapAreaSize.Y <= 0)
+            // Clear existing icons
+            foreach (var icon in _regionIcons.Values)
+            {
+                icon.QueueFree();
+            }
+            _regionIcons.Clear();
+
+            // Calculate bounds for discovered regions
+            var mapAreaSize = _mapArea.Size;
+            GD.Print($"[RegionMapUI] Map area size: {mapAreaSize}");
+            if (mapAreaSize.X <= 0 || mapAreaSize.Y <= 0)
+            {
+                // Defer until we have valid size
+                GD.Print("[RegionMapUI] Deferring RefreshMapDisplay (size not ready)");
+                CallDeferred(MethodName.RefreshMapDisplay);
+                return;
+            }
+
+            // Create icons for each region
+            GD.Print($"[RegionMapUI] Creating {_regionMap.Regions.Count} region icons");
+            foreach (var entry in _regionMap.Regions)
+            {
+                var icon = CreateRegionIcon(entry, mapAreaSize);
+                _mapArea.AddChild(icon);
+                _regionIcons[entry.RegionId] = icon;
+            }
+
+            // Trigger connection redraw
+            _mapArea.QueueRedraw();
+            GD.Print("[RegionMapUI] RefreshMapDisplay completed");
+        }
+        catch (Exception ex)
         {
-            // Defer until we have valid size
-            CallDeferred(MethodName.RefreshMapDisplay);
-            return;
+            GD.PrintErr($"[RegionMapUI] RefreshMapDisplay crashed: {ex.Message}\n{ex.StackTrace}");
+            throw;
         }
-
-        // Create icons for each region
-        foreach (var entry in _regionMap.Regions)
-        {
-            var icon = CreateRegionIcon(entry, mapAreaSize);
-            _mapArea.AddChild(icon);
-            _regionIcons[entry.RegionId] = icon;
-        }
-
-        // Trigger connection redraw
-        _mapArea.QueueRedraw();
     }
 
     private RegionIconNode CreateRegionIcon(RegionMapEntry entry, Vector2 mapSize)
@@ -346,38 +374,45 @@ public partial class RegionMapUI : Control
 
     private void OnMapAreaDraw()
     {
-        if (_regionMap == null || _mapArea == null) return;
-
-        // Draw connections between regions
-        foreach (var entry in _regionMap.Regions)
+        try
         {
-            if (!_regionIcons.TryGetValue(entry.RegionId, out var fromIcon))
-                continue;
+            if (_regionMap == null || _mapArea == null) return;
 
-            foreach (var targetId in entry.ConnectedRegionIds)
+            // Draw connections between regions
+            foreach (var entry in _regionMap.Regions)
             {
-                if (!_regionIcons.TryGetValue(targetId, out var toIcon))
+                if (!_regionIcons.TryGetValue(entry.RegionId, out var fromIcon))
                     continue;
 
-                // Only draw each connection once (when from < to by guid)
-                if (entry.RegionId.CompareTo(targetId) > 0)
-                    continue;
-
-                var color = ConnectionColor;
-
-                // Highlight if this is a travelable path from current region
-                if (entry.RegionId == _currentRegionId || targetId == _currentRegionId)
+                foreach (var targetId in entry.ConnectedRegionIds)
                 {
-                    color = TravelableConnectionColor;
-                }
+                    if (!_regionIcons.TryGetValue(targetId, out var toIcon))
+                        continue;
 
-                _mapArea.DrawLine(
-                    fromIcon.Position + new Vector2(IconSize / 2, IconSize / 2),
-                    toIcon.Position + new Vector2(IconSize / 2, IconSize / 2),
-                    color,
-                    ConnectionLineWidth
-                );
+                    // Only draw each connection once (when from < to by guid)
+                    if (entry.RegionId.CompareTo(targetId) > 0)
+                        continue;
+
+                    var color = ConnectionColor;
+
+                    // Highlight if this is a travelable path from current region
+                    if (entry.RegionId == _currentRegionId || targetId == _currentRegionId)
+                    {
+                        color = TravelableConnectionColor;
+                    }
+
+                    _mapArea.DrawLine(
+                        fromIcon.Position + new Vector2(IconSize / 2, IconSize / 2),
+                        toIcon.Position + new Vector2(IconSize / 2, IconSize / 2),
+                        color,
+                        ConnectionLineWidth
+                    );
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[RegionMapUI] OnMapAreaDraw crashed: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -510,38 +545,45 @@ public partial class RegionIconNode : Control
 
     public override void _Draw()
     {
-        var center = new Vector2(IconNodeSize / 2, IconNodeSize / 2);
-        var radius = IconNodeSize / 2 - Padding;
-
-        // Background circle
-        Color bgColor;
-        if (IsCurrent)
-            bgColor = new Color(0.2f, 0.8f, 0.3f);
-        else if (!IsDiscovered)
-            bgColor = new Color(0.4f, 0.4f, 0.4f);
-        else
-            bgColor = GetBiomeColor();
-
-        DrawCircle(center, radius, bgColor);
-
-        // Selection ring
-        if (IsSelected)
+        try
         {
-            DrawArc(center, radius + 3, 0, Mathf.Tau, 32, new Color(1f, 0.9f, 0.3f), 3f);
+            var center = new Vector2(IconNodeSize / 2, IconNodeSize / 2);
+            var radius = IconNodeSize / 2 - Padding;
+
+            // Background circle
+            Color bgColor;
+            if (IsCurrent)
+                bgColor = new Color(0.2f, 0.8f, 0.3f);
+            else if (!IsDiscovered)
+                bgColor = new Color(0.4f, 0.4f, 0.4f);
+            else
+                bgColor = GetBiomeColor();
+
+            DrawCircle(center, radius, bgColor);
+
+            // Selection ring
+            if (IsSelected)
+            {
+                DrawArc(center, radius + 3, 0, Mathf.Tau, 32, new Color(1f, 0.9f, 0.3f), 3f);
+            }
+
+            // Current location marker
+            if (IsCurrent)
+            {
+                DrawCircle(center, 6, Colors.White);
+            }
+
+            // Question mark for undiscovered
+            if (!IsDiscovered)
+            {
+                // Draw "?" in center (simplified)
+                DrawCircle(center + new Vector2(0, -4), 3, Colors.White);
+                DrawCircle(center + new Vector2(0, 6), 2, Colors.White);
+            }
         }
-
-        // Current location marker
-        if (IsCurrent)
+        catch (Exception ex)
         {
-            DrawCircle(center, 6, Colors.White);
-        }
-
-        // Question mark for undiscovered
-        if (!IsDiscovered)
-        {
-            // Draw "?" in center (simplified)
-            DrawCircle(center + new Vector2(0, -4), 3, Colors.White);
-            DrawCircle(center + new Vector2(0, 6), 2, Colors.White);
+            GD.PrintErr($"[RegionIconNode] _Draw crashed: {ex.Message}");
         }
     }
 

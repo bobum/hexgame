@@ -178,12 +178,25 @@ public partial class RegionSystemController : Node
         int difficulty,
         int seed = 0,
         Guid? connectTo = null,
-        float travelTime = 60f)
+        float travelTime = 60f,
+        int width = 0,
+        int height = 0)
     {
         if (_regionManager == null || _worldMap == null) return null;
 
-        // Generate region
-        var region = await _regionManager.GenerateNewRegionAsync(name, seed: seed);
+        // Use current region dimensions if not specified
+        if (width <= 0 || height <= 0)
+        {
+            var currentRegion = _worldMap.GetCurrentRegion();
+            if (currentRegion != null)
+            {
+                width = currentRegion.Width;
+                height = currentRegion.Height;
+            }
+        }
+
+        // Generate region with matching dimensions
+        var region = await _regionManager.GenerateNewRegionAsync(name, width, height, seed);
         if (region == null) return null;
 
         // Create map entry
