@@ -42,6 +42,8 @@
     <Compile Include="..\src\Region\RegionConfig.cs" Link="Source\RegionConfig.cs" />
     <Compile Include="..\src\Region\RegionData.cs" Link="Source\RegionData.cs" />
     <Compile Include="..\src\Region\RegionSerializer.cs" Link="Source\RegionSerializer.cs" />
+    <Compile Include="..\src\Region\RegionMap.cs" Link="Source\RegionMap.cs" />
+    <Compile Include="..\src\Region\RegionMapSerializer.cs" Link="Source\RegionMapSerializer.cs" />
   </ItemGroup>
 
 </Project>
