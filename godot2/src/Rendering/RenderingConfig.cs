@@ -22,19 +22,20 @@ public static class RenderingConfig
     /// Distance threshold for switching from HIGH to MEDIUM detail.
     /// Below this distance, full terrain detail with terraces is shown.
     /// </summary>
-    public const float LodHighToMedium = 300.0f;
+    public const float LodHighToMedium = 400.0f;
 
     /// <summary>
     /// Distance threshold for switching from MEDIUM to LOW detail.
     /// Below this distance, flat hexagons are shown.
     /// </summary>
-    public const float LodMediumToLow = 500.0f;
+    public const float LodMediumToLow = 800.0f;
 
     /// <summary>
     /// Maximum distance at which chunks are rendered.
     /// Chunks beyond this distance are culled entirely.
+    /// Fog (800) fully obscures before this distance, hiding geometry cutoff.
     /// </summary>
-    public const float MaxRenderDistance = 800.0f;
+    public const float MaxRenderDistance = 1500.0f;
 
     #endregion
 
