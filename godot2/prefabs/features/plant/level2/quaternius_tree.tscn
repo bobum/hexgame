@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://quaternius_tree1"]
 
 [ext_resource type="PackedScene" path="res://models/vegetation/trees/CommonTree_1.gltf" id="1_gltf"]
-[ext_resource type="ShaderMaterial" path="res://materials/vegetation_leaves.tres" id="2_wind"]
+[ext_resource type="ShaderMaterial" path="res://materials/quaternius_leaves.tres" id="2_wind"]
 [ext_resource type="Script" path="res://src/VegetationWindApplier.cs" id="3_script"]
 
 [node name="QuaterniusTree" type="Node3D"]

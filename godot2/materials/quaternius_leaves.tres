@@ -1,0 +1,16 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3]
+
+[ext_resource type="Shader" path="res://shaders/quaternius_leaves.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" path="res://models/vegetation/trees/Leaves_NormalTree_C.png" id="2_alpha"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/Leaf_Color = Color(0.45, 0.65, 0.1, 1.0)
+shader_parameter/SSS_Color = Color(0.5, 0.72, 0.0, 1.0)
+shader_parameter/WindSpeed = 3.0
+shader_parameter/WindStrength = 0.08
+shader_parameter/SSS_Strength = 2.0
+shader_parameter/SSS_Blend = 0.25
+shader_parameter/GlobalVariation = true
+shader_parameter/Alpha = ExtResource("2_alpha")
