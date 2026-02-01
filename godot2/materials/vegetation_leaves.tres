@@ -1,0 +1,17 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3]
+
+[ext_resource type="Shader" path="res://shaders/vegetation_wind.gdshader" id="1"]
+[ext_resource type="Texture2D" path="res://models/vegetation/trees/Leaves_NormalTree_C.png" id="2"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/wind_strength = 0.12
+shader_parameter/wind_speed = 1.2
+shader_parameter/wind_turbulence = 0.4
+shader_parameter/wind_direction = Vector2(1, 0.3)
+shader_parameter/alpha_scissor = 0.4
+shader_parameter/roughness = 0.75
+shader_parameter/sway_height_start = 1.0
+shader_parameter/sway_height_factor = 0.8
+shader_parameter/use_normal_map = false
+shader_parameter/albedo_texture = ExtResource("2")
